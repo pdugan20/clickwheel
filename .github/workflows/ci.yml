@@ -63,3 +63,11 @@ jobs:
         run: ruff check clickwheel/
       - name: Check formatting
         run: ruff format --check clickwheel/
+
+  claude-lint:
+    name: Claude Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run claude-code-lint
+        run: npx claude-code-lint@latest

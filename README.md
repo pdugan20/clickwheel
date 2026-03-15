@@ -37,16 +37,16 @@ clickwheel sync              # push to iPod
 
 ## Commands
 
-| Command | Description |
-| --- | --- |
-| `clickwheel scan` | Index the music library, report on metadata/art quality |
-| `clickwheel fix` | Clean up metadata, fetch album art, fill genres (beets) |
-| `clickwheel select` | Interactive picker — browse by artist/album/genre, track size vs. capacity |
-| `clickwheel playlist` | List, save, and load selections |
-| `clickwheel diff` | Preview what would be added/removed on the iPod |
-| `clickwheel sync` | Push current selection to iPod with progress bar |
-| `clickwheel ls` | Show what's currently on the iPod |
-| `clickwheel eject` | Safely unmount the iPod |
+| Command               | Description                                                                |
+| --------------------- | -------------------------------------------------------------------------- |
+| `clickwheel scan`     | Index the music library, report on metadata/art quality                    |
+| `clickwheel fix`      | Clean up metadata, fetch album art, fill genres (beets)                    |
+| `clickwheel select`   | Interactive picker — browse by artist/album/genre, track size vs. capacity |
+| `clickwheel playlist` | List, save, and load selections                                            |
+| `clickwheel diff`     | Preview what would be added/removed on the iPod                            |
+| `clickwheel sync`     | Push current selection to iPod with progress bar                           |
+| `clickwheel ls`       | Show what's currently on the iPod                                          |
+| `clickwheel eject`    | Safely unmount the iPod                                                    |
 
 ## Configuration
 

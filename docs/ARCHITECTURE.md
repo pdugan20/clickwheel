@@ -48,15 +48,15 @@ The iPod's stock firmware requires a proprietary database (`iTunesDB`). We use l
 
 ## Dependencies
 
-| Dependency | Purpose | Install |
-| --- | --- | --- |
-| Python 3.11+ | CLI runtime | brew / system |
-| Typer | CLI framework | pip |
-| Rich | Terminal UI | pip |
-| tqdm | Progress bars | pip |
-| beets | Metadata cleanup | pipx |
-| libgpod | iPod database | brew (libgpod) + pip (gpod bindings) |
-| ffprobe | Audio file inspection | brew (ffmpeg) |
-| Chromaprint | Audio fingerprinting | brew (chromaprint) |
-| ShellCheck | Bash linting | brew |
-| shfmt | Bash formatting | brew |
+| Dependency   | Purpose               | Install                              |
+| ------------ | --------------------- | ------------------------------------ |
+| Python 3.11+ | CLI runtime           | brew / system                        |
+| Typer        | CLI framework         | pip                                  |
+| Rich         | Terminal UI           | pip                                  |
+| tqdm         | Progress bars         | pip                                  |
+| beets        | Metadata cleanup      | pipx                                 |
+| libgpod      | iPod database         | brew (libgpod) + pip (gpod bindings) |
+| ffprobe      | Audio file inspection | brew (ffmpeg)                        |
+| Chromaprint  | Audio fingerprinting  | brew (chromaprint)                   |
+| ShellCheck   | Bash linting          | brew                                 |
+| shfmt        | Bash formatting       | brew                                 |
