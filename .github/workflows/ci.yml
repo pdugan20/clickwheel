@@ -84,7 +84,6 @@ jobs:
   claude-lint:
     name: Claude Lint
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v6
       - name: Run claude-code-lint
