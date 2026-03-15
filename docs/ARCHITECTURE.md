@@ -2,12 +2,12 @@
 
 ## Overview
 
-clickwheel is split into two layers:
+clickwheel is a Python CLI that manages the full iPod sync workflow:
 
-1. **Bash scripts** — one-time library maintenance (audit, metadata cleanup via beets)
-2. **Python CLI** — ongoing iPod workflow (scan, select, sync)
-
-The bash scripts are standalone and don't depend on the Python CLI. The Python CLI wraps beets for the `fix` command but otherwise operates independently.
+1. **Scan** — read metadata from a music library into a local SQLite index
+2. **Fix** — clean up metadata and album art via beets
+3. **Select** — interactively pick artists/albums that fit on the iPod
+4. **Sync** — write files and the iTunesDB to the iPod
 
 ## Data Flow
 
@@ -15,13 +15,26 @@ The bash scripts are standalone and don't depend on the Python CLI. The Python C
 Music Library (NAS/local)
         |
         v
-   clickwheel scan ──> SQLite index (local)
+   clickwheel scan --> SQLite index (~/.clickwheel/clickwheel.db)
         |
         v
-   clickwheel select ──> playlist files (saved selections)
+   clickwheel select --> playlist (saved in SQLite)
         |
         v
-   clickwheel sync ──> iPod (via libgpod)
+   clickwheel sync --> iPod (via vendored iOpenPodv2)
+```
+
+## Module Layout
+
+```text
+clickwheel/
+  cli.py          # Typer command definitions
+  config.py       # config loading (~/.clickwheel/config.yaml, env vars)
+  db.py           # SQLite database (tracks, playlists, scrobble cache)
+  library.py      # music file scanning (mutagen)
+  output.py       # Rich console helpers (tables, status, errors)
+  scrobble.py     # Last.fm scrobbling (pylast)
+  ipod/           # vendored iOpenPodv2 (iTunesDB + ArtworkDB writers)
 ```
 
 ## Key Design Decisions
@@ -32,31 +45,33 @@ beets and clickwheel never move, copy, or rename source files. The music library
 
 ### Local SQLite index
 
-`clickwheel scan` reads metadata from the library and stores it in a local SQLite database. This avoids re-reading thousands of files over SMB every time you want to browse or select music. The index is rebuilt on each scan.
+`clickwheel scan` reads metadata from the library and stores it in a local SQLite database. This avoids re-reading thousands of files over SMB every time you want to browse or select music.
 
 ### Selections are playlists
 
-When you `clickwheel select`, the result is a playlist file (m3u or a simple text list of paths). This is portable, human-readable, and easy to edit manually. Playlists are stored in `playlists/`.
+When you `clickwheel select`, the result is a playlist stored in SQLite with full track paths. Playlists track size so you can see capacity usage before syncing.
 
 ### No FLAC on iPod
 
-Stock iPod firmware doesn't support FLAC. Rather than building a transcoding pipeline into the sync command, FLAC files are excluded from selection. If you want FLAC albums on the iPod, convert them to ALAC/MP3 beforehand as a one-off batch job.
+Stock iPod firmware doesn't support FLAC. Rather than building a transcoding pipeline, FLAC files are excluded from selection. Convert them separately if needed.
 
-### iPod database via libgpod
+### iPod database via vendored iOpenPodv2
 
-The iPod's stock firmware requires a proprietary database (`iTunesDB`). We use libgpod's Python bindings to write to it. This lets the iPod display proper metadata, artist/album groupings, and album art — exactly like iTunes would set it up.
+The iPod's stock firmware requires a proprietary database (`iTunesDB`). We vendor iOpenPodv2 (MIT-licensed, ~2,000 lines) to write it directly — no libgpod dependency, no C extensions, pure Python.
+
+### numpy is optional
+
+numpy is only used for RGB565 artwork conversion in the ArtworkDB writer. At ~30MB installed, it's behind an `artwork` extra: `pipx install clickwheel[artwork]`.
 
 ## Dependencies
 
-| Dependency   | Purpose               | Install                              |
-| ------------ | --------------------- | ------------------------------------ |
-| Python 3.11+ | CLI runtime           | brew / system                        |
-| Typer        | CLI framework         | pip                                  |
-| Rich         | Terminal UI           | pip                                  |
-| tqdm         | Progress bars         | pip                                  |
-| beets        | Metadata cleanup      | pipx                                 |
-| libgpod      | iPod database         | brew (libgpod) + pip (gpod bindings) |
-| ffprobe      | Audio file inspection | brew (ffmpeg)                        |
-| Chromaprint  | Audio fingerprinting  | brew (chromaprint)                   |
-| ShellCheck   | Bash linting          | brew                                 |
-| shfmt        | Bash formatting       | brew                                 |
+| Dependency | Purpose              | Install             |
+| ---------- | -------------------- | ------------------- |
+| Typer      | CLI framework        | pip (auto)          |
+| Rich       | Terminal formatting  | pip (auto)          |
+| tqdm       | Progress bars        | pip (auto)          |
+| mutagen    | Audio metadata       | pip (auto)          |
+| pylast     | Last.fm API          | pip (auto)          |
+| beets      | Metadata cleanup     | pipx (user install) |
+| Pillow     | Album art processing | pip (artwork extra) |
+| numpy      | RGB565 conversion    | pip (artwork extra) |
