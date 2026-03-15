@@ -1,4 +1,4 @@
-"""Configuration management — reads from .env and config file."""
+"""Configuration management — reads from config file, .env, and environment."""
 
 from __future__ import annotations
 
@@ -7,7 +7,21 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 ENV_FILE = ".env"
+CONFIG_DIR = Path.home() / ".clickwheel"
+CONFIG_FILE = CONFIG_DIR / "config.yaml"
 DEFAULT_IPOD_MOUNT = "/Volumes/IPOD"
+DEFAULT_IPOD_CAPACITY_GB = 64
+
+# Config file keys mapped to env var names
+_YAML_TO_ENV = {
+    "music_dir": "MUSIC_DIR",
+    "ipod_mount": "IPOD_MOUNT",
+    "ipod_capacity_gb": "IPOD_CAPACITY_GB",
+    "acoustid_api_key": "ACOUSTID_API_KEY",
+    "lastfm_api_key": "LASTFM_API_KEY",
+    "lastfm_api_secret": "LASTFM_API_SECRET",
+    "lastfm_username": "LASTFM_USERNAME",
+}
 
 
 @dataclass
@@ -15,44 +29,101 @@ class Config:
     music_dir: Path
     project_dir: Path
     ipod_mount: Path = field(default_factory=lambda: Path(DEFAULT_IPOD_MOUNT))
+    ipod_capacity_gb: int = DEFAULT_IPOD_CAPACITY_GB
     acoustid_api_key: str = ""
+    lastfm_api_key: str = ""
+    lastfm_api_secret: str = ""
+    lastfm_username: str = ""
     db_path: Path = field(init=False)
+
+    @property
+    def ipod_capacity_bytes(self) -> int:
+        return self.ipod_capacity_gb * 1024 * 1024 * 1024
 
     def __post_init__(self) -> None:
         self.music_dir = Path(self.music_dir)
         self.ipod_mount = Path(self.ipod_mount)
         self.db_path = self.project_dir / "clickwheel.db"
+        # Ensure the data directory exists for installed (non-dev) users
+        self.project_dir.mkdir(parents=True, exist_ok=True)
 
 
 def load_config() -> Config:
-    """Load config from .env file, walking up to find project root."""
-    project_dir = _find_project_root()
-    env_file = project_dir / ENV_FILE
+    """Load config with priority: env vars > .env > ~/.clickwheel/config.yaml."""
+    # Load config file defaults first (lowest priority)
+    _load_config_file()
 
+    # Then load .env (overrides config file, but not real env vars)
+    data_dir = _find_data_dir()
+    env_file = data_dir / ENV_FILE
     if env_file.exists():
         _load_dotenv(env_file)
 
     music_dir = os.environ.get("MUSIC_DIR", "")
     if not music_dir:
         raise SystemExit(
-            "[ERROR] MUSIC_DIR not set. Copy .env.example to .env and configure it."
+            "[ERROR] Music folder not configured. "
+            "Set music_dir in ~/.clickwheel/config.yaml"
         )
 
     return Config(
         music_dir=Path(music_dir),
-        project_dir=project_dir,
+        project_dir=data_dir,
         ipod_mount=Path(os.environ.get("IPOD_MOUNT", DEFAULT_IPOD_MOUNT)),
+        ipod_capacity_gb=int(
+            os.environ.get("IPOD_CAPACITY_GB", DEFAULT_IPOD_CAPACITY_GB)
+        ),
         acoustid_api_key=os.environ.get("ACOUSTID_API_KEY", ""),
+        lastfm_api_key=os.environ.get("LASTFM_API_KEY", ""),
+        lastfm_api_secret=os.environ.get("LASTFM_API_SECRET", ""),
+        lastfm_username=os.environ.get("LASTFM_USERNAME", ""),
     )
 
 
-def _find_project_root() -> Path:
-    """Walk up from cwd to find the project root (contains pyproject.toml)."""
+def _load_config_file() -> None:
+    """Load ~/.clickwheel/config.yaml as environment defaults."""
+    if not CONFIG_FILE.exists():
+        return
+
+    try:
+        data = _parse_yaml(CONFIG_FILE)
+    except Exception:
+        return
+
+    for yaml_key, env_key in _YAML_TO_ENV.items():
+        if yaml_key in data and env_key not in os.environ:
+            os.environ[env_key] = str(data[yaml_key])
+
+
+def _parse_yaml(path: Path) -> dict:
+    """Minimal YAML parser for flat key: value files. No dependency needed."""
+    result = {}
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if ":" not in line:
+                continue
+            key, _, value = line.partition(":")
+            key = key.strip()
+            value = value.strip().strip("'\"")
+            if value:
+                result[key] = value
+    return result
+
+
+def _find_data_dir() -> Path:
+    """Find the data directory for clickwheel.
+
+    In a dev checkout (editable install), use the project root containing
+    pyproject.toml. For regular installs, use ~/.clickwheel/.
+    """
     current = Path.cwd()
     for parent in [current, *current.parents]:
         if (parent / "pyproject.toml").exists():
             return parent
-    return current
+    return CONFIG_DIR
 
 
 def _load_dotenv(path: Path) -> None:

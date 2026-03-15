@@ -28,7 +28,25 @@ repos:
     hooks:
       - id: ruff
         args: ['--fix']
+        exclude: '^clickwheel/ipod/'
       - id: ruff-format
+        exclude: '^clickwheel/ipod/'
+
+  - repo: https://github.com/pre-commit/pygrep-hooks
+    rev: v1.10.0
+    hooks:
+      - id: python-no-log-warn
+      - id: text-unicode-replacement-char
+
+  - repo: local
+    hooks:
+      - id: no-direct-console-print
+        name: No direct console.print() in CLI
+        language: pygrep
+        entry: 'console\.print\('
+        files: '^clickwheel/(?!output\.py).*\.py$'
+        exclude: '^clickwheel/ipod/(itunesdb_parser|itunesdb_writer|artworkdb_writer)/'
+        types: [python]
 
   - repo: https://github.com/pre-commit/mirrors-prettier
     rev: v4.0.0-alpha.8
@@ -40,3 +58,15 @@ repos:
     rev: v0.44.0
     hooks:
       - id: markdownlint
+
+  - repo: local
+    hooks:
+      - id: commitlint
+        name: commitlint
+        language: node
+        entry: commitlint --edit
+        stages: [commit-msg]
+        always_run: true
+        additional_dependencies:
+          - '@commitlint/cli@19'
+          - '@commitlint/config-conventional@19'

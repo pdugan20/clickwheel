@@ -44,6 +44,18 @@ CREATE TABLE IF NOT EXISTS playlist_tracks (
     FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS scrobble_cache (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    artist TEXT NOT NULL,
+    album TEXT,
+    title TEXT NOT NULL,
+    timestamp INTEGER NOT NULL,
+    duration_seconds REAL,
+    submitted INTEGER DEFAULT 0,
+    submitted_at TIMESTAMP,
+    UNIQUE(artist, title, timestamp)
+);
+
 CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks(artist);
 CREATE INDEX IF NOT EXISTS idx_tracks_album ON tracks(album);
 CREATE INDEX IF NOT EXISTS idx_tracks_album_artist ON tracks(album_artist);
@@ -220,6 +232,134 @@ class Database:
             GROUP BY p.id
             ORDER BY p.name
         """).fetchall()
+        return [dict(r) for r in rows]
+
+    def delete_playlist(self, name: str) -> bool:
+        """Delete a playlist by name. Returns True if it existed."""
+        row = self.conn.execute(
+            "SELECT id FROM playlists WHERE name = ?", (name,)
+        ).fetchone()
+        if not row:
+            return False
+        self.conn.execute(
+            "DELETE FROM playlist_tracks WHERE playlist_id = ?",
+            (row["id"],),
+        )
+        self.conn.execute("DELETE FROM playlists WHERE id = ?", (row["id"],))
+        self.conn.commit()
+        return True
+
+    def add_artist_to_playlist(self, playlist_name: str, artist: str) -> int:
+        """Add all tracks by an artist to a playlist. Returns count added."""
+        playlist = self.conn.execute(
+            "SELECT id FROM playlists WHERE name = ?",
+            (playlist_name,),
+        ).fetchone()
+        if not playlist:
+            self.conn.execute(
+                "INSERT INTO playlists (name) VALUES (?)",
+                (playlist_name,),
+            )
+            self.conn.commit()
+            playlist = self.conn.execute(
+                "SELECT id FROM playlists WHERE name = ?",
+                (playlist_name,),
+            ).fetchone()
+
+        pid = playlist["id"]
+        max_pos = self.conn.execute(
+            "SELECT COALESCE(MAX(position), -1) FROM playlist_tracks "
+            "WHERE playlist_id = ?",
+            (pid,),
+        ).fetchone()[0]
+
+        tracks = self.conn.execute(
+            """
+            SELECT id FROM tracks
+            WHERE (album_artist = ? OR artist = ?) AND format != 'flac'
+            AND id NOT IN (
+                SELECT track_id FROM playlist_tracks
+                WHERE playlist_id = ?
+            )
+            """,
+            (artist, artist, pid),
+        ).fetchall()
+
+        for i, t in enumerate(tracks):
+            self.conn.execute(
+                "INSERT INTO playlist_tracks "
+                "(playlist_id, track_id, position) "
+                "VALUES (?, ?, ?)",
+                (pid, t["id"], max_pos + 1 + i),
+            )
+
+        self.conn.commit()
+        return len(tracks)
+
+    def remove_artist_from_playlist(self, playlist_name: str, artist: str) -> int:
+        """Remove all tracks by an artist from a playlist. Returns count."""
+        row = self.conn.execute(
+            "SELECT id FROM playlists WHERE name = ?",
+            (playlist_name,),
+        ).fetchone()
+        if not row:
+            return 0
+        pid = row["id"]
+
+        count = self.conn.execute(
+            """
+            SELECT COUNT(*) FROM playlist_tracks pt
+            JOIN tracks t ON pt.track_id = t.id
+            WHERE pt.playlist_id = ?
+            AND (t.album_artist = ? OR t.artist = ?)
+            """,
+            (pid, artist, artist),
+        ).fetchone()[0]
+
+        self.conn.execute(
+            """
+            DELETE FROM playlist_tracks WHERE playlist_id = ?
+            AND track_id IN (
+                SELECT id FROM tracks
+                WHERE album_artist = ? OR artist = ?
+            )
+            """,
+            (pid, artist, artist),
+        )
+        self.conn.commit()
+        return count
+
+    def get_playlist_size(self, name: str) -> int:
+        """Return total size in bytes of a playlist."""
+        row = self.conn.execute(
+            """
+            SELECT COALESCE(SUM(t.file_size), 0) as total
+            FROM tracks t
+            JOIN playlist_tracks pt ON t.id = pt.track_id
+            JOIN playlists p ON pt.playlist_id = p.id
+            WHERE p.name = ?
+            """,
+            (name,),
+        ).fetchone()
+        return row["total"] if row else 0
+
+    def get_playlist_artists(self, name: str) -> list[dict]:
+        """Return artists in a playlist with track counts and size."""
+        rows = self.conn.execute(
+            """
+            SELECT
+                COALESCE(t.album_artist, t.artist) as name,
+                COUNT(*) as tracks,
+                SUM(t.file_size) as total_bytes
+            FROM tracks t
+            JOIN playlist_tracks pt ON t.id = pt.track_id
+            JOIN playlists p ON pt.playlist_id = p.id
+            WHERE p.name = ?
+            GROUP BY COALESCE(t.album_artist, t.artist)
+            ORDER BY name COLLATE NOCASE
+            """,
+            (name,),
+        ).fetchall()
         return [dict(r) for r in rows]
 
     def close(self) -> None:

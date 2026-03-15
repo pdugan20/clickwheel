@@ -4,25 +4,72 @@ build-backend = "hatchling.build"
 
 [project]
 name = "clickwheel"
-version = "0.1.0"
-description = "A CLI for syncing a music library to a classic iPod from a modern Mac"
+dynamic = ["version"]
+description = "Sync your music library to a classic iPod from a modern Mac"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
 authors = [{ name = "Pat Dugan" }]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Sound/Audio",
+]
 dependencies = [
     "typer>=0.9",
     "rich>=13.0",
     "tqdm>=4.65",
     "mutagen>=1.47",
+    "pylast>=5.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/pdugan20/clickwheel"
+Repository = "https://github.com/pdugan20/clickwheel"
+Issues = "https://github.com/pdugan20/clickwheel/issues"
+Changelog = "https://github.com/pdugan20/clickwheel/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+artwork = [
+    "Pillow>=10.0",
+    "numpy>=1.24",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.9",
+    "build>=1.0",
+    "python-semantic-release>=9.0",
 ]
 
 [project.scripts]
 clickwheel = "clickwheel.cli:app"
 
+[tool.hatch.version]
+path = "clickwheel/__init__.py"
+
+[tool.semantic_release]
+version_variables = ["clickwheel/__init__.py:__version__"]
+build_command = "python -m build"
+commit_message = "chore: release v{version}"
+changelog_file = "CHANGELOG.md"
+
+[tool.semantic_release.branches.main]
+match = "main"
+prerelease = false
+
+[tool.semantic_release.changelog]
+exclude_commit_patterns = ["^chore:"]
+
 [tool.ruff]
 target-version = "py311"
 line-length = 88
+exclude = ["clickwheel/ipod/"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
