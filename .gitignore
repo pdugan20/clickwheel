@@ -1,4 +1,5 @@
 beets/library.db
+beets/config.yaml
 reports/
 *.log
 .env

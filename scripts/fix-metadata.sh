@@ -13,14 +13,20 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 export BEETSDIR="${PROJECT_DIR}/beets"
-MUSIC_DIR="/Volumes/Public/Multimedia/Music"
 REPORT_DIR="${PROJECT_DIR}/reports"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+
+# Load config
+if [ -f "${PROJECT_DIR}/.env" ]; then
+    source "${PROJECT_DIR}/.env"
+fi
+
+MUSIC_DIR="${MUSIC_DIR:?MUSIC_DIR not set. Copy .env.example to .env and configure it.}"
 
 mkdir -p "$REPORT_DIR"
 
 if [ ! -d "$MUSIC_DIR" ]; then
-    echo "[ERROR] Music directory not mounted: $MUSIC_DIR"
+    echo "[ERROR] Music directory not found: $MUSIC_DIR"
     exit 1
 fi
 

@@ -1,45 +1,65 @@
 # Music Library Tools
 
-Tools for auditing, cleaning, and syncing a music library from a QNAP NAS to a flash-modded iPod 4th Gen (Click Wheel).
+Audit, clean metadata/album art, and sync a music library to an iPod Classic (stock firmware).
 
-## Setup
+## Prerequisites
 
-- **Source**: QNAP KITCHEN-TS-264, mounted at `/Volumes/Public/Multimedia/Music`
-- **Backup**: QNAP BSMNT-TS-251 (backup of KITCHEN)
-- **iPod**: 4th Gen Click Wheel (A1059), flash modded (~64GB, confirm exact size)
-- **Plex**: Library currently reads from the same source files
+- macOS with [Homebrew](https://brew.sh)
+- Music library accessible via local or network mount
+- [AcoustID API key](https://acoustid.org/my-applications) (free, for audio fingerprinting)
+- iPod Classic (for sync features)
 
-## Library Stats
+## Quick Start
 
-- ~12,000 audio files (11,340 MP3, 456 M4A, 231 FLAC)
-- ~90 GB total (exceeds iPod capacity, subset selection required)
+```bash
+git clone https://github.com/pdugan20/music-library-tools.git
+cd music-library-tools
+cp .env.example .env        # edit with your music path + API key
+./scripts/setup.sh          # install dependencies, configure beets
+./scripts/audit.sh          # scan library (read-only)
+./scripts/fix-metadata.sh   # fix tags, art, genres
+```
+
+## Configuration
+
+All scripts read from `.env` in the project root:
+
+```bash
+MUSIC_DIR=/path/to/your/music       # local path or network mount
+ACOUSTID_API_KEY=your_key_here      # from acoustid.org
+```
 
 ## Project Structure
 
 ```text
 beets/              # beets configuration
-  config.yaml       # beets config pointing at QNAP library
-scripts/            # automation scripts
-  audit.sh          # metadata/art audit (non-destructive)
+  config.yaml       # beets config (paths injected from .env)
+scripts/
+  setup.sh          # install dependencies, configure beets
+  audit.sh          # metadata/art quality audit (non-destructive)
   fix-metadata.sh   # apply metadata fixes via beets
-  convert.sh        # FLAC conversion for iPod compatibility
-  sync-ipod.sh      # stage and sync subset to iPod
-playlists/          # iPod subset definitions (m3u, text lists)
-reports/            # audit output and logs
+playlists/          # iPod subset definitions
+reports/            # audit output and logs (gitignored)
 ```
 
 ## Workflow
 
 1. **Audit** — scan library, report on metadata quality and missing album art
-2. **Review** — inspect audit report, decide what to fix
-3. **Clean** — apply metadata fixes (beets), fetch album art
-4. **Select** — define iPod subset (playlist, artist list, etc.)
-5. **Stage** — rsync selected files to local staging directory
-6. **Sync** — push staged files to iPod
+2. **Review** — inspect reports, decide what to fix
+3. **Clean** — apply metadata fixes (beets), fetch album art, fill genres
+4. **Select** — define iPod subset (playlist or artist/album list)
+5. **Sync** — push selected files to iPod via gpod-utils
 
-## Constraints
+## Tools
 
-- All metadata changes affect Plex (same source files) — changes should be improvements only
-- Metadata snapshot taken before any writes for rollback reference
-- FLAC files must be converted (MP3/AAC/ALAC) for stock iPod firmware
-- Network mount must be stable during audit/clean phases
+- **[beets](https://beets.io)** — music library manager for metadata cleanup
+- **[ffprobe](https://ffmpeg.org)** — audio file inspection (part of ffmpeg)
+- **[Chromaprint](https://acoustid.org/chromaprint)** — audio fingerprinting
+- **[gpod-utils](https://github.com/whatdoineed2do/gpod-utils)** — CLI iPod sync (stock firmware)
+
+## Notes
+
+- Metadata changes are written in-place. If your music library is shared with other apps (e.g., Plex), changes will be picked up on their next scan.
+- beets is configured to never move or rename files.
+- The audit script is fully non-destructive (read-only).
+- FLAC files need conversion (ALAC/MP3) for iPod compatibility.

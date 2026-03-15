@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# setup.sh — Install dependencies and configure beets on a new machine
+# setup.sh — Install dependencies and configure beets
 #
 # Usage: ./scripts/setup.sh
 
@@ -37,37 +37,54 @@ else
     echo "[INFO] beets already installed: $(beet version | head -1)"
 fi
 
-# Set up .env with AcoustID API key
+# Set up .env
 if [ ! -f "$ENV_FILE" ]; then
     echo ""
-    echo "[INFO] No .env file found."
+    read -rp "Enter path to your music library: " MUSIC_PATH
     read -rp "Enter your AcoustID API key (from acoustid.org): " API_KEY
-    echo "ACOUSTID_API_KEY=${API_KEY}" > "$ENV_FILE"
-    echo "[INFO] Saved to .env"
+    cat > "$ENV_FILE" <<EOF
+MUSIC_DIR=${MUSIC_PATH}
+ACOUSTID_API_KEY=${API_KEY}
+EOF
+    echo "[INFO] Saved config to .env"
 else
     echo "[INFO] .env already exists"
 fi
 
-# Substitute API key into beets config
+# Generate beets config from template
 source "$ENV_FILE"
-if [ -n "${ACOUSTID_API_KEY:-}" ] && [ "$ACOUSTID_API_KEY" != "your_key_here" ]; then
-    sed -i '' "s/ACOUSTID_API_KEY_PLACEHOLDER/${ACOUSTID_API_KEY}/" "$BEETS_CONFIG"
-    echo "[INFO] AcoustID API key configured in beets config"
-else
-    echo "[WARN] AcoustID API key not set — fingerprinting will not work"
+
+BEETS_TEMPLATE="${PROJECT_DIR}/beets/config.yaml.template"
+if [ ! -f "$BEETS_TEMPLATE" ]; then
+    echo "[ERROR] Beets config template not found: $BEETS_TEMPLATE"
+    exit 1
 fi
 
-# Verify QNAP mount
-MUSIC_DIR="/Volumes/Public/Multimedia/Music"
+sed \
+    -e "s|MUSIC_DIR_PLACEHOLDER|${MUSIC_DIR}|" \
+    -e "s|LIBRARY_DB_PLACEHOLDER|${PROJECT_DIR}/beets/library.db|" \
+    -e "s|REPORTS_DIR_PLACEHOLDER|${PROJECT_DIR}/reports|" \
+    -e "s|ACOUSTID_API_KEY_PLACEHOLDER|${ACOUSTID_API_KEY:-not_set}|" \
+    "$BEETS_TEMPLATE" > "$BEETS_CONFIG"
+
+echo "[INFO] Generated beets/config.yaml from template"
+
+if [ -z "${ACOUSTID_API_KEY:-}" ] || [ "$ACOUSTID_API_KEY" = "your_key_here" ]; then
+    echo "[WARN] AcoustID API key not set -- fingerprinting will not work"
+fi
+
+# Verify music directory
 if [ -d "$MUSIC_DIR" ]; then
-    echo "[INFO] QNAP music directory found: $MUSIC_DIR"
+    echo "[INFO] Music directory found: $MUSIC_DIR"
 else
-    echo "[WARN] QNAP not mounted at $MUSIC_DIR"
-    echo "       Mount it via Finder: smb://KITCHEN-TS-264.local/Public"
+    echo "[WARN] Music directory not found: $MUSIC_DIR"
+    echo "       Make sure the path is correct and any network drives are mounted."
 fi
 
 # Create local directories
 mkdir -p "${PROJECT_DIR}/reports"
 
 echo ""
-echo "[SUCCESS] Setup complete. Run: ./scripts/fix-metadata.sh"
+echo "[SUCCESS] Setup complete."
+echo "  Audit:   ./scripts/audit.sh"
+echo "  Fix:     ./scripts/fix-metadata.sh"

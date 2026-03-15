@@ -1,0 +1,75 @@
+# Beets configuration for music library cleanup
+# IMPORTANT: This config does NOT move, copy, or rename files.
+# It only updates metadata and album art in-place.
+#
+# This is a template. Run ./scripts/setup.sh to generate config.yaml.
+
+directory: MUSIC_DIR_PLACEHOLDER
+library: LIBRARY_DB_PLACEHOLDER
+
+# Do not move or copy files — preserves paths for other apps (Plex, etc.)
+import:
+  move: no
+  copy: no
+  write: yes
+  timid: no
+  quiet_fallback: asis
+  log: REPORTS_DIR_PLACEHOLDER/beets_import.log
+
+# Paths — not used since we're not moving files, but required
+paths:
+  default: $albumartist/$album%aunique{}/$track $title
+  singleton: Non-Album/$artist/$title
+  comp: Compilations/$album%aunique{}/$track $title
+
+# Plugins
+plugins:
+  - chroma
+  - fetchart
+  - embedart
+  - lastgenre
+  - scrub
+  - info
+  - missing
+  - duplicates
+
+chroma:
+  auto: yes
+acoustid:
+  apikey: ACOUSTID_API_KEY_PLACEHOLDER
+
+# Fetch high-quality album art
+fetchart:
+  auto: no
+  minwidth: 500
+  maxwidth: 1200
+  sources:
+    - filesystem
+    - coverart
+    - itunes
+    - amazon
+
+# Embed art into files
+embedart:
+  auto: no
+  ifempty: no
+  maxwidth: 1200
+  remove_art_file: no
+
+# Auto-fill genre from Last.fm
+lastgenre:
+  auto: no
+  count: 1
+  fallback: ''
+  source: album
+
+# MusicBrainz matching
+match:
+  strong_rec_thresh: 0.10
+  preferred:
+    media: ['Digital Media|File', 'CD']
+  ignored: unmatched_tracks
+
+# UI
+ui:
+  color: yes
