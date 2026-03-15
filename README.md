@@ -55,24 +55,22 @@ Then run `clickwheel scan` to index your library and `clickwheel select` to star
 clickwheel reads from `~/.clickwheel/config.yaml`:
 
 ```yaml
+# Required — path to your music library (local or network mount)
 music_dir: /Volumes/Music/Library
-acoustid_api_key: your_key_here # optional, from acoustid.org (free)
-ipod_capacity_gb: 120 # optional, defaults to 120
-```
 
-Environment variables (`MUSIC_DIR`, `ACOUSTID_API_KEY`, etc.) override the config file.
+# Optional — audio fingerprinting for the fix command (free key from acoustid.org)
+acoustid_api_key: your_key_here
 
-### Last.fm Scrobbling
+# Optional — defaults to 120
+ipod_capacity_gb: 120
 
-To use `clickwheel scrobble`, add your Last.fm API credentials:
-
-```yaml
+# Optional — enables the scrobble command (get keys at last.fm/api/account/create)
 lastfm_api_key: your_key
 lastfm_api_secret: your_secret
 lastfm_username: your_username
 ```
 
-Get API keys at [last.fm/api/account/create](https://www.last.fm/api/account/create).
+Environment variables (`MUSIC_DIR`, `ACOUSTID_API_KEY`, etc.) override the config file.
 
 ## Requirements
 
