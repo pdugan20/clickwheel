@@ -812,9 +812,7 @@ def _print_capacity_bar(used: int, capacity: int) -> None:
     filled = int(bar_width * min(pct, 100) / 100)
     bar = "#" * filled + "-" * (bar_width - filled)
     msg = f"[{bar}] {pct:.1f}% ({_fmt_size(used)} / {_fmt_size(capacity)})"
-    if pct >= 100:
-        warn(msg)
-    elif pct >= 80:
+    if pct >= 80:
         warn(msg)
     else:
         confirm(msg)

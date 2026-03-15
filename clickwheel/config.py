@@ -17,7 +17,6 @@ _YAML_TO_ENV = {
     "music_dir": "MUSIC_DIR",
     "ipod_mount": "IPOD_MOUNT",
     "ipod_capacity_gb": "IPOD_CAPACITY_GB",
-    "acoustid_api_key": "ACOUSTID_API_KEY",
     "lastfm_api_key": "LASTFM_API_KEY",
     "lastfm_api_secret": "LASTFM_API_SECRET",
     "lastfm_username": "LASTFM_USERNAME",
@@ -30,7 +29,6 @@ class Config:
     project_dir: Path
     ipod_mount: Path = field(default_factory=lambda: Path(DEFAULT_IPOD_MOUNT))
     ipod_capacity_gb: int = DEFAULT_IPOD_CAPACITY_GB
-    acoustid_api_key: str = ""
     lastfm_api_key: str = ""
     lastfm_api_secret: str = ""
     lastfm_username: str = ""
@@ -73,7 +71,6 @@ def load_config() -> Config:
         ipod_capacity_gb=int(
             os.environ.get("IPOD_CAPACITY_GB", DEFAULT_IPOD_CAPACITY_GB)
         ),
-        acoustid_api_key=os.environ.get("ACOUSTID_API_KEY", ""),
         lastfm_api_key=os.environ.get("LASTFM_API_KEY", ""),
         lastfm_api_secret=os.environ.get("LASTFM_API_SECRET", ""),
         lastfm_username=os.environ.get("LASTFM_USERNAME", ""),

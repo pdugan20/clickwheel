@@ -4,41 +4,47 @@ A Python CLI for syncing a music library to a classic iPod from a modern Mac.
 
 ## Stack
 
-- **Python 3.11+** with Typer, Rich, tqdm, mutagen
-- **Bash scripts** for beets-based metadata cleanup
-- **SQLite** for library index and playlist storage
-- **libgpod** for iPod database management (Phase 5)
+- **Python 3.11+** with Typer, Rich, tqdm, mutagen, pylast
+- **SQLite** for library index, playlist storage, and scrobble cache
+- **Vendored iOpenPodv2** for iPod database management (iTunesDB + ArtworkDB)
+- **beets** for metadata cleanup (called via subprocess)
 
 ## Project Layout
 
-- `clickwheel/` — Python CLI package (installed via `pipx install -e .`)
-- `beets/` — beets config template, generated config is gitignored
+- `clickwheel/` — Python CLI package
+- `clickwheel/ipod/` — vendored iOpenPodv2 (excluded from ruff)
+- `tests/` — pytest test suite
 - `scripts/` — bash utilities (audit, fix-metadata, setup)
-- `playlists/` — saved iPod selections
-- `reports/` — audit output (gitignored)
-- `docs/` — architecture docs and project tracker
+- `beets/` — beets config template (generated config is gitignored)
+- `docs/` — architecture docs and task tracker
 
 ## Commands
 
 - `clickwheel scan` — index library metadata into SQLite
-- `clickwheel fix` — run beets metadata cleanup
+- `clickwheel fix` — clean up metadata via beets
 - `clickwheel select` — interactive iPod subset picker
-- `clickwheel playlist` — manage saved selections
-- `clickwheel diff/sync/ls/eject` — iPod sync (Phase 5)
+- `clickwheel playlist` — list saved playlists
+- `clickwheel edit` — add/remove artists from a playlist
+- `clickwheel delete` — delete a playlist
+- `clickwheel diff` — preview iPod sync changes
+- `clickwheel sync` — push playlist to iPod
+- `clickwheel ls` — show iPod contents
+- `clickwheel eject` — safely unmount iPod
+- `clickwheel scrobble` — submit iPod listens to Last.fm
 
 ## Development
 
 ```bash
-pipx install -e .                    # install CLI in editable mode
-ruff check clickwheel/               # lint Python
-ruff format clickwheel/              # format Python
-shellcheck scripts/*.sh              # lint bash
-shfmt -d scripts/*.sh                # check bash formatting
+pip install -e '.[dev]'              # install with dev dependencies
+pre-commit install --hook-type pre-commit --hook-type commit-msg
+python -m pytest tests/ -v           # run tests
+ruff check clickwheel/               # lint
+ruff format clickwheel/              # format
 ```
 
 ## Configuration
 
-All runtime config is in `.env` (gitignored). Copy `.env.example` to get started. The `setup.sh` script generates `beets/config.yaml` from the template.
+Runtime config is in `~/.clickwheel/config.yaml`. Environment variables override the config file. See README for all settings.
 
 ## Key Constraints
 
@@ -46,3 +52,4 @@ All runtime config is in `.env` (gitignored). Copy `.env.example` to get started
 - FLAC files are excluded from iPod sync (stock firmware limitation)
 - Metadata changes are written in-place to source files
 - The `scan` command is read-only (no file modifications)
+- macOS only (iPod sync depends on macOS disk utilities)

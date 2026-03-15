@@ -56,8 +56,7 @@ clickwheel reads from `~/.clickwheel/config.yaml`:
 
 ```yaml
 music_dir: /Volumes/Music/Library
-acoustid_api_key: your_key_here # acoustid.org (free)
-ipod_capacity_gb: 120 # defaults to 120
+ipod_capacity_gb: 64 # defaults to 64
 lastfm_api_key: your_key # last.fm/api/account/create
 lastfm_api_secret: your_secret
 lastfm_username: your_username
