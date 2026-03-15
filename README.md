@@ -1,5 +1,10 @@
 # Music Library Tools
 
+[![CI](https://github.com/pdugan20/music-library-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/pdugan20/music-library-tools/actions/workflows/ci.yml)
+[![Bash](https://img.shields.io/badge/language-bash-blue?logo=gnubash&logoColor=white)](https://www.gnu.org/software/bash/)
+[![ShellCheck](https://img.shields.io/badge/linting-shellcheck-brightgreen?logo=gnu&logoColor=white)](https://www.shellcheck.net/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow?logo=opensourceinitiative&logoColor=white)](https://opensource.org/licenses/MIT)
+
 Audit, clean metadata/album art, and sync a music library to an iPod Classic (stock firmware).
 
 ## Prerequisites

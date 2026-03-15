@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run ShellCheck
+        run: shellcheck scripts/*.sh
+
+  shfmt:
+    name: shfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install shfmt
+        run: |
+          SHFMT_VERSION=3.10.0
+          curl -sS -L "https://github.com/mvdan/sh/releases/download/v${SHFMT_VERSION}/shfmt_v${SHFMT_VERSION}_linux_amd64" -o /usr/local/bin/shfmt
+          chmod +x /usr/local/bin/shfmt
+      - name: Check formatting
+        run: shfmt -d scripts/*.sh
+
+  markdownlint:
+    name: Markdown Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: DavidAnson/markdownlint-cli2-action@v19
+        with:
+          globs: '**/*.md'
+
+  prettier:
+    name: Prettier
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run Prettier check
+        run: npx prettier@3 --check '**/*.{json,yml,yaml,md}' --ignore-path .prettierignore

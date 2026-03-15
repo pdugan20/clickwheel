@@ -35,7 +35,7 @@ echo "[INFO] Report: $REPORT_FILE"
     echo "Date: $(date)"
     echo "Source: $MUSIC_DIR"
     echo ""
-} > "$REPORT_FILE"
+} >"$REPORT_FILE"
 
 # File format breakdown
 echo "[INFO] Counting files by format..."
@@ -46,7 +46,7 @@ echo "[INFO] Counting files by format..."
         -o -iname "*.aac" -o -iname "*.wav" -o -iname "*.aiff" -o -iname "*.ogg" \
         -o -iname "*.wma" \) 2>/dev/null | awk -F. '{print tolower($NF)}' | sort | uniq -c | sort -rn
     echo ""
-} >> "$REPORT_FILE"
+} >>"$REPORT_FILE"
 
 # Check for embedded album art using ffprobe
 echo "[INFO] Checking for missing album art (this may take a while)..."
@@ -57,14 +57,14 @@ NO_ART_COUNT=0
 {
     echo "Files Missing Embedded Album Art"
     echo "--------------------------------"
-} > "$MISSING_ART_FILE"
+} >"$MISSING_ART_FILE"
 
 while IFS= read -r -d '' file; do
     if ffprobe -v quiet -select_streams v -show_entries stream=codec_type "$file" 2>/dev/null | grep -q "video"; then
         HAS_ART_COUNT=$((HAS_ART_COUNT + 1))
     else
         NO_ART_COUNT=$((NO_ART_COUNT + 1))
-        echo "$file" >> "$MISSING_ART_FILE"
+        echo "$file" >>"$MISSING_ART_FILE"
     fi
 done < <(find "$MUSIC_DIR" -type f \( -iname "*.mp3" -o -iname "*.flac" -o -iname "*.m4a" \) -print0 2>/dev/null)
 
@@ -75,7 +75,7 @@ done < <(find "$MUSIC_DIR" -type f \( -iname "*.mp3" -o -iname "*.flac" -o -inam
     echo "Files missing art:       $NO_ART_COUNT"
     echo "See: $MISSING_ART_FILE"
     echo ""
-} >> "$REPORT_FILE"
+} >>"$REPORT_FILE"
 
 # Check for missing/empty metadata fields using ffprobe
 echo "[INFO] Checking metadata fields..."
@@ -87,7 +87,7 @@ BAD_META=0
     echo "Files With Missing/Empty Metadata"
     echo "----------------------------------"
     echo "Format: file | missing_fields"
-} > "$MISSING_META_FILE"
+} >"$MISSING_META_FILE"
 
 while IFS= read -r -d '' file; do
     MISSING_FIELDS=""
@@ -104,7 +104,7 @@ while IFS= read -r -d '' file; do
 
     if [ -n "$MISSING_FIELDS" ]; then
         BAD_META=$((BAD_META + 1))
-        echo "$file | ${MISSING_FIELDS%,}" >> "$MISSING_META_FILE"
+        echo "$file | ${MISSING_FIELDS%,}" >>"$MISSING_META_FILE"
     else
         GOOD_META=$((GOOD_META + 1))
     fi
@@ -117,7 +117,7 @@ done < <(find "$MUSIC_DIR" -type f \( -iname "*.mp3" -o -iname "*.flac" -o -inam
     echo "Files with missing fields:    $BAD_META"
     echo "See: $MISSING_META_FILE"
     echo ""
-} >> "$REPORT_FILE"
+} >>"$REPORT_FILE"
 
 # Total size
 TOTAL_SIZE=$(du -sh "$MUSIC_DIR" 2>/dev/null | cut -f1)
@@ -126,7 +126,7 @@ TOTAL_SIZE=$(du -sh "$MUSIC_DIR" 2>/dev/null | cut -f1)
     echo "------------"
     echo "Total: $TOTAL_SIZE"
     echo ""
-} >> "$REPORT_FILE"
+} >>"$REPORT_FILE"
 
 echo "[INFO] Audit complete."
 echo "[INFO] Report: $REPORT_FILE"

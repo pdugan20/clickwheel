@@ -42,7 +42,7 @@ if [ ! -f "$ENV_FILE" ]; then
     echo ""
     read -rp "Enter path to your music library: " MUSIC_PATH
     read -rp "Enter your AcoustID API key (from acoustid.org): " API_KEY
-    cat > "$ENV_FILE" <<EOF
+    cat >"$ENV_FILE" <<EOF
 MUSIC_DIR=${MUSIC_PATH}
 ACOUSTID_API_KEY=${API_KEY}
 EOF
@@ -65,7 +65,7 @@ sed \
     -e "s|LIBRARY_DB_PLACEHOLDER|${PROJECT_DIR}/beets/library.db|" \
     -e "s|REPORTS_DIR_PLACEHOLDER|${PROJECT_DIR}/reports|" \
     -e "s|ACOUSTID_API_KEY_PLACEHOLDER|${ACOUSTID_API_KEY:-not_set}|" \
-    "$BEETS_TEMPLATE" > "$BEETS_CONFIG"
+    "$BEETS_TEMPLATE" >"$BEETS_CONFIG"
 
 echo "[INFO] Generated beets/config.yaml from template"
 
