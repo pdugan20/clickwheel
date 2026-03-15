@@ -1,7 +1,6 @@
 # clickwheel
 
-[![PyPI](https://img.shields.io/pypi/v/clickwheel)](https://pypi.org/project/clickwheel/)
-[![Downloads](https://img.shields.io/pypi/dm/clickwheel)](https://pypi.org/project/clickwheel/)
+[![PyPI](https://img.shields.io/pypi/v/clickwheel?logo=pypi&logoColor=white)](https://pypi.org/project/clickwheel/)
 [![CI](https://github.com/pdugan20/clickwheel/actions/workflows/ci.yml/badge.svg)](https://github.com/pdugan20/clickwheel/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?logo=opensourceinitiative&logoColor=white)](https://opensource.org/licenses/MIT)
@@ -24,23 +23,16 @@ pipx install 'clickwheel[artwork]'
 
 ## Quick Start
 
+Create a config file pointing to your music library:
+
 ```bash
-# Point clickwheel at your music library
 mkdir -p ~/.clickwheel
 cat > ~/.clickwheel/config.yaml << 'EOF'
 music_dir: /path/to/your/music
 EOF
-
-# Scan and clean up metadata
-clickwheel scan
-clickwheel fix
-
-# Pick music for the iPod and sync
-clickwheel select
-clickwheel diff
-clickwheel sync
-clickwheel eject
 ```
+
+Then run `clickwheel scan` to index your library and `clickwheel select` to start picking music for your iPod.
 
 ## Commands
 

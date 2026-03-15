@@ -10,3 +10,6 @@ dist/
 build/
 clickwheel.db
 .ruff_cache/
+node_modules/
+package.json
+package-lock.json
