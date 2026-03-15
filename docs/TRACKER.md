@@ -31,7 +31,5 @@ Everything needed to go from "published on PyPI" to "daily-driving clickwheel on
 
 ## 4. Nice-to-Have Polish
 
-- [ ] Shell completion (`--install-completion`)
-- [ ] Improved TUI (album art preview, richer browsing)
-- [ ] TestPyPI for pre-release validation in future releases
-- [ ] Announce on r/ipod, r/commandline
+- [x] Shell completion (`--install-completion`) — built into Typer, works out of the box
+- [x] TestPyPI for pre-release validation — `test-publish.yml` workflow, manual trigger from Actions tab
