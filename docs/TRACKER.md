@@ -1,73 +1,37 @@
-# Project Tracker
+# Remaining Tasks
 
-## Phase 1: Library Cleanup
+Everything needed to go from "published on PyPI" to "daily-driving clickwheel on the iPod."
 
-Bash scripts for auditing and fixing metadata. Run once to get the library in shape.
+## 1. Install on Mac Mini
 
-- [x] Audit script — scan library for missing metadata and album art
-- [x] Beets config — template-based, env-injected paths
-- [x] Fix-metadata script — catalog, fetch art, fill genres, write tags
-- [x] Test on single artist (Daft Punk — art fetched and embedded)
-- [ ] Run full library cleanup from Mac Mini
-- [ ] Review results — check audit report for remaining issues
-- [ ] Manually fix stragglers (files beets couldn't auto-match)
+- [ ] `pipx install clickwheel` on Mac Mini (clean install from PyPI)
+- [ ] Verify `clickwheel --version` prints 0.2.0
+- [ ] Verify `clickwheel --help` and all subcommand `--help` work
 
-## Phase 2: Project Setup
+## 2. Library Cleanup
 
-Repo scaffolding, CI, and tooling.
+- [ ] Run `clickwheel scan` on full music library
+- [ ] Review scan stats — check for missing metadata, missing art
+- [ ] Run `clickwheel fix` to batch-fix metadata via beets
+- [ ] Review audit report for remaining issues
+- [ ] Manually fix stragglers beets couldn't auto-match
 
-- [x] Git repo + GitHub remote
-- [x] Generalize config (no hardcoded paths)
-- [x] CI workflow (shellcheck, shfmt, markdownlint, prettier)
-- [x] Dependabot + auto-merge
-- [x] MIT license
-- [x] Linter configs (shellcheck, shfmt, markdownlint, prettier, editorconfig)
-- [x] Rename repo to `clickwheel`
-- [x] CLAUDE.md for project
-- [x] Python project scaffolding (pyproject.toml, src layout)
-- [x] Python linting in CI (ruff)
-- [x] claude-code-lint in CI
-- [x] Pre-commit hooks
+## 3. End-to-End Testing
 
-## Phase 3: clickwheel CLI — Library Index
-
-Build the scan/index layer.
-
-- [x] Python package structure (`clickwheel/`)
-- [x] Typer CLI entry point with command stubs
-- [x] `clickwheel scan` — read metadata from library, store in SQLite
-- [x] SQLite schema (tracks, albums, artists, art status)
-- [x] `clickwheel fix` — wrapper around beets scripts
-- [x] Basic `--help` and version output
-- [ ] Test scan on full library
-
-## Phase 4: clickwheel CLI — Selection
-
-Interactive subset picker for iPod.
-
-- [x] `clickwheel select` — TUI for browsing artists/albums/genres
-- [x] Running size total vs. iPod capacity display
-- [x] Exclude FLAC files from selection
-- [x] `clickwheel playlist` — save/load/list selections as m3u
-- [ ] Edit existing playlists (add/remove artists/albums)
-- [ ] iPod capacity config and warning when selection exceeds it
-
-## Phase 5: clickwheel CLI — iPod Sync
-
-Wire up libgpod for actual iPod management.
-
-- [ ] Detect and mount iPod
-- [ ] `clickwheel ls` — show iPod contents
-- [ ] `clickwheel diff` — preview adds/removes before syncing
-- [ ] `clickwheel sync` — copy files + write iTunesDB via libgpod
-- [ ] Progress bar (tqdm/rich) during sync
-- [ ] Embed album art in iTunesDB
+- [ ] `clickwheel scan` — verify full library indexed correctly
+- [ ] `clickwheel select` — pick artists/albums, confirm capacity tracking
+- [ ] `clickwheel playlist` — save a selection, list saved playlists
+- [ ] `clickwheel playlist edit` — add/remove artists from a playlist
+- [ ] `clickwheel playlist delete` — remove a playlist
+- [ ] `clickwheel diff` — preview adds/removes against iPod
+- [ ] `clickwheel sync` — copy files to iPod, verify iTunesDB written
+- [ ] `clickwheel ls` — confirm iPod contents match expectations
 - [ ] `clickwheel eject` — safe unmount
-- [ ] Error handling (disconnected iPod, full disk, corrupt files)
+- [ ] `clickwheel scrobble` — submit plays to Last.fm, verify dedup
 
-## Phase 6: Polish
+## 4. Nice-to-Have Polish
 
-- [ ] Config file support (`~/.clickwheel/config.yaml`)
-- [ ] `--dry-run` flag on destructive commands
-- [ ] Shell completion (Typer built-in)
+- [ ] Shell completion (`--install-completion`)
 - [ ] Improved TUI (album art preview, richer browsing)
+- [ ] TestPyPI for pre-release validation in future releases
+- [ ] Announce on r/ipod, r/commandline
