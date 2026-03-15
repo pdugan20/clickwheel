@@ -3,3 +3,10 @@ beets/config.yaml
 reports/
 *.log
 .env
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+clickwheel.db
+.ruff_cache/

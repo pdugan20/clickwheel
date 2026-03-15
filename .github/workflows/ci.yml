@@ -48,3 +48,18 @@ jobs:
       - uses: actions/checkout@v6
       - name: Run Prettier check
         run: npx prettier@3 --check '**/*.{json,yml,yaml,md}' --ignore-path .prettierignore
+
+  ruff:
+    name: Ruff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Ruff
+        run: pip install ruff
+      - name: Check linting
+        run: ruff check clickwheel/
+      - name: Check formatting
+        run: ruff format --check clickwheel/
