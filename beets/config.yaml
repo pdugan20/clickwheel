@@ -1,0 +1,73 @@
+# Beets configuration for QNAP music library cleanup
+# IMPORTANT: This config does NOT move, copy, or rename files.
+# It only updates metadata and album art in-place.
+
+directory: /Volumes/Public/Multimedia/Music
+library: /Users/patdugan/Documents/GitHub/music-library-tools/beets/library.db
+
+# Do not move or copy files — Plex depends on current paths
+import:
+  move: no
+  copy: no
+  write: yes
+  timid: no
+  quiet_fallback: asis   # import as-is when no strong match (preserves existing tags)
+  log: /Users/patdugan/Documents/GitHub/music-library-tools/reports/beets_import.log
+
+# Paths — not used since we're not moving files, but required
+paths:
+  default: $albumartist/$album%aunique{}/$track $title
+  singleton: Non-Album/$artist/$title
+  comp: Compilations/$album%aunique{}/$track $title
+
+# Plugins
+plugins:
+  - chroma          # AcoustID fingerprinting for unknown tracks
+  - fetchart        # download album art
+  - embedart        # embed art into audio files
+  - lastgenre       # auto-fill genre from Last.fm
+  - scrub           # clean junk metadata
+  - info            # CLI inspection tool
+  - missing         # find missing tracks in albums
+  - duplicates      # find duplicate tracks
+
+chroma:
+  auto: yes
+acoustid:
+  apikey: ACOUSTID_API_KEY_PLACEHOLDER
+
+# Fetch high-quality album art
+fetchart:
+  auto: no
+  minwidth: 500       # minimum 500px for Plex quality
+  maxwidth: 1200      # no need for huge files
+  sources:
+    - filesystem       # check for cover.jpg/folder.jpg first
+    - coverart         # Cover Art Archive (MusicBrainz)
+    - itunes           # iTunes artwork
+    - amazon           # Amazon product images
+
+# Embed art into files
+embedart:
+  auto: no
+  ifempty: no          # replace existing low-res art too
+  maxwidth: 1200       # resize if larger
+  remove_art_file: no  # keep external art files for Plex
+
+# Auto-fill genre from Last.fm
+lastgenre:
+  auto: no
+  count: 1             # use top genre only
+  fallback: ''         # leave empty if no genre found
+  source: album        # prefer album-level genre
+
+# MusicBrainz matching
+match:
+  strong_rec_thresh: 0.10    # strong recommendation threshold
+  preferred:
+    media: ['Digital Media|File', 'CD']
+  ignored: unmatched_tracks
+
+# UI
+ui:
+  color: yes

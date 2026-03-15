@@ -1,0 +1,4 @@
+beets/library.db
+reports/
+*.log
+.env
