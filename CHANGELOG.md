@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/) and
 [Conventional Commits](https://www.conventionalcommits.org/).
 
+## v0.2.0 (2026-03-15)
+
+### Fixes
+
+- Move macOS platform guard to individual commands so `--help` works on any OS
+- Add test matrix job to CI (ubuntu + macos, Python 3.11-3.13)
+
 ## v0.1.0 (2026-03-15)
 
 ### Features
