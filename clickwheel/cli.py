@@ -38,11 +38,14 @@ def _version_callback(value: bool) -> None:
 
 @app.callback()
 def main(
+    ctx: typer.Context,
     version: bool = typer.Option(
         False, "--version", "-v", help="Show version", callback=_version_callback
     ),
 ) -> None:
     """clickwheel — sync your music library to a classic iPod."""
+    if ctx.resilient_parsing:
+        return
     import sys
 
     if sys.platform != "darwin":
