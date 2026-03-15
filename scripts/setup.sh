@@ -10,7 +10,7 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 BEETS_CONFIG="${PROJECT_DIR}/beets/config.yaml"
 ENV_FILE="${PROJECT_DIR}/.env"
 
-echo "[INFO] Setting up music-library-tools..."
+echo "[INFO] Setting up clickwheel..."
 
 # Check for Homebrew
 if ! command -v brew &>/dev/null; then
