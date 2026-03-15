@@ -36,21 +36,22 @@ def _version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
-@app.callback()
-def main(
-    ctx: typer.Context,
-    version: bool = typer.Option(
-        False, "--version", "-v", help="Show version", callback=_version_callback
-    ),
-) -> None:
-    """clickwheel — sync your music library to a classic iPod."""
-    if ctx.resilient_parsing:
-        return
+def _check_macos() -> None:
+    """Exit if not running on macOS."""
     import sys
 
     if sys.platform != "darwin":
         error("clickwheel requires macOS. iPod sync depends on macOS disk utilities.")
         raise typer.Exit(1)
+
+
+@app.callback()
+def main(
+    version: bool = typer.Option(
+        False, "--version", "-v", help="Show version", callback=_version_callback
+    ),
+) -> None:
+    """clickwheel — sync your music library to a classic iPod."""
 
 
 @app.command()
@@ -390,6 +391,7 @@ def diff(
     playlist_name: str = typer.Argument("ipod", help="Playlist to diff against iPod"),
 ) -> None:
     """Preview changes before syncing to your iPod."""
+    _check_macos()
     cfg = load_config()
     db = Database(cfg.db_path)
 
@@ -455,6 +457,7 @@ def sync(
     ),
 ) -> None:
     """Send your playlist to the iPod."""
+    _check_macos()
     import shutil
 
     from clickwheel.ipod.sync import copy_tracks_to_ipod, write_ipod_db
@@ -552,6 +555,7 @@ def sync(
 @app.command()
 def ls() -> None:
     """Show what's on your iPod."""
+    _check_macos()
     cfg = load_config()
     ipod = _require_ipod(cfg)
     tracks = _get_ipod_track_list(ipod)
@@ -585,6 +589,7 @@ def ls() -> None:
 @app.command()
 def eject() -> None:
     """Safely disconnect the iPod."""
+    _check_macos()
     import subprocess
 
     cfg = load_config()
