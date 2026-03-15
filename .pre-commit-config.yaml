@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -24,7 +24,7 @@ repos:
         types: [shell]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.9.10
+    rev: v0.15.6
     hooks:
       - id: ruff
         args: ['--fix']
@@ -55,7 +55,7 @@ repos:
         types_or: [json, yaml, markdown]
 
   - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.44.0
+    rev: v0.48.0
     hooks:
       - id: markdownlint
 
@@ -68,5 +68,5 @@ repos:
         stages: [commit-msg]
         always_run: true
         additional_dependencies:
-          - '@commitlint/cli@19'
-          - '@commitlint/config-conventional@19'
+          - '@commitlint/cli@20'
+          - '@commitlint/config-conventional@20'
