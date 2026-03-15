@@ -22,32 +22,35 @@ Repo scaffolding, CI, and tooling.
 - [x] Dependabot + auto-merge
 - [x] MIT license
 - [x] Linter configs (shellcheck, shfmt, markdownlint, prettier, editorconfig)
-- [ ] Rename repo to `clickwheel`
-- [ ] CLAUDE.md for project
-- [ ] Python project scaffolding (pyproject.toml, src layout)
-- [ ] Python linting in CI (ruff)
-- [ ] Pre-commit hooks
+- [x] Rename repo to `clickwheel`
+- [x] CLAUDE.md for project
+- [x] Python project scaffolding (pyproject.toml, src layout)
+- [x] Python linting in CI (ruff)
+- [x] claude-code-lint in CI
+- [x] Pre-commit hooks
 
 ## Phase 3: clickwheel CLI — Library Index
 
 Build the scan/index layer.
 
-- [ ] Python package structure (`clickwheel/`)
-- [ ] Typer CLI entry point with command stubs
-- [ ] `clickwheel scan` — read metadata from library, store in SQLite
-- [ ] SQLite schema (tracks, albums, artists, art status)
-- [ ] `clickwheel fix` — wrapper around beets scripts
-- [ ] Basic `--help` and version output
+- [x] Python package structure (`clickwheel/`)
+- [x] Typer CLI entry point with command stubs
+- [x] `clickwheel scan` — read metadata from library, store in SQLite
+- [x] SQLite schema (tracks, albums, artists, art status)
+- [x] `clickwheel fix` — wrapper around beets scripts
+- [x] Basic `--help` and version output
+- [ ] Test scan on full library
 
 ## Phase 4: clickwheel CLI — Selection
 
 Interactive subset picker for iPod.
 
-- [ ] `clickwheel select` — TUI for browsing artists/albums/genres
-- [ ] Running size total vs. iPod capacity display
-- [ ] Exclude FLAC files from selection
-- [ ] `clickwheel playlist` — save/load/list selections as m3u
+- [x] `clickwheel select` — TUI for browsing artists/albums/genres
+- [x] Running size total vs. iPod capacity display
+- [x] Exclude FLAC files from selection
+- [x] `clickwheel playlist` — save/load/list selections as m3u
 - [ ] Edit existing playlists (add/remove artists/albums)
+- [ ] iPod capacity config and warning when selection exceeds it
 
 ## Phase 5: clickwheel CLI — iPod Sync
 
