@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/) and
 [Conventional Commits](https://www.conventionalcommits.org/).
 
+## v0.2.1 (2026-03-15)
+
+### Fixes and Cleanup
+
+- Remove unused acoustid_api_key from config
+- Fix duplicate warn() in capacity bar
+- Fix README capacity default to match code (64 GB)
+- Rewrite README for end users (pipx install, clean config example)
+- Update all dependencies to latest versions
+- Add repo description, website, and topics on GitHub
+
 ## v0.2.0 (2026-03-15)
 
 ### Fixes
