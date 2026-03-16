@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/) and
 [Conventional Commits](https://www.conventionalcommits.org/).
 
+## v0.3.0 (2026-03-15)
+
+### Features
+
+- Non-interactive playlist editing: `clickwheel edit --add "Artist"` / `--remove "Artist"`
+- Live file counter during scan discovery phase (no more staring at a blank screen)
+- Scan progress indicator using tqdm for file discovery
+
+### Fixes
+
+- Always use `~/.clickwheel/` for data dir instead of varying by working directory
+- Fix iPod sync: use `shutil.copy` instead of `copy2` to avoid FAT32 xattr errors
+- Fix sync error output: group failures by artist/album instead of per-file path noise
+- Fix vendored iPod imports: bare `from device_info` → `from clickwheel.ipod.device_info`
+- Fix iTunesDB reader to handle both flat and nested track list formats
+- Normalize capitalized track keys (Title/Artist/Album) from iTunesDB writer format
+
+### Infrastructure
+
+- Add release-please for automated changelog and version management
+- 83 tests (6 new for non-interactive edit)
+
 ## v0.2.1 (2026-03-15)
 
 ### Fixes and Cleanup
