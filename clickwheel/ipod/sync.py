@@ -53,30 +53,30 @@ def copy_tracks_to_ipod(
         (music_dir / f"F{i:02d}").mkdir(exist_ok=True)
 
     copied: list[tuple[dict, str]] = []
-    errors = 0
+    failed: list[dict] = []
 
     for i, track in enumerate(tracks):
         src = Path(track["path"])
         if not src.exists():
-            logger.warning("Source file not found: %s", src)
-            errors += 1
+            failed.append(track)
+            if progress_callback:
+                progress_callback(i + 1, len(tracks))
             continue
 
         subdir = f"F{i % 50:02d}"
         dest = music_dir / subdir / src.name
 
         try:
-            shutil.copy2(str(src), str(dest))
+            shutil.copy(str(src), str(dest))
             ipod_rel = f"{subdir}/{src.name}"
             copied.append((track, ipod_rel))
-        except OSError as exc:
-            logger.warning("Failed to copy %s: %s", src, exc)
-            errors += 1
+        except OSError:
+            failed.append(track)
 
         if progress_callback:
             progress_callback(i + 1, len(tracks))
 
-    return copied
+    return copied, failed
 
 
 def write_ipod_db(

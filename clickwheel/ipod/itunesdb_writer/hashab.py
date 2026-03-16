@@ -246,7 +246,7 @@ def read_firewire_id(ipod_path: str) -> bytes:
 
     Reads from the centralised DeviceInfo store.  Raises if not available.
     """
-    from device_info import get_current_device
+    from clickwheel.ipod.device_info import get_current_device
     device = get_current_device()
     if device is not None:
         fwid = device.firewire_id_bytes

@@ -603,7 +603,7 @@ def write_itunesdb(
     Returns:
         True if successful
     """
-    from device_info import resolve_itdb_path, itdb_write_filename
+    from clickwheel.ipod.device_info import resolve_itdb_path, itdb_write_filename
 
     # Determine the correct database filename for this device (iTunesDB or iTunesCDB)
     db_filename = itdb_write_filename(ipod_path)
@@ -612,8 +612,8 @@ def write_itunesdb(
     # Auto-detect capabilities from the centralized device store
     if capabilities is None:
         try:
-            from device_info import get_current_device
-            from ipod_models import capabilities_for_family_gen
+            from clickwheel.ipod.device_info import get_current_device
+            from clickwheel.ipod.ipod_models import capabilities_for_family_gen
             dev = get_current_device()
             if dev and dev.model_family and dev.generation:
                 capabilities = capabilities_for_family_gen(
@@ -931,7 +931,7 @@ def write_itunesdb(
         # Try to get FireWire ID from parameter, SysInfo, SysInfoExtended, or Windows registry
         if firewire_id is None:
             try:
-                from device_info import get_firewire_id
+                from clickwheel.ipod.device_info import get_firewire_id
                 firewire_id = get_firewire_id(ipod_path)
             except Exception as e:
                 logger.warning("Could not get FireWire ID: %s", e)
@@ -958,7 +958,7 @@ def write_itunesdb(
 
         hash_info = None
         try:
-            from device_info import get_current_device
+            from clickwheel.ipod.device_info import get_current_device
             dev = get_current_device()
             if dev and dev.hash_info_iv and dev.hash_info_rndpart:
                 hash_info = HashInfo(uuid=b'\x00' * 20, rndpart=dev.hash_info_rndpart, iv=dev.hash_info_iv)
@@ -1014,7 +1014,7 @@ def write_itunesdb(
         # Requires FireWire ID (same as HASH58)
         if firewire_id is None:
             try:
-                from device_info import get_firewire_id
+                from clickwheel.ipod.device_info import get_firewire_id
                 firewire_id = get_firewire_id(ipod_path)
             except Exception as e:
                 logger.warning("Could not get FireWire ID for HASHAB: %s", e)

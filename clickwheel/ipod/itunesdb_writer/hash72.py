@@ -87,7 +87,7 @@ def read_hash_info(ipod_path: str) -> Optional[HashInfo]:
     """
     # Check centralized device_info store first
     try:
-        from device_info import get_current_device
+        from clickwheel.ipod.device_info import get_current_device
         dev = get_current_device()
         if dev and dev.hash_info_iv and dev.hash_info_rndpart:
             return HashInfo(uuid=b'\x00' * 20, rndpart=dev.hash_info_rndpart, iv=dev.hash_info_iv)

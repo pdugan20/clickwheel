@@ -42,7 +42,7 @@ Then run `clickwheel scan` to index your library and `clickwheel select` to star
 | `clickwheel fix`      | Clean up metadata, fetch album art, fill genres via beets |
 | `clickwheel select`   | Interactive picker — browse by artist/album/genre         |
 | `clickwheel playlist` | List saved playlists or show details for one              |
-| `clickwheel edit`     | Add or remove artists from a playlist                     |
+| `clickwheel edit`     | Add or remove artists from a playlist (interactive or via `--add`/`--remove`) |
 | `clickwheel delete`   | Delete a saved playlist                                   |
 | `clickwheel diff`     | Preview what would be added or removed on the iPod        |
 | `clickwheel sync`     | Push your playlist to the iPod                            |

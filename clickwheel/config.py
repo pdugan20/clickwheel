@@ -111,15 +111,8 @@ def _parse_yaml(path: Path) -> dict:
 
 
 def _find_data_dir() -> Path:
-    """Find the data directory for clickwheel.
-
-    In a dev checkout (editable install), use the project root containing
-    pyproject.toml. For regular installs, use ~/.clickwheel/.
-    """
-    current = Path.cwd()
-    for parent in [current, *current.parents]:
-        if (parent / "pyproject.toml").exists():
-            return parent
+    """Return the data directory for clickwheel (~/.clickwheel/)."""
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     return CONFIG_DIR
 
 

@@ -71,14 +71,6 @@ def test_load_dotenv_comments(tmp_path: Path, monkeypatch):
     monkeypatch.delenv("TEST_VAR2")
 
 
-def test_find_data_dir_in_project(tmp_path: Path, monkeypatch):
-    (tmp_path / "pyproject.toml").touch()
-    monkeypatch.chdir(tmp_path)
-    assert _find_data_dir() == tmp_path
-
-
-def test_find_data_dir_fallback(tmp_path: Path, monkeypatch):
-    # No pyproject.toml anywhere up — should fall back to ~/.clickwheel
-    monkeypatch.chdir(tmp_path)
+def test_find_data_dir_always_config_dir():
     result = _find_data_dir()
     assert result == CONFIG_DIR

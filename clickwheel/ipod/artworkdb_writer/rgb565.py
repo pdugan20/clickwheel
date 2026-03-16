@@ -54,7 +54,7 @@ def get_artwork_formats(ipod_path: str) -> dict[int, tuple[int, int]]:
     import logging
     _log = logging.getLogger(__name__)
 
-    from device_info import get_current_device
+    from clickwheel.ipod.device_info import get_current_device
     device = get_current_device()
     if device is not None and device.artwork_formats:
         _log.info(

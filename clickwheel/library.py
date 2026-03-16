@@ -54,19 +54,18 @@ def scan_file(path: Path) -> dict | None:
         return None
 
 
-def find_audio_files(music_dir: Path) -> list[Path]:
+def find_audio_files(
+    music_dir: Path, progress_callback: callable | None = None
+) -> list[Path]:
     """Recursively find all audio files in the given directory."""
-    files = []
-    for ext in AUDIO_EXTENSIONS:
-        files.extend(music_dir.rglob(f"*{ext}"))
-        files.extend(music_dir.rglob(f"*{ext.upper()}"))
-    # Deduplicate (case-insensitive match might overlap)
-    seen = set()
-    unique = []
-    for f in files:
-        if f not in seen:
-            seen.add(f)
-            unique.append(f)
+    seen: set[Path] = set()
+    unique: list[Path] = []
+    for entry in music_dir.rglob("*"):
+        if entry.suffix.lower() in AUDIO_EXTENSIONS and entry not in seen:
+            seen.add(entry)
+            unique.append(entry)
+            if progress_callback:
+                progress_callback(len(unique))
     return sorted(unique)
 
 

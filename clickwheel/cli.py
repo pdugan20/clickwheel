@@ -86,8 +86,13 @@ def scan(
     if full:
         db.clear_tracks()
 
-    status(f"Scanning {cfg.music_dir}...")
-    files = find_audio_files(cfg.music_dir)
+    counter = tqdm(unit=" files", desc="Finding audio files", bar_format="{desc}: {n_fmt}{unit}")
+    def _on_found(count: int) -> None:
+        counter.n = count
+        counter.refresh()
+
+    files = find_audio_files(cfg.music_dir, progress_callback=_on_found)
+    counter.close()
     info(f"Found {len(files):,} tracks")
 
     scanned = 0
@@ -299,16 +304,51 @@ def delete(
 @app.command()
 def edit(
     playlist_name: str = typer.Argument("ipod", help="Playlist to edit"),
+    add: list[str] = typer.Option([], "--add", "-a", help="Artist to add"),
+    remove: list[str] = typer.Option([], "--remove", "-r", help="Artist to remove"),
 ) -> None:
     """Add or remove artists from a playlist."""
     cfg = load_config()
     db = Database(cfg.db_path)
 
+    # Non-interactive mode: --add and/or --remove flags
+    if add or remove:
+        capacity = cfg.ipod_capacity_bytes
+
+        for artist in add:
+            added = db.add_artist_to_playlist(playlist_name, artist)
+            if added:
+                confirm(f"+ {artist}: {added} tracks added")
+            else:
+                warn(f"No tracks found for '{artist}' (or already in playlist)")
+
+        for artist in remove:
+            removed = db.remove_artist_from_playlist(playlist_name, artist)
+            if removed:
+                info(f"- {artist}: {removed} tracks removed")
+            else:
+                warn(f"'{artist}' not in playlist.")
+
+        final_size = db.get_playlist_size(playlist_name)
+        tracks = db.get_playlist(playlist_name)
+        success(
+            f"Playlist '{playlist_name}' — "
+            f"{len(tracks)} tracks, {_fmt_size(final_size)}"
+        )
+        if final_size > capacity:
+            warn(
+                f"This is {_fmt_size(final_size - capacity)} over your iPod's capacity."
+            )
+        db.close()
+        return
+
+    # Interactive mode (no flags)
     existing = db.get_playlist(playlist_name)
     if not existing:
         error(
             f"Playlist '{playlist_name}' not found. "
-            "Run `clickwheel select` to create one."
+            "Run `clickwheel select` to create one, "
+            "or use `clickwheel edit --add \"Artist\"` to start one."
         )
         db.close()
         raise typer.Exit(1)
@@ -524,13 +564,19 @@ def sync(
     def _on_progress(current: int, total: int) -> None:
         progress.update(1)
 
-    copied = copy_tracks_to_ipod(to_add, cfg.ipod_mount, _on_progress)
+    copied, failed = copy_tracks_to_ipod(to_add, cfg.ipod_mount, _on_progress)
     progress.close()
 
-    copy_errors = len(to_add) - len(copied)
     success(f"Copied {len(copied)} tracks to iPod.")
-    if copy_errors:
-        warn(f"{copy_errors} tracks couldn't be copied.")
+    if failed:
+        warn(f"{len(failed)} tracks couldn't be copied:")
+        # Group failures by artist + album
+        groups: dict[tuple[str, str], int] = {}
+        for t in failed:
+            key = (t.get("artist") or "Unknown", t.get("album") or "Unknown")
+            groups[key] = groups.get(key, 0) + 1
+        for (artist, album), count in sorted(groups.items()):
+            dim(f"  {artist} — {album} ({count} tracks)")
 
     # Write iTunesDB — include both existing iPod tracks and newly copied ones
     info("Updating iPod database...")

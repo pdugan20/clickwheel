@@ -75,8 +75,31 @@ def read_play_counts(
 def get_ipod_tracks(db: dict) -> list[dict]:
     """Extract the flat track list from a parsed iTunesDB.
 
-    Walks the nested chunk structure to find the track list (mhlt).
+    Handles both the nested chunk format (mhsd > mhlt > children)
+    and the flat format where mhlt is a top-level list.
     """
+    # Flat format: mhlt is a top-level list of track dicts
+    # Normalize capitalized keys (Title, Artist, Album) to lowercase
+    mhlt = db.get("mhlt")
+    if isinstance(mhlt, list):
+        key_map = {
+            "Title": "title",
+            "Artist": "artist",
+            "Album": "album",
+            "Album Artist": "album_artist",
+            "Genre": "genre",
+            "Location": "location",
+        }
+        normalized = []
+        for t in mhlt:
+            norm = dict(t)
+            for old_key, new_key in key_map.items():
+                if old_key in norm:
+                    norm[new_key] = norm.pop(old_key)
+            normalized.append(norm)
+        return normalized
+
+    # Nested chunk format: walk children to find mhsd > mhlt
     tracks = []
     for child in db.get("children", []):
         if child.get("type") == "mhsd":
