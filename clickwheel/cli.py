@@ -86,7 +86,9 @@ def scan(
     if full:
         db.clear_tracks()
 
-    counter = tqdm(unit=" files", desc="Finding audio files", bar_format="{desc}: {n_fmt}{unit}")
+    bar_fmt = "{desc}: {n_fmt}{unit}"
+    counter = tqdm(unit=" files", desc="Finding audio files", bar_format=bar_fmt)
+
     def _on_found(count: int) -> None:
         counter.n = count
         counter.refresh()
@@ -348,7 +350,7 @@ def edit(
         error(
             f"Playlist '{playlist_name}' not found. "
             "Run `clickwheel select` to create one, "
-            "or use `clickwheel edit --add \"Artist\"` to start one."
+            'or use `clickwheel edit --add "Artist"` to start one.'
         )
         db.close()
         raise typer.Exit(1)
