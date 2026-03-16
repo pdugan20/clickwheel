@@ -9,6 +9,8 @@ __pycache__/
 dist/
 build/
 clickwheel.db
+clickwheel.db-shm
+clickwheel.db-wal
 .ruff_cache/
 node_modules/
 package.json
