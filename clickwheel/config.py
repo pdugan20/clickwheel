@@ -21,6 +21,7 @@ _YAML_TO_ENV = {
     "lastfm_api_key": "LASTFM_API_KEY",
     "lastfm_api_secret": "LASTFM_API_SECRET",
     "lastfm_username": "LASTFM_USERNAME",
+    "lastfm_session_key": "LASTFM_SESSION_KEY",
     "auto_scan": "AUTO_SCAN",
     "auto_scan_staleness_minutes": "AUTO_SCAN_STALENESS_MINUTES",
 }
@@ -35,6 +36,7 @@ class Config:
     lastfm_api_key: str = ""
     lastfm_api_secret: str = ""
     lastfm_username: str = ""
+    lastfm_session_key: str = ""
     auto_scan: bool = True
     auto_scan_staleness_minutes: int = DEFAULT_AUTO_SCAN_STALENESS_MINUTES
     db_path: Path = field(init=False)
@@ -79,6 +81,7 @@ def load_config() -> Config:
         lastfm_api_key=os.environ.get("LASTFM_API_KEY", ""),
         lastfm_api_secret=os.environ.get("LASTFM_API_SECRET", ""),
         lastfm_username=os.environ.get("LASTFM_USERNAME", ""),
+        lastfm_session_key=os.environ.get("LASTFM_SESSION_KEY", ""),
         auto_scan=os.environ.get("AUTO_SCAN", "true").lower()
         not in ("false", "0", "no"),
         auto_scan_staleness_minutes=int(

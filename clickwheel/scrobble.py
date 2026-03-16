@@ -149,6 +149,7 @@ def submit_scrobbles(
     username: str,
     scrobbles: list[dict],
     db_conn: sqlite3.Connection,
+    session_key: str = "",
 ) -> tuple[int, int]:
     """Submit scrobbles to Last.fm in batches.
 
@@ -160,6 +161,7 @@ def submit_scrobbles(
         api_key=api_key,
         api_secret=api_secret,
         username=username,
+        session_key=session_key,
     )
 
     submitted = 0
@@ -200,6 +202,32 @@ def submit_scrobbles(
             errors += len(batch)
 
     return submitted, errors
+
+
+def authenticate_lastfm(api_key: str, api_secret: str) -> str:
+    """Run the Last.fm web auth flow. Returns a session key.
+
+    Opens the user's browser to authorize clickwheel, then waits
+    for them to confirm before fetching the session key.
+    """
+    import webbrowser
+
+    import pylast
+
+    network = pylast.LastFMNetwork(
+        api_key=api_key,
+        api_secret=api_secret,
+    )
+    sg = pylast.SessionKeyGenerator(network)
+    url = sg.get_web_auth_url()
+
+    webbrowser.open(url)
+    return url, sg
+
+
+def complete_lastfm_auth(sg, url: str) -> str:
+    """Complete the auth flow after the user has approved in their browser."""
+    return sg.get_web_auth_session_key(url)
 
 
 def get_lastfm_profile(api_key: str, api_secret: str, username: str) -> dict | None:

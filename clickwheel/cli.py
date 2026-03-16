@@ -706,12 +706,17 @@ def scrobble(
     show_status: bool = typer.Option(
         False, "--status", help="Show Last.fm profile info"
     ),
+    auth: bool = typer.Option(
+        False, "--auth", help="Authorize clickwheel with your Last.fm account"
+    ),
 ) -> None:
     """Submit your recent iPod listens to Last.fm."""
     import time as _time
 
     from clickwheel.scrobble import (
+        authenticate_lastfm,
         cache_scrobbles,
+        complete_lastfm_auth,
         get_lastfm_profile,
         get_pending_scrobbles,
         read_ipod_plays,
@@ -727,6 +732,27 @@ def scrobble(
         )
         raise typer.Exit(1)
 
+    if not cfg.lastfm_api_secret:
+        error(
+            "Last.fm API secret is missing. Add it to ~/.clickwheel/config.yaml or .env"
+        )
+        raise typer.Exit(1)
+
+    if auth:
+        status("Opening Last.fm in your browser...")
+        info("Authorize clickwheel, then come back here.")
+        url, sg = authenticate_lastfm(cfg.lastfm_api_key, cfg.lastfm_api_secret)
+        info(f"  Auth URL: {url}")
+        typer.prompt("Press Enter after you've approved in your browser", default="")
+        try:
+            session_key = complete_lastfm_auth(sg, url)
+        except Exception as exc:
+            error(f"Auth failed: {exc}")
+            raise typer.Exit(1) from exc
+        _save_session_key(cfg, session_key)
+        success("Last.fm authorized! Session key saved to config.")
+        return
+
     if show_status:
         profile = get_lastfm_profile(
             cfg.lastfm_api_key, cfg.lastfm_api_secret, cfg.lastfm_username
@@ -739,9 +765,10 @@ def scrobble(
             error("Couldn't reach Last.fm. Check your API key and internet connection.")
         return
 
-    if not cfg.lastfm_api_secret:
+    if not cfg.lastfm_session_key:
         error(
-            "Last.fm API secret is missing. Add it to ~/.clickwheel/config.yaml or .env"
+            "Last.fm not authorized. "
+            "Run `clickwheel scrobble --auth` to connect your account."
         )
         raise typer.Exit(1)
 
@@ -805,6 +832,7 @@ def scrobble(
         cfg.lastfm_username,
         pending,
         db.conn,
+        session_key=cfg.lastfm_session_key,
     )
 
     success(f"Sent {submitted} listens to Last.fm.")
@@ -941,6 +969,28 @@ def _calc_size(db: Database, paths: list[str]) -> int:
         if row:
             total += row["file_size"] or 0
     return total
+
+
+def _save_session_key(cfg, session_key: str) -> None:
+    """Append the Last.fm session key to the config file."""
+    from clickwheel.config import CONFIG_FILE
+
+    # Read existing config, append session key
+    lines = []
+    replaced = False
+    if CONFIG_FILE.exists():
+        with open(CONFIG_FILE) as f:
+            for line in f:
+                if line.strip().startswith("lastfm_session_key:"):
+                    lines.append(f"lastfm_session_key: {session_key}\n")
+                    replaced = True
+                else:
+                    lines.append(line)
+    if not replaced:
+        lines.append(f"lastfm_session_key: {session_key}\n")
+
+    with open(CONFIG_FILE, "w") as f:
+        f.writelines(lines)
 
 
 def _require_ipod(cfg) -> dict:
