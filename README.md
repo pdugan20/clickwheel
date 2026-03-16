@@ -94,6 +94,30 @@ Or fix the entire library:
 clickwheel fix
 ```
 
+### Last.fm scrobbling
+
+To submit your iPod listens to Last.fm, add your API credentials to the config (get them at [last.fm/api/account/create](https://www.last.fm/api/account/create)):
+
+```yaml
+lastfm_api_key: your_key
+lastfm_api_secret: your_secret
+lastfm_username: your_username
+```
+
+Then authorize clickwheel with your Last.fm account (one-time):
+
+```bash
+clickwheel scrobble --auth
+```
+
+After that, submit listens any time your iPod is connected:
+
+```bash
+clickwheel scrobble
+```
+
+Scrobbles are cached locally so duplicates are never submitted, even if you run it multiple times.
+
 ## Requirements
 
 - macOS (iPod sync depends on macOS disk utilities)

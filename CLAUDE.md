@@ -16,7 +16,7 @@ A Python CLI for syncing a music library to a classic iPod from a modern Mac.
 - `tests/` — pytest test suite
 - `scripts/` — bash utilities (audit, fix-metadata, setup)
 - `beets/` — beets config template (generated config is gitignored)
-- `docs/` — architecture docs and task tracker
+- `docs/` — architecture docs
 
 ## Commands
 
@@ -30,7 +30,7 @@ A Python CLI for syncing a music library to a classic iPod from a modern Mac.
 - `clickwheel sync` — push playlist to iPod
 - `clickwheel ls` — show iPod contents
 - `clickwheel eject` — safely unmount iPod
-- `clickwheel scrobble` — submit iPod listens to Last.fm
+- `clickwheel scrobble` — submit iPod listens to Last.fm (`--auth` for first-time setup)
 
 ## Development
 

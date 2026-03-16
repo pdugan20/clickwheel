@@ -30,10 +30,11 @@ Music Library (NAS/local)
 clickwheel/
   cli.py          # Typer command definitions
   config.py       # config loading (~/.clickwheel/config.yaml, env vars)
-  db.py           # SQLite database (tracks, playlists, scrobble cache)
+  db.py           # SQLite database (tracks, playlists, scrobble cache, scan metadata)
   library.py      # music file scanning (mutagen)
+  autoscan.py     # incremental library scan (mtime+size comparison)
   output.py       # Rich console helpers (tables, status, errors)
-  scrobble.py     # Last.fm scrobbling (pylast)
+  scrobble.py     # Last.fm scrobbling + web auth (pylast)
   ipod/           # vendored iOpenPodv2 (iTunesDB + ArtworkDB writers)
 ```
 
@@ -45,7 +46,7 @@ beets and clickwheel never move, copy, or rename source files. The music library
 
 ### Local SQLite index
 
-`clickwheel scan` reads metadata from the library and stores it in a local SQLite database. This avoids re-reading thousands of files over SMB every time you want to browse or select music.
+`clickwheel scan` reads metadata from the library and stores it in a local SQLite database. This avoids re-reading thousands of files over SMB every time you want to browse or select music. Scans are incremental by default — only files whose mtime or size changed are re-read. Commands like `select`, `edit`, `diff`, and `sync` auto-scan if the last scan is older than a configurable threshold (default: 30 minutes).
 
 ### Selections are playlists
 
@@ -63,6 +64,10 @@ The iPod's stock firmware requires a proprietary database (`iTunesDB`). We vendo
 
 numpy is only used for RGB565 artwork conversion in the ArtworkDB writer. At ~30MB installed, it's behind an `artwork` extra: `pipx install clickwheel[artwork]`.
 
+### Last.fm auth via web flow
+
+Scrobbling requires a Last.fm session key, obtained through a one-time browser auth flow (`clickwheel scrobble --auth`). The session key is saved to `~/.clickwheel/config.yaml` and never expires unless the user revokes it. No passwords are stored.
+
 ## Dependencies
 
 | Dependency | Purpose              | Install             |
@@ -72,6 +77,6 @@ numpy is only used for RGB565 artwork conversion in the ArtworkDB writer. At ~30
 | tqdm       | Progress bars        | pip (auto)          |
 | mutagen    | Audio metadata       | pip (auto)          |
 | pylast     | Last.fm API          | pip (auto)          |
-| beets      | Metadata cleanup     | pipx (user install) |
-| Pillow     | Album art processing | pip (artwork extra) |
+| beets      | Metadata cleanup     | pip (fix extra)     |
+| Pillow     | Album art processing | pip (fix extra)     |
 | numpy      | RGB565 conversion    | pip (artwork extra) |
