@@ -8,6 +8,7 @@ import typer
 from tqdm import tqdm
 
 from clickwheel import __version__
+from clickwheel.autoscan import maybe_auto_scan
 from clickwheel.config import load_config
 from clickwheel.db import Database
 from clickwheel.library import find_audio_files, scan_file
@@ -97,9 +98,28 @@ def scan(
     counter.close()
     info(f"Found {len(files):,} tracks")
 
+    import time as _time
+
     scanned = 0
+    skipped = 0
     scan_errors = 0
     for f in tqdm(files, desc="Scanning", unit="file"):
+        # Incremental: skip files whose mtime+size haven't changed
+        if not full:
+            try:
+                stat = f.stat()
+                db_mtime, db_size = db.get_track_mtime(str(f))
+                if (
+                    db_mtime is not None
+                    and db_size is not None
+                    and stat.st_mtime == db_mtime
+                    and stat.st_size == db_size
+                ):
+                    skipped += 1
+                    continue
+            except OSError:
+                pass
+
         track = scan_file(f)
         if track:
             db.upsert_track(track)
@@ -111,6 +131,7 @@ def scan(
             db.commit()
 
     db.commit()
+    db.set_scan_meta("last_scan_completed", str(_time.time()))
 
     stats = db.get_stats()
     formats = db.get_format_breakdown()
@@ -147,10 +168,15 @@ def fix(
 @app.command()
 def select(
     playlist_name: str = typer.Option("ipod", "--name", "-n", help="Playlist name"),
+    no_scan: bool = typer.Option(
+        False, "--no-scan", help="Skip automatic library scan"
+    ),
 ) -> None:
     """Pick artists and albums for your iPod."""
     cfg = load_config()
     db = Database(cfg.db_path)
+    if not no_scan:
+        maybe_auto_scan(cfg, db)
     artists = db.get_artists()
 
     if not artists:
@@ -308,10 +334,15 @@ def edit(
     playlist_name: str = typer.Argument("ipod", help="Playlist to edit"),
     add: list[str] = typer.Option([], "--add", "-a", help="Artist to add"),
     remove: list[str] = typer.Option([], "--remove", "-r", help="Artist to remove"),
+    no_scan: bool = typer.Option(
+        False, "--no-scan", help="Skip automatic library scan"
+    ),
 ) -> None:
     """Add or remove artists from a playlist."""
     cfg = load_config()
     db = Database(cfg.db_path)
+    if not no_scan:
+        maybe_auto_scan(cfg, db)
 
     # Non-interactive mode: --add and/or --remove flags
     if add or remove:
@@ -431,11 +462,16 @@ def edit(
 @app.command()
 def diff(
     playlist_name: str = typer.Argument("ipod", help="Playlist to diff against iPod"),
+    no_scan: bool = typer.Option(
+        False, "--no-scan", help="Skip automatic library scan"
+    ),
 ) -> None:
     """Preview changes before syncing to your iPod."""
     _check_macos()
     cfg = load_config()
     db = Database(cfg.db_path)
+    if not no_scan:
+        maybe_auto_scan(cfg, db)
 
     ipod = _require_ipod(cfg)
     ipod_tracks = _get_ipod_track_list(ipod)
@@ -497,6 +533,9 @@ def sync(
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Show what would change without doing it"
     ),
+    no_scan: bool = typer.Option(
+        False, "--no-scan", help="Skip automatic library scan"
+    ),
 ) -> None:
     """Send your playlist to the iPod."""
     _check_macos()
@@ -506,6 +545,8 @@ def sync(
 
     cfg = load_config()
     db = Database(cfg.db_path)
+    if not no_scan:
+        maybe_auto_scan(cfg, db)
 
     ipod = _require_ipod(cfg)
     ipod_tracks = _get_ipod_track_list(ipod)
@@ -933,18 +974,20 @@ def _run_beets_fix(cfg, target: str) -> None:
     """Run the beets metadata cleanup pipeline.
 
     Runs five phases: catalog, fetch art, embed art, fill genres, write tags.
-    Requires beets to be installed (pip install beets).
+    Requires beets to be installed: pipx inject clickwheel 'clickwheel[fix]'
     """
+    import os
     import subprocess
 
     beets_dir = cfg.project_dir / "beets"
     beets_dir.mkdir(parents=True, exist_ok=True)
 
-    env = {
-        "BEETSDIR": str(beets_dir),
-        "PATH": _get_path(),
-        "HOME": str(Path.home()),
-    }
+    # Auto-generate beets config if it doesn't exist
+    beets_config = beets_dir / "config.yaml"
+    if not beets_config.exists():
+        _generate_beets_config(beets_config, cfg)
+
+    env = {**os.environ, "BEETSDIR": str(beets_dir)}
 
     def _beet(args: list[str], phase: str) -> bool:
         status(phase)
@@ -954,9 +997,14 @@ def _run_beets_fix(cfg, target: str) -> None:
             capture_output=True,
             text=True,
         )
-        if result.returncode != 0 and result.stderr:
-            warn(result.stderr.strip())
-        return result.returncode == 0
+        if result.returncode != 0:
+            if result.stderr:
+                warn(f"  Failed: {result.stderr.strip()}")
+            else:
+                warn("  Failed (no error details)")
+            return False
+        confirm("  Done")
+        return True
 
     # Check beets is installed
     check = subprocess.run(
@@ -965,16 +1013,126 @@ def _run_beets_fix(cfg, target: str) -> None:
         capture_output=True,
     )
     if check.returncode != 0:
-        error("beets is not installed. Install it with: pip install beets")
+        error(
+            "beets is not installed.\n"
+            "  If you installed clickwheel with pipx:\n"
+            "    pipx inject clickwheel 'clickwheel[fix]'\n"
+            "  If you installed with pip:\n"
+            "    pip install 'clickwheel[fix]'"
+        )
         raise typer.Exit(1)
 
-    _beet(
-        ["import", "-qA", target],
-        "Step 1/5: Cataloging library...",
-    )
-    _beet(["fetchart", "-f"], "Step 2/5: Fetching missing album art...")
-    _beet(["embedart", "-y"], "Step 3/5: Embedding album art...")
-    _beet(["lastgenre"], "Step 4/5: Filling missing genres...")
-    _beet(["write", "-y"], "Step 5/5: Writing tags to files...")
+    # Step 1: Catalog — import each subdirectory individually so one
+    # bad folder (e.g. SMB 8.3 aliases) doesn't kill the whole run.
+    target_path = Path(target)
+    if target_path.is_dir() and target == str(cfg.music_dir):
+        status("Step 1/5: Cataloging library...")
+        subdirs = sorted(
+            d
+            for d in target_path.iterdir()
+            if d.is_dir() and not d.name.startswith(".")
+        )
+        import_ok = 0
+        import_fail = 0
+        for d in subdirs:
+            result = subprocess.run(
+                ["beet", "import", "-A", str(d)],
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                import_ok += 1
+            else:
+                import_fail += 1
+                dim(f"  Skipped: {d.name}")
+        if import_fail:
+            warn(f"  Cataloged {import_ok} folders, {import_fail} skipped")
+        else:
+            confirm(f"  Done ({import_ok} folders)")
+    else:
+        _beet(["import", "-A", target], "Step 1/5: Cataloging library...")
 
-    success("Metadata cleanup complete.")
+    # Steps 2-5: art, genres, write
+    remaining = [
+        (["fetchart", "-f"], "Step 2/5: Fetching missing album art..."),
+        (["embedart", "-y"], "Step 3/5: Embedding album art..."),
+        (["lastgenre"], "Step 4/5: Filling missing genres..."),
+        (["write"], "Step 5/5: Writing tags to files..."),
+    ]
+
+    failed = 0
+    for args, phase in remaining:
+        if not _beet(args, phase):
+            failed += 1
+
+    if failed == 0:
+        success("Metadata cleanup complete.")
+    else:
+        warn(f"Metadata cleanup finished with {failed} step(s) that had issues.")
+
+
+def _generate_beets_config(config_path: Path, cfg) -> None:
+    """Generate a beets config.yaml for metadata cleanup."""
+    from clickwheel.output import dim
+
+    config_path.write_text(
+        f"""\
+# Auto-generated by clickwheel. Edit to customize beets behavior.
+# Docs: https://beets.readthedocs.io/en/stable/reference/config.html
+
+directory: {cfg.music_dir}
+library: {config_path.parent / "library.db"}
+
+# Do not move or copy files — preserves paths for other apps (Plex, etc.)
+import:
+  move: no
+  copy: no
+  write: yes
+  timid: no
+  quiet_fallback: asis
+
+# Skip hidden files and common junk directories
+ignore: ['.*', 'System Volume Information', 'lost+found']
+ignore_hidden: yes
+
+paths:
+  default: $albumartist/$album%aunique{{}}/$track $title
+  singleton: Non-Album/$artist/$title
+  comp: Compilations/$album%aunique{{}}/$track $title
+
+plugins:
+  - fetchart
+  - embedart
+  - lastgenre
+
+fetchart:
+  auto: no
+  minwidth: 500
+  maxwidth: 1200
+  sources:
+    - filesystem
+    - coverart
+    - itunes
+    - amazon
+
+embedart:
+  auto: no
+  ifempty: no
+  maxwidth: 1200
+  remove_art_file: no
+
+lastgenre:
+  auto: no
+  count: 1
+  fallback: ''
+  source: album
+
+match:
+  strong_rec_thresh: 0.10
+  preferred:
+    media: ['Digital Media|File', 'CD']
+  ignored: unmatched_tracks
+"""
+    )
+    dim(f"Generated beets config at {config_path}")

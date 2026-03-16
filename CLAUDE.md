@@ -20,9 +20,9 @@ A Python CLI for syncing a music library to a classic iPod from a modern Mac.
 
 ## Commands
 
-- `clickwheel scan` — index library metadata into SQLite
-- `clickwheel fix` — clean up metadata via beets
-- `clickwheel select` — interactive iPod subset picker
+- `clickwheel scan` — index library metadata into SQLite (incremental by default)
+- `clickwheel fix` — clean up metadata via beets (requires `[fix]` extras)
+- `clickwheel select` — interactive iPod subset picker (auto-scans if stale)
 - `clickwheel playlist` — list saved playlists
 - `clickwheel edit` — add/remove artists from a playlist
 - `clickwheel delete` — delete a playlist
@@ -52,4 +52,6 @@ Runtime config is in `~/.clickwheel/config.yaml`. Environment variables override
 - FLAC files are excluded from iPod sync (stock firmware limitation)
 - Metadata changes are written in-place to source files
 - The `scan` command is read-only (no file modifications)
+- `select`, `edit`, `diff`, `sync` auto-scan the library if stale (configurable, `--no-scan` to skip)
+- `fix` requires beets + Pillow (`pip install 'clickwheel[fix]'`); auto-generates beets config on first run
 - macOS only (iPod sync depends on macOS disk utilities)

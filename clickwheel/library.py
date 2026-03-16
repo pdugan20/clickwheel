@@ -20,11 +20,13 @@ def scan_file(path: Path) -> dict | None:
             return None
 
         info = audio.info if audio.info else None
-        file_size = path.stat().st_size
+        stat = path.stat()
+        file_size = stat.st_size
         fmt = path.suffix.lstrip(".").lower()
 
         track = {
             "path": str(path),
+            "mtime": stat.st_mtime,
             "title": _first(audio.get("title")),
             "artist": _first(audio.get("artist")),
             "album": _first(audio.get("album")),

@@ -56,6 +56,11 @@ CREATE TABLE IF NOT EXISTS scrobble_cache (
     UNIQUE(artist, title, timestamp)
 );
 
+CREATE TABLE IF NOT EXISTS scan_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks(artist);
 CREATE INDEX IF NOT EXISTS idx_tracks_album ON tracks(album);
 CREATE INDEX IF NOT EXISTS idx_tracks_album_artist ON tracks(album_artist);
@@ -75,7 +80,17 @@ class Database:
 
     def _init_schema(self) -> None:
         self.conn.executescript(SCHEMA)
+        self._migrate()
         self.conn.commit()
+
+    def _migrate(self) -> None:
+        """Run schema migrations for columns added after initial release."""
+        cur = self.conn.execute("PRAGMA table_info(tracks)")
+        columns = {row["name"] for row in cur.fetchall()}
+        if "mtime" not in columns:
+            self.conn.execute("ALTER TABLE tracks ADD COLUMN mtime REAL")
+        if "missing_since" not in columns:
+            self.conn.execute("ALTER TABLE tracks ADD COLUMN missing_since TIMESTAMP")
 
     def upsert_track(self, track: dict) -> None:
         """Insert or update a track record."""
@@ -361,6 +376,60 @@ class Database:
             (name,),
         ).fetchall()
         return [dict(r) for r in rows]
+
+    def get_scan_meta(self, key: str) -> str | None:
+        """Get a scan metadata value."""
+        row = self.conn.execute(
+            "SELECT value FROM scan_meta WHERE key = ?", (key,)
+        ).fetchone()
+        return row["value"] if row else None
+
+    def set_scan_meta(self, key: str, value: str) -> None:
+        """Set a scan metadata value."""
+        self.conn.execute(
+            "INSERT INTO scan_meta (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = ?",
+            (key, value, value),
+        )
+        self.conn.commit()
+
+    def get_track_mtime(self, path: str) -> tuple[float | None, int | None]:
+        """Return (mtime, file_size) for a track, or (None, None) if not found."""
+        row = self.conn.execute(
+            "SELECT mtime, file_size FROM tracks WHERE path = ?", (path,)
+        ).fetchone()
+        if row:
+            return row["mtime"], row["file_size"]
+        return None, None
+
+    def get_all_tracked_paths(self) -> set[str]:
+        """Return all track paths currently in the database."""
+        rows = self.conn.execute(
+            "SELECT path FROM tracks WHERE missing_since IS NULL"
+        ).fetchall()
+        return {row["path"] for row in rows}
+
+    def mark_missing(self, paths: set[str]) -> int:
+        """Mark tracks as missing. Returns count marked."""
+        if not paths:
+            return 0
+        count = 0
+        for path in paths:
+            self.conn.execute(
+                "UPDATE tracks SET missing_since = CURRENT_TIMESTAMP "
+                "WHERE path = ? AND missing_since IS NULL",
+                (path,),
+            )
+            count += 1
+        self.conn.commit()
+        return count
+
+    def clear_missing(self, path: str) -> None:
+        """Clear the missing flag for a track that reappeared."""
+        self.conn.execute(
+            "UPDATE tracks SET missing_since = NULL WHERE path = ?",
+            (path,),
+        )
 
     def close(self) -> None:
         self.conn.close()

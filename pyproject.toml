@@ -35,6 +35,10 @@ Issues = "https://github.com/pdugan20/clickwheel/issues"
 Changelog = "https://github.com/pdugan20/clickwheel/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
+fix = [
+    "beets>=2.0",
+    "Pillow>=10.0",
+]
 artwork = [
     "Pillow>=10.0",
     "numpy>=1.24",

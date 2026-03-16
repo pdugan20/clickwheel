@@ -15,10 +15,10 @@ Handles the full workflow: scan and clean up your library's metadata, interactiv
 pipx install clickwheel
 ```
 
-Or with album art embedding support:
+To use `clickwheel fix` (metadata cleanup, album art, genre tagging):
 
 ```bash
-pipx install 'clickwheel[artwork]'
+pipx inject clickwheel 'clickwheel[fix]'
 ```
 
 ## Quick Start
@@ -33,6 +33,8 @@ EOF
 ```
 
 Then run `clickwheel scan` to index your library and `clickwheel select` to start picking music for your iPod.
+
+Commands like `select`, `edit`, `diff`, and `sync` automatically check for library changes before running. To skip this, pass `--no-scan`.
 
 ## Commands
 
@@ -57,12 +59,40 @@ clickwheel reads from `~/.clickwheel/config.yaml`:
 ```yaml
 music_dir: /Volumes/Music/Library
 ipod_capacity_gb: 64 # defaults to 64
+auto_scan: true # auto-check for library changes (default: true)
+auto_scan_staleness_minutes: 30 # how often to re-check (default: 30)
 lastfm_api_key: your_key # last.fm/api/account/create
 lastfm_api_secret: your_secret
 lastfm_username: your_username
 ```
 
-Environment variables (`MUSIC_DIR`, `ACOUSTID_API_KEY`, etc.) override the config file.
+Environment variables (`MUSIC_DIR`, `AUTO_SCAN`, etc.) override the config file.
+
+### Metadata cleanup (`fix`)
+
+`clickwheel fix` uses [beets](https://beets.io/) to fetch album art, fill genres, and clean up tags. Install the extras first:
+
+```bash
+# If installed with pipx:
+pipx inject clickwheel 'clickwheel[fix]'
+
+# If installed with pip:
+pip install 'clickwheel[fix]'
+```
+
+On first run, clickwheel generates a beets config at `~/.clickwheel/beets/config.yaml`. You can edit it to customize sources, matching thresholds, etc. The config is set up to never move or rename your files.
+
+Fix a single artist/album folder:
+
+```bash
+clickwheel fix "Artist - Album Name"
+```
+
+Or fix the entire library:
+
+```bash
+clickwheel fix
+```
 
 ## Requirements
 
