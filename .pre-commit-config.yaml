@@ -47,6 +47,13 @@ repos:
         files: '^clickwheel/(?!output\.py).*\.py$'
         exclude: '^clickwheel/ipod/(itunesdb_parser|itunesdb_writer|artworkdb_writer)/'
         types: [python]
+      - id: no-direct-table
+        name: Use output.table() not Table() directly
+        language: pygrep
+        entry: '= Table\('
+        files: '^clickwheel/(?!output\.py).*\.py$'
+        exclude: '^clickwheel/ipod/'
+        types: [python]
 
   - repo: https://github.com/pre-commit/mirrors-prettier
     rev: v4.0.0-alpha.8

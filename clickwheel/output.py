@@ -55,6 +55,15 @@ def confirm(msg: str) -> None:
 
 def table(*args, **kwargs) -> Table:
     """Create a Rich Table. Caller should pass it to print_table()."""
+    if "title_style" not in kwargs:
+        kwargs["title_style"] = "bold not italic"
+    if "title_justify" not in kwargs:
+        kwargs["title_justify"] = "left"
+    if "box" not in kwargs:
+        kwargs["box"] = None
+    if "pad_edge" not in kwargs:
+        kwargs["pad_edge"] = False
+    kwargs.setdefault("header_style", "bold")
     return Table(*args, **kwargs)
 
 

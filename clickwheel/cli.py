@@ -929,8 +929,8 @@ def _print_stats(stats: dict, formats: list[dict], scan_errors: int) -> None:
     total_gb = (stats["total_bytes"] or 0) / (1024 * 1024 * 1024)
     hours = (stats["total_seconds"] or 0) / 3600
 
-    summary = table(title="Library Summary", show_header=False, box=None)
-    summary.add_column("Label", style="bold")
+    summary = table(title="Library Summary", show_header=False)
+    summary.add_column("Label")
     summary.add_column("Value")
     summary.add_row("Tracks", f"{stats['total_tracks']:,}")
     summary.add_row("Artists", f"{stats['artists']:,}")
@@ -951,7 +951,7 @@ def _print_stats(stats: dict, formats: list[dict], scan_errors: int) -> None:
 
     info("")
     quality = table(title="Metadata Quality")
-    quality.add_column("Check", style="bold")
+    quality.add_column("Check")
     quality.add_column("OK", justify="right", style="green")
     quality.add_column("Missing", justify="right", style="red")
 
