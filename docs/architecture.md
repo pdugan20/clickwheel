@@ -33,7 +33,7 @@ clickwheel/
   db.py           # SQLite database (tracks, playlists, scrobble cache, scan metadata)
   library.py      # music file scanning (mutagen)
   autoscan.py     # incremental library scan (mtime+size comparison)
-  output.py       # Rich console helpers (tables, status, errors)
+  output.py       # Rich console helpers (tables, spinners, panels, errors)
   scrobble.py     # Last.fm scrobbling + web auth (pylast)
   ipod/           # vendored iOpenPodv2 (iTunesDB + ArtworkDB writers)
 ```
@@ -70,13 +70,14 @@ Scrobbling requires a Last.fm session key, obtained through a one-time browser a
 
 ## Dependencies
 
-| Dependency | Purpose              | Install             |
-| ---------- | -------------------- | ------------------- |
-| Typer      | CLI framework        | pip (auto)          |
-| Rich       | Terminal formatting  | pip (auto)          |
-| tqdm       | Progress bars        | pip (auto)          |
-| mutagen    | Audio metadata       | pip (auto)          |
-| pylast     | Last.fm API          | pip (auto)          |
-| beets      | Metadata cleanup     | pip (fix extra)     |
-| Pillow     | Album art processing | pip (fix extra)     |
-| numpy      | RGB565 conversion    | pip (artwork extra) |
+| Dependency  | Purpose              | Install             |
+| ----------- | -------------------- | ------------------- |
+| Typer       | CLI framework        | pip (auto)          |
+| Rich        | Terminal formatting  | pip (auto)          |
+| questionary | Interactive prompts  | pip (auto)          |
+| tqdm        | Progress bars        | pip (auto)          |
+| mutagen     | Audio metadata       | pip (auto)          |
+| pylast      | Last.fm API          | pip (auto)          |
+| beets       | Metadata cleanup     | pip (fix extra)     |
+| Pillow      | Album art processing | pip (fix extra)     |
+| numpy       | RGB565 conversion    | pip (artwork extra) |

@@ -1,8 +1,16 @@
-.PHONY: lint test build clean release release-dry release-patch release-minor release-major
+.PHONY: dev lint format test build clean check-all release release-dry release-patch release-minor release-major
+
+dev:
+	pip install -e '.[dev]'
+	pre-commit install --hook-type pre-commit --hook-type commit-msg
 
 lint:
 	ruff check clickwheel/
 	ruff format --check clickwheel/
+
+format:
+	ruff check --fix clickwheel/
+	ruff format clickwheel/
 
 test:
 	python -m pytest tests/ -v
@@ -12,6 +20,10 @@ build: clean
 
 clean:
 	rm -rf dist/ build/ *.egg-info clickwheel/*.egg-info
+
+check-all: lint test
+	shellcheck scripts/*.sh
+	shfmt -d scripts/*.sh
 
 release-dry:
 	semantic-release version --print

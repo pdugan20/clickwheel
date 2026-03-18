@@ -7,7 +7,12 @@ A pre-commit pygrep hook enforces this.
 
 from __future__ import annotations
 
+from collections.abc import Generator
+from contextlib import contextmanager
+
 from rich.console import Console
+from rich.live import Live
+from rich.panel import Panel
 from rich.table import Table
 
 console = Console()
@@ -56,3 +61,20 @@ def table(*args, **kwargs) -> Table:
 def print_table(t: Table) -> None:
     """Print a Rich Table."""
     console.print(t)
+
+
+def print_panel(content: str, title: str = "", style: str = "dim") -> None:
+    """Print content inside a bordered panel."""
+    console.print(Panel(content, title=title, border_style=style))
+
+
+@contextmanager
+def spinner(msg: str) -> Generator[None, None, None]:
+    """Show an animated spinner while work is in progress."""
+    with console.status(f"[bold]{msg}[/bold]"):
+        yield
+
+
+def live_table() -> Live:
+    """Create a Rich Live context for in-place table updates."""
+    return Live(console=console, refresh_per_second=8)

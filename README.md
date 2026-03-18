@@ -7,7 +7,7 @@
 
 A CLI for syncing a music library to a classic iPod from a modern Mac — no iTunes required.
 
-Handles the full workflow: scan and clean up your library's metadata, interactively pick what goes on the iPod, and sync with a progress bar.
+Handles the full workflow: scan and clean up your library's metadata, interactively pick what goes on the iPod, and sync — all with a modern terminal UI.
 
 ## Install
 
@@ -38,19 +38,19 @@ Commands like `select`, `edit`, `diff`, and `sync` automatically check for libra
 
 ## Commands
 
-| Command               | Description                                                                   |
-| --------------------- | ----------------------------------------------------------------------------- |
-| `clickwheel scan`     | Index your music library and report on metadata quality                       |
-| `clickwheel fix`      | Clean up metadata, fetch album art, fill genres via beets                     |
-| `clickwheel select`   | Interactive picker — browse by artist/album/genre                             |
-| `clickwheel playlist` | List saved playlists or show details for one                                  |
-| `clickwheel edit`     | Add or remove artists from a playlist (interactive or via `--add`/`--remove`) |
-| `clickwheel delete`   | Delete a saved playlist                                                       |
-| `clickwheel diff`     | Preview what would be added or removed on the iPod                            |
-| `clickwheel sync`     | Push your playlist to the iPod                                                |
-| `clickwheel ls`       | Show what's on the iPod                                                       |
-| `clickwheel eject`    | Safely unmount the iPod                                                       |
-| `clickwheel scrobble` | Submit recent iPod listens to Last.fm                                         |
+| Command               | Description                                                             |
+| --------------------- | ----------------------------------------------------------------------- |
+| `clickwheel scan`     | Index your music library and report on metadata quality                 |
+| `clickwheel fix`      | Clean up metadata, fetch album art, fill genres via beets               |
+| `clickwheel select`   | Interactive picker — checkbox artist selection                          |
+| `clickwheel playlist` | List saved playlists or show details for one                            |
+| `clickwheel edit`     | Add or remove artists via interactive menus or `--add`/`--remove` flags |
+| `clickwheel delete`   | Delete a saved playlist (with confirmation)                             |
+| `clickwheel diff`     | Preview what would be added or removed on the iPod                      |
+| `clickwheel sync`     | Push your playlist to the iPod (with live progress table)               |
+| `clickwheel ls`       | Show what's on the iPod                                                 |
+| `clickwheel eject`    | Safely unmount the iPod                                                 |
+| `clickwheel scrobble` | Submit recent iPod listens to Last.fm                                   |
 
 ## Configuration
 

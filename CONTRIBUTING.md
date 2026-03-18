@@ -5,14 +5,25 @@
 ```bash
 git clone https://github.com/pdugan20/clickwheel.git
 cd clickwheel
-pip install -e '.[dev]'
-pre-commit install --hook-type pre-commit --hook-type commit-msg
+make dev
 ```
+
+This installs the package with dev dependencies and sets up pre-commit hooks.
 
 ## Running Tests
 
 ```bash
-python -m pytest tests/ -v
+make test
+```
+
+Tests run with coverage reporting. The minimum threshold is 30% (excluding vendored `clickwheel/ipod/`).
+
+## Linting and Formatting
+
+```bash
+make lint                            # check only
+make format                          # auto-fix
+make check-all                       # lint + test + shellcheck + shfmt
 ```
 
 ## Commit Messages
@@ -52,15 +63,22 @@ test: add unit tests for scrobble dedup logic
 - Keep the header under 100 characters
 - No period at the end of the subject
 
-## Linting
-
-```bash
-ruff check clickwheel/
-ruff format clickwheel/
-```
-
 ## Building
 
 ```bash
-python -m build
+make build
 ```
+
+## Releasing
+
+See [docs/releasing.md](docs/releasing.md) for how versioning and releases work.
+
+## Pre-push Checks
+
+Run the full validation suite before pushing:
+
+```bash
+./scripts/pre-push-checks.sh
+```
+
+This checks lint, tests, shell scripts, and debug artifacts.

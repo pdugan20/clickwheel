@@ -17,7 +17,10 @@ from clickwheel.output import (
     dim,
     error,
     info,
+    live_table,
+    print_panel,
     print_table,
+    spinner,
     status,
     success,
     table,
@@ -173,6 +176,8 @@ def select(
     ),
 ) -> None:
     """Pick artists and albums for your iPod."""
+    import questionary
+
     cfg = load_config()
     db = Database(cfg.db_path)
     if not no_scan:
@@ -190,52 +195,38 @@ def select(
     )
     info("")
 
-    _print_artist_table(artists)
+    choices = [
+        questionary.Choice(
+            title=(
+                f"{a['name']}  "
+                f"({a['tracks']} tracks, "
+                f"{_fmt_size(a['total_bytes'] or 0)})"
+            ),
+            value=a["name"],
+        )
+        for a in artists
+    ]
 
-    dim(
-        "Enter artist numbers (comma-separated), "
-        "'all' for everything, or 'done' to finish."
-    )
+    selected_names = questionary.checkbox(
+        "Select artists for your iPod (space to toggle, enter to confirm):",
+        choices=choices,
+    ).ask()
+
+    if selected_names is None:
+        db.close()
+        raise typer.Exit(0)
 
     selected_paths: list[str] = []
-    selected_size = 0
+    for name in selected_names:
+        added = _add_artist_tracks(db, name, selected_paths)
+        confirm(f"+ {name}: {added} tracks")
 
-    while True:
-        _print_capacity_bar(selected_size, capacity)
-        prompt = (
-            f"Selected: {len(selected_paths)} tracks, {_fmt_size(selected_size)} > "
-        )
-        choice = typer.prompt(prompt, default="done")
+    selected_size = _calc_size(db, selected_paths)
+    _print_capacity_bar(selected_size, capacity)
 
-        if choice.lower() == "done":
-            break
-        if choice.lower() == "all":
-            for a in artists:
-                _add_artist_tracks(db, a["name"], selected_paths)
-            selected_size = _calc_size(db, selected_paths)
-            confirm("Added all artists")
-            continue
-
-        try:
-            indices = [int(x.strip()) for x in choice.split(",")]
-        except ValueError:
-            warn("Invalid input. Enter numbers or 'done'.")
-            continue
-
-        for idx in indices:
-            if 1 <= idx <= len(artists):
-                a = artists[idx - 1]
-                added = _add_artist_tracks(db, a["name"], selected_paths)
-                confirm(f"+ {a['name']}: {added} tracks")
-
-        selected_size = _calc_size(db, selected_paths)
-
-        if selected_size > capacity:
-            over = selected_size - capacity
-            warn(
-                f"Over capacity by {_fmt_size(over)}. "
-                "Remove some artists, or type 'done' to save anyway."
-            )
+    if selected_size > capacity:
+        over = selected_size - capacity
+        warn(f"Over capacity by {_fmt_size(over)}.")
 
     if selected_paths:
         db.save_playlist(playlist_name, selected_paths)
@@ -243,11 +234,6 @@ def select(
             f"Playlist '{playlist_name}' saved — "
             f"{len(selected_paths)} tracks, {_fmt_size(selected_size)}"
         )
-        if selected_size > capacity:
-            warn(
-                f"This is {_fmt_size(selected_size - capacity)} "
-                "over your iPod's capacity."
-            )
 
     db.close()
 
@@ -314,18 +300,27 @@ def playlist(
 @app.command()
 def delete(
     playlist_name: str = typer.Argument(..., help="Playlist to delete"),
+    force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
 ) -> None:
     """Delete a saved playlist."""
     cfg = load_config()
     db = Database(cfg.db_path)
 
-    if db.delete_playlist(playlist_name):
-        success(f"Deleted playlist '{playlist_name}'.")
-    else:
+    tracks = db.get_playlist(playlist_name)
+    if not tracks:
         error(f"Playlist '{playlist_name}' not found.")
         db.close()
         raise typer.Exit(1)
 
+    if not force:
+        warn(f"This will delete playlist '{playlist_name}' ({len(tracks)} tracks).")
+        if not typer.confirm("Are you sure?", default=False):
+            info("Cancelled.")
+            db.close()
+            return
+
+    db.delete_playlist(playlist_name)
+    success(f"Deleted playlist '{playlist_name}'.")
     db.close()
 
 
@@ -376,6 +371,8 @@ def edit(
         return
 
     # Interactive mode (no flags)
+    import questionary
+
     existing = db.get_playlist(playlist_name)
     if not existing:
         error(
@@ -390,63 +387,96 @@ def edit(
     all_artists = db.get_artists()
     playlist_artists = db.get_playlist_artists(playlist_name)
     playlist_size = db.get_playlist_size(playlist_name)
+    current_names = {a["name"] for a in playlist_artists}
 
     status(f"Editing playlist: {playlist_name}")
     info(f"Current: {len(existing)} tracks, {_fmt_size(playlist_size)}")
     _print_capacity_bar(playlist_size, capacity)
     info("")
 
-    if playlist_artists:
-        t = table(title="Artists in playlist")
-        t.add_column("Artist")
-        t.add_column("Tracks", justify="right")
-        t.add_column("Size", justify="right")
-        for a in playlist_artists:
-            size = _fmt_size(a["total_bytes"] or 0)
-            t.add_row(a["name"], str(a["tracks"]), size)
-        print_table(t)
-        info("")
-
-    dim(
-        "Commands: +N (add artist #N), -ArtistName (remove), "
-        "'list' (show all artists), 'done' (finish)"
-    )
-
     while True:
-        playlist_size = db.get_playlist_size(playlist_name)
-        _print_capacity_bar(playlist_size, capacity)
-        choice = typer.prompt("edit", default="done")
+        action = questionary.select(
+            "What would you like to do?",
+            choices=[
+                "Add artists",
+                "Remove artists",
+                "Show current playlist",
+                "Done",
+            ],
+        ).ask()
 
-        if choice.lower() == "done":
+        if action is None or action == "Done":
             break
 
-        if choice.lower() == "list":
-            _print_artist_table(all_artists)
-            continue
-
-        if choice.startswith("+"):
-            try:
-                idx = int(choice[1:].strip())
-                if 1 <= idx <= len(all_artists):
-                    artist = all_artists[idx - 1]["name"]
-                    added = db.add_artist_to_playlist(playlist_name, artist)
-                    confirm(f"+ {artist}: {added} tracks added")
-                else:
-                    warn("That number isn't in the list.")
-            except ValueError:
-                warn("Use +N where N is the artist number.")
-            continue
-
-        if choice.startswith("-"):
-            artist_name = choice[1:].strip()
-            removed = db.remove_artist_from_playlist(playlist_name, artist_name)
-            if removed:
-                info(f"Removed {artist_name} ({removed} tracks)")
+        if action == "Show current playlist":
+            playlist_artists = db.get_playlist_artists(playlist_name)
+            if playlist_artists:
+                t = table(title="Artists in playlist")
+                t.add_column("Artist")
+                t.add_column("Tracks", justify="right")
+                t.add_column("Size", justify="right")
+                for a in playlist_artists:
+                    size = _fmt_size(a["total_bytes"] or 0)
+                    t.add_row(a["name"], str(a["tracks"]), size)
+                print_table(t)
             else:
-                warn(f"'{artist_name}' not in playlist.")
+                warn("Playlist is empty.")
             continue
 
-        warn("Unknown command. Use +N, -ArtistName, list, or done.")
+        if action == "Add artists":
+            available = [a for a in all_artists if a["name"] not in current_names]
+            if not available:
+                warn("All artists are already in the playlist.")
+                continue
+            choices = [
+                questionary.Choice(
+                    title=(
+                        f"{a['name']}  "
+                        f"({a['tracks']} tracks, "
+                        f"{_fmt_size(a['total_bytes'] or 0)})"
+                    ),
+                    value=a["name"],
+                )
+                for a in available
+            ]
+            to_add = questionary.checkbox(
+                "Select artists to add (space to toggle, enter to confirm):",
+                choices=choices,
+            ).ask()
+            if to_add:
+                for name in to_add:
+                    added = db.add_artist_to_playlist(playlist_name, name)
+                    current_names.add(name)
+                    confirm(f"+ {name}: {added} tracks added")
+
+        if action == "Remove artists":
+            playlist_artists = db.get_playlist_artists(playlist_name)
+            if not playlist_artists:
+                warn("Playlist is empty.")
+                continue
+            choices = [
+                questionary.Choice(
+                    title=f"{a['name']}  ({a['tracks']} tracks)",
+                    value=a["name"],
+                )
+                for a in playlist_artists
+            ]
+            to_remove = questionary.checkbox(
+                "Select artists to remove (space to toggle, enter to confirm):",
+                choices=choices,
+            ).ask()
+            if to_remove:
+                for name in to_remove:
+                    removed = db.remove_artist_from_playlist(playlist_name, name)
+                    current_names.discard(name)
+                    info(f"Removed {name} ({removed} tracks)")
+
+        playlist_size = db.get_playlist_size(playlist_name)
+        _print_capacity_bar(playlist_size, capacity)
+
+        if playlist_size > capacity:
+            over = playlist_size - capacity
+            warn(f"Over capacity by {_fmt_size(over)}.")
 
     final_size = db.get_playlist_size(playlist_name)
     tracks = db.get_playlist(playlist_name)
@@ -494,16 +524,16 @@ def diff(
     to_remove = ipod_set - playlist_set
     unchanged = playlist_set & ipod_set
 
-    status(f"Comparing playlist '{playlist_name}' with your iPod")
-    info(
-        f"  {len(to_add)} to add, "
+    summary = (
+        f"{len(to_add)} to add, "
         f"{len(to_remove)} to remove, "
         f"{len(unchanged)} already on iPod"
     )
+    print_panel(summary, title=f"Diff: {playlist_name}", style="cyan")
 
     if to_add:
         info("")
-        add_table = table(title="To Add")
+        add_table = table(title="[green]+ To Add[/green]")
         add_table.add_column("Artist")
         add_table.add_column("Album")
         add_table.add_column("Title")
@@ -513,7 +543,7 @@ def diff(
 
     if to_remove:
         info("")
-        rm_table = table(title="To Remove")
+        rm_table = table(title="[red]- To Remove[/red]")
         rm_table.add_column("Artist")
         rm_table.add_column("Album")
         rm_table.add_column("Title")
@@ -590,6 +620,11 @@ def sync(
         db.close()
         return
 
+    if not typer.confirm("Proceed with sync?", default=True):
+        info("Cancelled.")
+        db.close()
+        return
+
     # Check available space on iPod
     ipod_stat = shutil.disk_usage(str(cfg.ipod_mount))
     if add_size > ipod_stat.free:
@@ -602,13 +637,35 @@ def sync(
 
     # Copy files
     info("")
-    progress = tqdm(total=len(to_add), desc="Copying", unit="file")
+    sync_table = table(title="Syncing to iPod")
+    sync_table.add_column("#", style="dim", width=6)
+    sync_table.add_column("Artist")
+    sync_table.add_column("Title")
+    sync_table.add_column("Size", justify="right")
+    sync_table.add_column("Status", justify="right")
+
+    total_count = len(to_add)
 
     def _on_progress(current: int, total: int) -> None:
-        progress.update(1)
+        if current <= total_count:
+            track = to_add[current - 1]
+            size = _fmt_size(track["file_size"] or 0)
+            sync_table.add_row(
+                f"{current}/{total_count}",
+                track["artist"] or "?",
+                track["title"] or "?",
+                size,
+                "[green]OK[/green]",
+            )
 
-    copied, failed = copy_tracks_to_ipod(to_add, cfg.ipod_mount, _on_progress)
-    progress.close()
+    with live_table() as live:
+        live.update(sync_table)
+
+        def _on_progress_live(current: int, total: int) -> None:
+            _on_progress(current, total)
+            live.update(sync_table)
+
+        copied, failed = copy_tracks_to_ipod(to_add, cfg.ipod_mount, _on_progress_live)
 
     success(f"Copied {len(copied)} tracks to iPod.")
     if failed:
@@ -622,15 +679,22 @@ def sync(
             dim(f"  {artist} — {album} ({count} tracks)")
 
     # Write iTunesDB — include both existing iPod tracks and newly copied ones
-    info("Updating iPod database...")
-    db_ok = write_ipod_db(cfg.ipod_mount, copied)
+    with spinner("Updating iPod database..."):
+        db_ok = write_ipod_db(cfg.ipod_mount, copied)
     if db_ok:
         success("iPod database updated.")
     else:
-        error(
+        warn(
             "Couldn't update the iPod database. "
             "Your music was copied, but the iPod may not show it."
         )
+        if typer.confirm("Retry writing the iPod database?", default=True):
+            with spinner("Retrying iPod database write..."):
+                db_ok = write_ipod_db(cfg.ipod_mount, copied)
+            if db_ok:
+                success("iPod database updated on retry.")
+            else:
+                error("Still couldn't update iPod database.")
 
     if to_remove_keys:
         warn(
@@ -684,12 +748,12 @@ def eject() -> None:
     cfg = load_config()
     _require_ipod(cfg)  # verify iPod is mounted
 
-    status("Ejecting iPod...")
-    result = subprocess.run(
-        ["diskutil", "eject", str(cfg.ipod_mount)],
-        capture_output=True,
-        text=True,
-    )
+    with spinner("Ejecting iPod..."):
+        result = subprocess.run(
+            ["diskutil", "eject", str(cfg.ipod_mount)],
+            capture_output=True,
+            text=True,
+        )
 
     if result.returncode == 0:
         confirm("iPod ejected. Safe to unplug.")
@@ -776,8 +840,8 @@ def scrobble(
     db = Database(cfg.db_path)
 
     # Read plays from iPod
-    status("Checking iPod for recent listens...")
-    plays = read_ipod_plays(cfg.ipod_mount)
+    with spinner("Checking iPod for recent listens..."):
+        plays = read_ipod_plays(cfg.ipod_mount)
 
     if not plays:
         warn("No new listens found on iPod.")
@@ -825,19 +889,37 @@ def scrobble(
         return
 
     # Submit to Last.fm
-    info(f"Sending {len(pending)} listens to Last.fm...")
-    submitted, submit_errors = submit_scrobbles(
-        cfg.lastfm_api_key,
-        cfg.lastfm_api_secret,
-        cfg.lastfm_username,
-        pending,
-        db.conn,
-        session_key=cfg.lastfm_session_key,
-    )
+    with spinner(f"Sending {len(pending)} listens to Last.fm..."):
+        submitted, submit_errors = submit_scrobbles(
+            cfg.lastfm_api_key,
+            cfg.lastfm_api_secret,
+            cfg.lastfm_username,
+            pending,
+            db.conn,
+            session_key=cfg.lastfm_session_key,
+        )
 
     success(f"Sent {submitted} listens to Last.fm.")
     if submit_errors:
-        warn(f"{submit_errors} failed. They'll be retried next time you scrobble.")
+        warn(f"{submit_errors} failed.")
+        remaining = get_pending_scrobbles(db.conn)
+        if remaining and typer.confirm("Retry failed scrobbles now?", default=True):
+            with spinner(f"Retrying {len(remaining)} scrobbles..."):
+                retried, retry_errors = submit_scrobbles(
+                    cfg.lastfm_api_key,
+                    cfg.lastfm_api_secret,
+                    cfg.lastfm_username,
+                    remaining,
+                    db.conn,
+                    session_key=cfg.lastfm_session_key,
+                )
+            if retried:
+                success(f"Sent {retried} more on retry.")
+            if retry_errors:
+                warn(
+                    f"{retry_errors} still failed. "
+                    "They'll be retried next time you scrobble."
+                )
 
     db.close()
 
@@ -1040,20 +1122,20 @@ def _run_beets_fix(cfg, target: str) -> None:
     env = {**os.environ, "BEETSDIR": str(beets_dir)}
 
     def _beet(args: list[str], phase: str) -> bool:
-        status(phase)
-        result = subprocess.run(
-            ["beet", *args],
-            env=env,
-            capture_output=True,
-            text=True,
-        )
+        with spinner(phase):
+            result = subprocess.run(
+                ["beet", *args],
+                env=env,
+                capture_output=True,
+                text=True,
+            )
         if result.returncode != 0:
             if result.stderr:
                 warn(f"  Failed: {result.stderr.strip()}")
             else:
                 warn("  Failed (no error details)")
             return False
-        confirm("  Done")
+        confirm(f"  {phase} Done")
         return True
 
     # Check beets is installed
