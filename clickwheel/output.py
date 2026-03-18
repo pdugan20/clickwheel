@@ -61,8 +61,6 @@ def table(*args, **kwargs) -> Table:
         kwargs["title_justify"] = "left"
     if "box" not in kwargs:
         kwargs["box"] = None
-    if "pad_edge" not in kwargs:
-        kwargs["pad_edge"] = False
     kwargs.setdefault("header_style", "bold")
     return Table(*args, **kwargs)
 

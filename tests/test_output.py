@@ -13,7 +13,7 @@ def _capture(fn, msg: str) -> str:
     """Capture output from an output helper by temporarily swapping the console."""
     buf = StringIO()
     original = output.console
-    output.console = Console(file=buf, no_color=True)
+    output.console = Console(file=buf, no_color=True, width=80)
     try:
         fn(msg)
         return buf.getvalue()
@@ -61,7 +61,7 @@ def test_confirm():
 def test_table_and_print():
     buf = StringIO()
     original = output.console
-    output.console = Console(file=buf, no_color=True)
+    output.console = Console(file=buf, no_color=True, width=80)
     try:
         t = output.table(title="Test")
         t.add_column("Col")
