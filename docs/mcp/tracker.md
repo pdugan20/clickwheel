@@ -1,0 +1,76 @@
+# MCP project tracker
+
+Live tracker for the MCP integration. Update statuses as we go. See `design.md` for the locked design and `research.md` for SDK/spec findings.
+
+**Status legend:** ☐ pending · ◐ in progress · ☒ done · ⊘ skipped/deferred
+
+## Phase 0 — Research and design
+
+- ☒ Web research on Python MCP SDK status (`mcp` vs `fastmcp`)
+- ☒ Web research on MCP spec features (elicitation, structured output, resources)
+- ☒ Web research on Claude Code `.mcp.json` scope precedence
+- ☒ Web research on tool naming/description conventions
+- ☒ Write `docs/mcp/research.md`
+- ☒ Write `docs/mcp/design.md`
+- ☒ Write `docs/mcp/tracker.md` (this file)
+- ☒ Write `docs/mcp/test-plan.md`
+- ☒ **User reviews `design.md`, gives go-ahead** (approved 2026-05-06)
+
+## Phase 1 — `actions.py` refactor (ships standalone, `refactor:` commit)
+
+- ☒ Create `clickwheel/actions.py` skeleton with the function signatures from `design.md`
+- ☒ Move `scan_library` logic out of `cli.py:scan` — replace tqdm with `on_progress` callback. CLI command becomes thin wrapper that adapts the callback to tqdm.
+- ☒ Move `compute_diff` logic out of `cli.py:diff` — return structured `Diff`; CLI adapts to Rich tables.
+- ☒ Move `sync_playlist` logic out of `cli.py:sync` — return `SyncResult`; CLI adapts to Live table via `on_event` callback.
+- ☒ Move pure read helpers (`library_stats`, `list_playlist_artists`, `read_ipod_contents`, `read_pending_scrobbles`) to `actions.py`.
+- ☒ Move `submit_pending_scrobbles` orchestration out of `cli.py:scrobble`.
+- ☒ Consolidate `autoscan.incremental_scan` into `actions.scan_library` — autoscan now decides _whether_ to scan, actions does the actual work.
+- ☒ Run full test suite — 92 passed, 41.6% coverage.
+- ☒ Manual smoke: `clickwheel scan --stats` and `clickwheel playlist` behave identically against real library.
+- ☐ Conventional commit: `refactor: extract action logic from cli.py into actions.py`.
+
+## Phase 2 — Read-only MCP server (`feat:` commit)
+
+- ☐ Add `[mcp]` extra to `pyproject.toml` (`mcp>=1.2`)
+- ☐ Add `[project.scripts]` entry: `clickwheel-mcp = "clickwheel.mcp:main"`
+- ☐ Create `clickwheel/mcp/__init__.py` exporting `main`
+- ☐ Create `clickwheel/mcp/server.py` — FastMCP instance, lifespan management (DB open/close), stderr-only logging, env-driven log level
+- ☐ Create `clickwheel/mcp/tools_read.py` with the 10 read tools per `design.md`
+- ☐ Each tool: type hints + docstring (FastMCP infers schema), wraps an `actions.py` call, returns structured dict
+- ☐ Wire autoscan check into tools that depend on indexed library data (re-use `clickwheel.autoscan`)
+- ☐ Add `tests/test_mcp_server.py` — direct unit tests of tool functions (not full protocol roundtrip)
+- ☐ Add a `tests/test_mcp_smoke.py` that spawns `clickwheel-mcp` over stdio and exchanges a `tools/list` + one `list_playlists` call (skipped if `mcp` not installed)
+- ☐ Update `clickwheel/ipod` exclusion in `pyproject.toml` if needed (no — MCP isn't vendored)
+- ☐ Lint passes (`make lint`); tests pass (`make test`)
+- ☐ Manual: `pipx inject clickwheel 'clickwheel[mcp]'`, register with Claude Code via `claude mcp add` (verify the user-scope bug isn't blocking us — fall back to project scope or hand-edit if so), invoke from a chat session
+- ☐ Conventional commit: `feat: add read-only MCP server` (minor version bump)
+
+## Phase 3 — Mutation tools (`feat:` commit)
+
+- ☐ Create `clickwheel/mcp/tools_write.py` with the 7 mutation tools
+- ☐ Implement elicitation pattern for `delete_playlist` and `sync_playlist_to_ipod` — server requests confirmation when `confirm=False`
+- ☐ Tests for each mutation tool (mock the DB and iPod where needed)
+- ☐ Update `tests/test_mcp_smoke.py` to cover one elicitation roundtrip
+- ☐ Manual: invoke each mutation tool from a chat session against the real library (but not the iPod yet)
+- ☐ Conventional commit: `feat: add MCP mutation tools` (minor bump)
+
+## Phase 4 — Docs and packaging
+
+- ☐ Add `## MCP server` section to `README.md`: install, register with Claude Code, example prompts, link to `docs/mcp/`
+- ☐ Update `clickwheel/CLAUDE.md` (this repo's): add `clickwheel/mcp/` to project layout, brief note in Critical Rules if any new invariants
+- ☐ Confirm `pyproject.toml` `description` still fits (probably unchanged — MCP is an add-on, not the headline feature)
+- ☐ Add `docs/mcp/` to whatever index docs exist (none currently — the existing `docs/architecture.md` is freestanding)
+- ☐ Conventional commit: `docs: document MCP server install and usage` (no version bump)
+
+## Phase 5 — Manual iPod testing
+
+- ☐ Walk `docs/mcp/test-plan.md` against the real iPod
+- ☐ Capture findings, file follow-ups as new tracker rows or issues
+- ☐ Decide on release: tag and let release-please publish, or sit on it for a week
+
+## Post-ship follow-ups (parking lot)
+
+- ☐ Resources (`clickwheel://artists/<name>`, `clickwheel://playlists/<name>`)
+- ☐ Server-defined prompts ("build me a playlist of X")
+- ☐ Reconsider whether `scan` should be an explicit tool
+- ☐ HTTP transport if ever needed for remote/Desktop integration
