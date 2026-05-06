@@ -44,16 +44,17 @@ Live tracker for the MCP integration. Update statuses as we go. See `design.md` 
 - ☒ Add `tests/test_mcp_smoke.py` — spawns `python -m clickwheel.mcp` over stdio, runs a real `initialize` + `tools/list` round trip
 - ☒ Lint passes; tests pass — 107 passing, 45.5% coverage
 - ☐ Manual: register with Claude Code via `claude mcp add` (verify the 2.1.122 user-scope bug status; fall back to project scope or hand-edit if needed), invoke from a chat session
-- ☐ Conventional commit: `feat: add read-only mcp server` (minor version bump)
+- ☒ Conventional commit: `feat: add read-only mcp server` (commit `74ba924`).
 
 ## Phase 3 — Mutation tools (`feat:` commit)
 
-- ☐ Create `clickwheel/mcp/tools_write.py` with the 7 mutation tools
-- ☐ Implement elicitation pattern for `delete_playlist` and `sync_playlist_to_ipod` — server requests confirmation when `confirm=False`
-- ☐ Tests for each mutation tool (mock the DB and iPod where needed)
-- ☐ Update `tests/test_mcp_smoke.py` to cover one elicitation roundtrip
+- ☒ Add the 7 mutation tools to `mcp/server.py` (kept inline; split if file grows past ~500 lines): `create_playlist`, `update_playlist`, `delete_playlist`, `add_artist_to_playlist`, `remove_artist_from_playlist`, `submit_scrobbles`, `sync_playlist_to_ipod`
+- ☒ Add `playlist_exists`, `create_playlist`, `update_playlist`, `PlaylistAlreadyExistsError` to `actions.py`
+- ☒ Implement elicitation pattern for `delete_playlist` and `sync_playlist_to_ipod` — server requests yes/no confirmation when `confirm=False` via `Context.elicit()`
+- ☒ Tests for each mutation tool (12 new cases, including elicitation accept/decline paths via a fake Context)
+- ☒ Live protocol smoke: 17 tools register and respond to `tools/list`
 - ☐ Manual: invoke each mutation tool from a chat session against the real library (but not the iPod yet)
-- ☐ Conventional commit: `feat: add MCP mutation tools` (minor bump)
+- ☐ Conventional commit: `feat: add mcp mutation tools` (minor bump)
 
 ## Phase 4 — Docs and packaging
 

@@ -16,7 +16,8 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
+from pydantic import BaseModel, Field
 
 from clickwheel import actions
 from clickwheel.actions import (
@@ -184,6 +185,182 @@ def library_health() -> dict:
                 health["last_scan_at"]
             ).isoformat()
         return health
+
+
+# ---------------------------------------------------------------------------
+# Tools — mutation (Phase 3)
+#
+# Tools that change state. Destructive ones (delete_playlist,
+# sync_playlist_to_ipod) elicit a confirmation from the user via MCP's
+# elicitation feature when the caller didn't pass `confirm=True`.
+# ---------------------------------------------------------------------------
+
+
+class _Confirm(BaseModel):
+    """Schema for a yes/no elicitation prompt."""
+
+    confirm: bool = Field(
+        description="Confirm the action. Set false to cancel.",
+    )
+
+
+async def _elicit_confirm(ctx: Context, message: str) -> bool:
+    """Ask the client to confirm. Returns True only on explicit accept+confirm."""
+    result = await ctx.elicit(message=message, schema=_Confirm)
+    if result.action != "accept" or result.data is None:
+        return False
+    return bool(result.data.confirm)
+
+
+@mcp.tool()
+def create_playlist(name: str, track_paths: list[str]) -> dict:
+    """Create a new playlist with the given track paths. Errors if a playlist
+    with the same name already exists — use update_playlist to replace.
+
+    `track_paths` should be the absolute paths returned by list_tracks_by_album,
+    search_tracks, etc."""
+    with _open_session() as (_cfg, db):
+        count = actions.create_playlist(db, name, track_paths)
+        return {"name": name, "track_count": count}
+
+
+@mcp.tool()
+def update_playlist(name: str, track_paths: list[str]) -> dict:
+    """Replace a playlist's contents (or create it if it doesn't exist).
+    Returns track_count and `replaced` (True if a playlist by this name
+    already existed)."""
+    with _open_session() as (_cfg, db):
+        count, replaced = actions.update_playlist(db, name, track_paths)
+        return {"name": name, "track_count": count, "replaced": replaced}
+
+
+@mcp.tool()
+async def delete_playlist(ctx: Context, name: str, confirm: bool = False) -> dict:
+    """Delete a saved playlist by name. If `confirm` is False (default),
+    asks the user to confirm via the client. Pass `confirm=True` to skip
+    the prompt."""
+    with _open_session(autoscan=False) as (_cfg, db):
+        if not actions.playlist_exists(db, name):
+            return {"deleted": False, "reason": f"Playlist '{name}' not found."}
+
+        if not confirm:
+            track_count = len(db.get_playlist(name))
+            ok = await _elicit_confirm(
+                ctx,
+                f"Delete playlist '{name}'? It contains {track_count} track(s). "
+                "This cannot be undone.",
+            )
+            if not ok:
+                return {"deleted": False, "reason": "user declined"}
+
+        actions.delete_playlist(db, name)
+        return {"deleted": True, "name": name}
+
+
+@mcp.tool()
+def add_artist_to_playlist(playlist: str, artist: str) -> dict:
+    """Add every track by `artist` to `playlist` (skipping duplicates).
+    Creates the playlist if it doesn't already exist. Returns the number
+    of tracks actually added."""
+    with _open_session() as (_cfg, db):
+        added = actions.add_artist_to_playlist(db, playlist, artist)
+        return {"added": added, "playlist": playlist, "artist": artist}
+
+
+@mcp.tool()
+def remove_artist_from_playlist(playlist: str, artist: str) -> dict:
+    """Remove every track by `artist` from `playlist`. Returns the number
+    of tracks removed (0 if the artist wasn't in the playlist)."""
+    with _open_session(autoscan=False) as (_cfg, db):
+        removed = actions.remove_artist_from_playlist(db, playlist, artist)
+        return {"removed": removed, "playlist": playlist, "artist": artist}
+
+
+@mcp.tool()
+def submit_scrobbles(dry_run: bool = False) -> dict:
+    """Submit pending iPod plays to Last.fm.
+
+    First reads the iPod for any new plays (caching them in the local DB),
+    then submits all unsent scrobbles. Pass `dry_run=True` to see what
+    would be sent without actually submitting.
+
+    Requires Last.fm to be configured (api key, secret, session key).
+    Requires the iPod to be mounted to pick up new plays."""
+    with _open_session(autoscan=False) as (cfg, db):
+        plays_status = actions.collect_ipod_plays(cfg, db)
+
+        if dry_run:
+            pending = actions.read_pending_scrobbles(db)
+            return {
+                "dry_run": True,
+                "plays_found_on_ipod": plays_status["plays_found"],
+                "newly_cached": plays_status["new_cached"],
+                "pending_total": len(pending),
+                "oldest_age_days": plays_status["oldest_age_days"],
+            }
+
+        result = actions.submit_pending_scrobbles(cfg, db)
+        return {
+            "submitted": result.submitted,
+            "failed": result.failed,
+            "remaining_pending": result.remaining_pending,
+            "newly_cached": plays_status["new_cached"],
+            "plays_found_on_ipod": plays_status["plays_found"],
+        }
+
+
+@mcp.tool()
+async def sync_playlist_to_ipod(
+    ctx: Context, playlist: str, confirm: bool = False
+) -> dict:
+    """Sync a saved playlist to the iPod: copy new tracks, leave existing
+    matches in place, and rewrite the iTunesDB.
+
+    By default, computes the diff first and asks the user to confirm before
+    doing anything destructive. Pass `confirm=True` to skip the prompt
+    (use sparingly — this writes to the iPod).
+
+    Requires the iPod to be mounted. Errors with InsufficientSpaceError
+    if the new tracks won't fit."""
+    with _open_session() as (cfg, db):
+        diff = actions.compute_diff(cfg, db, playlist)
+
+        if not diff.to_add and not diff.to_remove:
+            return {
+                "synced": False,
+                "reason": "iPod already matches this playlist.",
+                "playlist": playlist,
+            }
+
+        if not confirm:
+            ok = await _elicit_confirm(
+                ctx,
+                f"Sync '{playlist}' to iPod? "
+                f"Will add {len(diff.to_add)} track(s) "
+                f"({_format_bytes(diff.add_size_bytes)}) "
+                f"and {len(diff.to_remove)} track(s) currently on iPod "
+                "won't be in this playlist (they stay on the iPod for now).",
+            )
+            if not ok:
+                return {"synced": False, "reason": "user declined"}
+
+        result = actions.sync_playlist(cfg, db, playlist, diff=diff)
+        return {
+            "synced": True,
+            "playlist": playlist,
+            "copied": len(result.copied),
+            "failed": len(result.failed),
+            "removed_count": result.removed_count,
+            "db_write_ok": result.db_write_ok,
+        }
+
+
+def _format_bytes(n: int) -> str:
+    if n >= 1024**3:
+        return f"{n / 1024**3:.1f} GB"
+    if n >= 1024**2:
+        return f"{n / 1024**2:.1f} MB"
+    return f"{n / 1024:.1f} KB"
 
 
 # ---------------------------------------------------------------------------

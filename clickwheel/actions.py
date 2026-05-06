@@ -335,14 +335,52 @@ def get_playlist_size(db: Database, name: str) -> int:
 # ---------------------------------------------------------------------------
 
 
+class PlaylistAlreadyExistsError(ClickwheelError):
+    """A playlist with the given name already exists."""
+
+
+def playlist_exists(db: Database, name: str) -> bool:
+    row = db.conn.execute("SELECT 1 FROM playlists WHERE name = ?", (name,)).fetchone()
+    return row is not None
+
+
 def save_playlist(db: Database, name: str, track_paths: list[str]) -> None:
     db.save_playlist(name, track_paths)
+
+
+def create_playlist(db: Database, name: str, track_paths: list[str]) -> int:
+    """Create a new playlist. Raises PlaylistAlreadyExistsError if `name`
+    is taken — callers should use `update_playlist` to overwrite.
+
+    Returns the number of tracks actually persisted (paths not in the index
+    are silently skipped by the DB layer).
+    """
+    if playlist_exists(db, name):
+        raise PlaylistAlreadyExistsError(
+            f"Playlist '{name}' already exists. "
+            "Use update_playlist to replace its contents."
+        )
+    db.save_playlist(name, track_paths)
+    return len(db.get_playlist(name))
+
+
+def update_playlist(
+    db: Database, name: str, track_paths: list[str]
+) -> tuple[int, bool]:
+    """Replace a playlist's contents (or create it if it doesn't exist).
+
+    Returns (track_count, replaced) — `replaced` is True if a playlist by
+    this name already existed.
+    """
+    replaced = playlist_exists(db, name)
+    db.save_playlist(name, track_paths)
+    return len(db.get_playlist(name)), replaced
 
 
 def delete_playlist(db: Database, name: str) -> bool:
     """Delete a playlist by name. Raises PlaylistNotFoundError if it doesn't
     exist (callers that prefer no-op-on-missing can catch and ignore)."""
-    if not db.get_playlist(name):
+    if not playlist_exists(db, name):
         raise PlaylistNotFoundError(f"Playlist '{name}' not found.")
     return db.delete_playlist(name)
 
