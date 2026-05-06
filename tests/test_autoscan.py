@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import time
 
-from clickwheel.autoscan import incremental_scan, maybe_auto_scan
+from clickwheel.actions import scan_library
+from clickwheel.autoscan import maybe_auto_scan
 from clickwheel.config import Config
 from clickwheel.db import Database
 from clickwheel.library import scan_file
@@ -18,7 +19,7 @@ def test_incremental_scan_finds_new_files(tmp_path, music_dir_with_mp3):
     )
     db = Database(tmp_path / "test.db")
 
-    result = incremental_scan(cfg, db)
+    result = scan_library(cfg, db, full=False)
     assert result.added == 1
     assert result.unchanged == 0
     assert result.total == 1
@@ -34,10 +35,10 @@ def test_incremental_scan_skips_unchanged(tmp_path, music_dir_with_mp3):
     )
     db = Database(tmp_path / "test.db")
 
-    result1 = incremental_scan(cfg, db)
+    result1 = scan_library(cfg, db, full=False)
     assert result1.added == 1
 
-    result2 = incremental_scan(cfg, db)
+    result2 = scan_library(cfg, db, full=False)
     assert result2.added == 0
     assert result2.unchanged == 1
 
@@ -52,13 +53,13 @@ def test_incremental_scan_detects_missing(tmp_path, music_dir_with_mp3):
     )
     db = Database(tmp_path / "test.db")
 
-    incremental_scan(cfg, db)
+    scan_library(cfg, db, full=False)
 
     # Delete the file
     mp3 = list(music_dir_with_mp3.rglob("*.mp3"))[0]
     mp3.unlink()
 
-    result = incremental_scan(cfg, db)
+    result = scan_library(cfg, db, full=False)
     assert result.missing == 1
 
     db.close()

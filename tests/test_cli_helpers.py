@@ -7,7 +7,8 @@ from io import StringIO
 from rich.console import Console
 
 from clickwheel import output
-from clickwheel.cli import _calc_size, _fmt_size
+from clickwheel.actions import calc_size_of_paths
+from clickwheel.cli import _fmt_size
 from clickwheel.db import Database
 
 
@@ -32,12 +33,12 @@ def test_calc_size(populated_db: Database):
         "/music/A/Album1/01 T1.mp3",  # 5M
         "/music/B/Album2/01 S1.mp3",  # 3M
     ]
-    assert _calc_size(populated_db, paths) == 8_000_000
+    assert calc_size_of_paths(populated_db, paths) == 8_000_000
 
 
 def test_calc_size_missing_path(populated_db: Database):
     paths = ["/music/nonexistent.mp3"]
-    assert _calc_size(populated_db, paths) == 0
+    assert calc_size_of_paths(populated_db, paths) == 0
 
 
 def test_capacity_bar_green():

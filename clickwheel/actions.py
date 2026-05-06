@@ -1,0 +1,555 @@
+"""Pure-logic actions consumed by both the CLI and the MCP server.
+
+Functions here return data (and accept progress callbacks) without touching
+Rich, tqdm, typer, or questionary. The CLI adapts these calls to interactive
+output; the MCP server adapts them to structured tool responses.
+
+Errors are raised as typed exceptions so callers can map them to their own
+error surface (typer.Exit, McpError, etc.).
+"""
+
+from __future__ import annotations
+
+import shutil
+import time
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from clickwheel.config import Config
+from clickwheel.db import Database
+from clickwheel.library import AUDIO_EXTENSIONS, scan_file
+
+
+class ClickwheelError(Exception):
+    """Base class for user-facing clickwheel errors."""
+
+
+class LibraryNotFoundError(ClickwheelError):
+    """Music library directory doesn't exist."""
+
+
+class PlaylistNotFoundError(ClickwheelError):
+    """Named playlist doesn't exist."""
+
+
+class IpodNotFoundError(ClickwheelError):
+    """iPod not mounted or not detected."""
+
+
+class LastfmNotConfiguredError(ClickwheelError):
+    """Last.fm API key, secret, or session key is missing."""
+
+
+class InsufficientSpaceError(ClickwheelError):
+    """iPod doesn't have enough free space for the requested operation."""
+
+
+@dataclass
+class ScanResult:
+    total: int = 0
+    added: int = 0
+    updated: int = 0
+    unchanged: int = 0
+    missing: int = 0
+    errors: int = 0
+
+
+@dataclass
+class ScanProgress:
+    current: int
+    total: int
+    added: int
+    updated: int
+    unchanged: int
+    errors: int
+
+
+@dataclass
+class Diff:
+    """Add/remove/unchanged sets between a playlist and the iPod.
+
+    `to_add` carries full track dicts (in playlist order) because sync needs
+    file paths and sizes. `to_remove` and `unchanged` are (artist, album, title)
+    tuples — those tracks live on the iPod, not in our DB.
+    """
+
+    playlist: str
+    to_add: list[dict] = field(default_factory=list)
+    to_remove: list[tuple[str, str, str]] = field(default_factory=list)
+    unchanged: list[tuple[str, str, str]] = field(default_factory=list)
+
+    @property
+    def add_size_bytes(self) -> int:
+        return sum(t.get("file_size") or 0 for t in self.to_add)
+
+    def to_add_display(self) -> list[tuple[str, str, str]]:
+        return sorted(
+            (t["artist"] or "", t["album"] or "", t["title"] or "") for t in self.to_add
+        )
+
+
+@dataclass
+class SyncEvent:
+    """Emitted during sync_playlist for each track copy attempt."""
+
+    current: int
+    total: int
+    track: dict
+    ok: bool
+
+
+@dataclass
+class SyncResult:
+    copied: list[dict] = field(default_factory=list)
+    failed: list[dict] = field(default_factory=list)
+    removed_count: int = 0
+    db_write_ok: bool = True
+
+
+@dataclass
+class ScrobbleSubmitResult:
+    plays_found: int = 0
+    new_cached: int = 0
+    submitted: int = 0
+    failed: int = 0
+    remaining_pending: int = 0
+    oldest_age_days: float | None = None
+
+
+# ---------------------------------------------------------------------------
+# Library scanning
+# ---------------------------------------------------------------------------
+
+
+def scan_library(
+    cfg: Config,
+    db: Database,
+    *,
+    full: bool = False,
+    on_found: Callable[[int], None] | None = None,
+    on_progress: Callable[[ScanProgress], None] | None = None,
+) -> ScanResult:
+    """Walk the music library and update the index.
+
+    full=True clears the DB and re-scans every file. full=False (default) is
+    incremental: skip files whose mtime+size match the DB, mark vanished files
+    as missing.
+
+    Raises LibraryNotFoundError if cfg.music_dir doesn't exist.
+    """
+    if not cfg.music_dir.is_dir():
+        raise LibraryNotFoundError(f"Music folder not found: {cfg.music_dir}")
+
+    if full:
+        db.clear_tracks()
+
+    # Phase 1: discover audio files on disk
+    disk_files: list[Path] = []
+    for entry in cfg.music_dir.rglob("*"):
+        if entry.suffix.lower() in AUDIO_EXTENSIONS:
+            disk_files.append(entry)
+            if on_found is not None:
+                on_found(len(disk_files))
+    disk_files.sort()
+
+    result = ScanResult(total=len(disk_files))
+    db_paths = db.get_all_tracked_paths() if not full else set()
+
+    # Phase 2: per-file scan, comparing against DB unless full
+    for i, path in enumerate(disk_files, 1):
+        try:
+            stat = path.stat()
+        except OSError:
+            result.errors += 1
+            _emit_scan_progress(on_progress, i, result)
+            continue
+
+        if not full:
+            db_mtime, db_size = db.get_track_mtime(str(path))
+            if (
+                db_mtime is not None
+                and db_size is not None
+                and stat.st_mtime == db_mtime
+                and stat.st_size == db_size
+            ):
+                result.unchanged += 1
+                if str(path) not in db_paths:
+                    db.clear_missing(str(path))
+                _emit_scan_progress(on_progress, i, result)
+                continue
+
+            track = scan_file(path)
+            if track:
+                db.upsert_track(track)
+                if str(path) in db_paths:
+                    result.updated += 1
+                else:
+                    result.added += 1
+            else:
+                result.errors += 1
+        else:
+            track = scan_file(path)
+            if track:
+                db.upsert_track(track)
+                result.added += 1
+            else:
+                result.errors += 1
+
+        if (result.added + result.updated) % 500 == 0:
+            db.commit()
+        _emit_scan_progress(on_progress, i, result)
+
+    db.commit()
+
+    # Phase 3: detect deleted files (incremental only)
+    if not full:
+        disk_paths = {str(p) for p in disk_files}
+        missing_paths = db_paths - disk_paths
+        if missing_paths:
+            result.missing = db.mark_missing(missing_paths)
+
+    db.set_scan_meta("last_scan_completed", str(time.time()))
+    return result
+
+
+def _emit_scan_progress(
+    cb: Callable[[ScanProgress], None] | None,
+    current: int,
+    result: ScanResult,
+) -> None:
+    if cb is None:
+        return
+    cb(
+        ScanProgress(
+            current=current,
+            total=result.total,
+            added=result.added,
+            updated=result.updated,
+            unchanged=result.unchanged,
+            errors=result.errors,
+        )
+    )
+
+
+def library_stats(db: Database) -> dict:
+    """Return combined library stats and format breakdown."""
+    return {
+        "stats": db.get_stats(),
+        "formats": db.get_format_breakdown(),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Library and playlist queries (thin wrappers, here so callers don't need to
+# touch the Database API directly)
+# ---------------------------------------------------------------------------
+
+
+def list_artists(db: Database) -> list[dict]:
+    return db.get_artists()
+
+
+def list_albums_by_artist(db: Database, artist: str) -> list[dict]:
+    return db.get_albums_by_artist(artist)
+
+
+def list_tracks_by_album(db: Database, artist: str, album: str) -> list[dict]:
+    return db.get_tracks_by_album(artist, album)
+
+
+def list_playlists(db: Database) -> list[dict]:
+    return db.list_playlists()
+
+
+def get_playlist(db: Database, name: str) -> list[dict]:
+    """Return tracks in a playlist. Raises PlaylistNotFoundError if missing."""
+    tracks = db.get_playlist(name)
+    if not tracks:
+        raise PlaylistNotFoundError(f"Playlist '{name}' not found.")
+    return tracks
+
+
+def get_playlist_artists(db: Database, name: str) -> list[dict]:
+    return db.get_playlist_artists(name)
+
+
+def get_playlist_size(db: Database, name: str) -> int:
+    return db.get_playlist_size(name)
+
+
+# ---------------------------------------------------------------------------
+# Playlist mutations
+# ---------------------------------------------------------------------------
+
+
+def save_playlist(db: Database, name: str, track_paths: list[str]) -> None:
+    db.save_playlist(name, track_paths)
+
+
+def delete_playlist(db: Database, name: str) -> bool:
+    """Delete a playlist by name. Raises PlaylistNotFoundError if it doesn't
+    exist (callers that prefer no-op-on-missing can catch and ignore)."""
+    if not db.get_playlist(name):
+        raise PlaylistNotFoundError(f"Playlist '{name}' not found.")
+    return db.delete_playlist(name)
+
+
+def add_artist_to_playlist(db: Database, playlist: str, artist: str) -> int:
+    return db.add_artist_to_playlist(playlist, artist)
+
+
+def remove_artist_from_playlist(db: Database, playlist: str, artist: str) -> int:
+    return db.remove_artist_from_playlist(playlist, artist)
+
+
+def collect_tracks_for_artist(db: Database, artist: str) -> list[str]:
+    """All track paths for a single artist, ordered by album/track.
+
+    Caller is responsible for dedup across multiple artists.
+    """
+    paths: list[str] = []
+    seen: set[str] = set()
+    for album in db.get_albums_by_artist(artist):
+        for track in db.get_tracks_by_album(artist, album["album"]):
+            p = track["path"]
+            if p not in seen:
+                seen.add(p)
+                paths.append(p)
+    return paths
+
+
+def calc_size_of_paths(db: Database, paths: list[str]) -> int:
+    if not paths:
+        return 0
+    placeholders = ",".join("?" * len(paths))
+    row = db.conn.execute(
+        f"SELECT COALESCE(SUM(file_size), 0) AS total "
+        f"FROM tracks WHERE path IN ({placeholders})",
+        paths,
+    ).fetchone()
+    return row["total"] if row else 0
+
+
+# ---------------------------------------------------------------------------
+# iPod inspection
+# ---------------------------------------------------------------------------
+
+
+def require_ipod(cfg: Config) -> dict:
+    """Find and read the iPod database. Raises IpodNotFoundError if missing."""
+    from clickwheel.ipod import find_ipod, read_ipod
+
+    if not find_ipod(cfg.ipod_mount):
+        raise IpodNotFoundError(
+            "No iPod found. Make sure it's plugged in and shows up in Finder."
+        )
+    return read_ipod(cfg.ipod_mount)
+
+
+def read_ipod_track_list(ipod_db: dict) -> list[dict]:
+    from clickwheel.ipod import get_ipod_tracks
+
+    return get_ipod_tracks(ipod_db)
+
+
+def read_ipod_contents(cfg: Config) -> dict:
+    """Return iPod track list plus capacity/usage. Raises IpodNotFoundError."""
+    ipod_db = require_ipod(cfg)
+    tracks = read_ipod_track_list(ipod_db)
+    total_size = sum(t.get("size", 0) for t in tracks)
+    try:
+        usage = shutil.disk_usage(str(cfg.ipod_mount))
+        capacity = usage.total
+        used = usage.used
+        free = usage.free
+    except OSError:
+        capacity = cfg.ipod_capacity_bytes
+        used = total_size
+        free = max(0, capacity - used)
+    return {
+        "capacity_bytes": capacity,
+        "used_bytes": used,
+        "free_bytes": free,
+        "tracks": tracks,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Sync (diff + copy)
+# ---------------------------------------------------------------------------
+
+
+def compute_diff(cfg: Config, db: Database, playlist_name: str) -> Diff:
+    """Compute add/remove/unchanged sets between a playlist and the iPod.
+
+    Raises PlaylistNotFoundError, IpodNotFoundError.
+    """
+    ipod_db = require_ipod(cfg)
+    ipod_tracks = read_ipod_track_list(ipod_db)
+    ipod_set = {
+        (t.get("artist", ""), t.get("album", ""), t.get("title", ""))
+        for t in ipod_tracks
+    }
+
+    playlist_tracks = db.get_playlist(playlist_name)
+    if not playlist_tracks:
+        raise PlaylistNotFoundError(f"Playlist '{playlist_name}' not found.")
+
+    playlist_set = {
+        (t["artist"] or "", t["album"] or "", t["title"] or "") for t in playlist_tracks
+    }
+
+    to_add = [
+        t
+        for t in playlist_tracks
+        if (t["artist"] or "", t["album"] or "", t["title"] or "") not in ipod_set
+    ]
+
+    return Diff(
+        playlist=playlist_name,
+        to_add=to_add,
+        to_remove=sorted(ipod_set - playlist_set),
+        unchanged=sorted(playlist_set & ipod_set),
+    )
+
+
+def sync_playlist(
+    cfg: Config,
+    db: Database,
+    playlist_name: str,
+    *,
+    diff: Diff | None = None,
+    on_event: Callable[[SyncEvent], None] | None = None,
+) -> SyncResult:
+    """Copy tracks from a playlist to the iPod and rewrite iTunesDB.
+
+    Confirmation is the caller's job. This function actually performs the sync.
+    Pass a pre-computed `diff` (e.g. from a preview) to avoid re-reading the
+    iPod.
+
+    Raises PlaylistNotFoundError, IpodNotFoundError, InsufficientSpaceError.
+    """
+    from clickwheel.ipod.sync import copy_tracks_to_ipod, write_ipod_db
+
+    if diff is None:
+        diff = compute_diff(cfg, db, playlist_name)
+
+    to_add = diff.to_add
+    add_size = diff.add_size_bytes
+
+    ipod_stat = shutil.disk_usage(str(cfg.ipod_mount))
+    if add_size > ipod_stat.free:
+        raise InsufficientSpaceError(
+            f"Not enough space on iPod. "
+            f"Need {add_size} bytes but only {ipod_stat.free} free."
+        )
+
+    total_count = len(to_add)
+
+    def _on_progress(current: int, total: int) -> None:
+        if on_event is None or current < 1 or current > total_count:
+            return
+        track = to_add[current - 1]
+        on_event(SyncEvent(current=current, total=total_count, track=track, ok=True))
+
+    copied, failed = copy_tracks_to_ipod(to_add, cfg.ipod_mount, _on_progress)
+    db_ok = write_ipod_db(cfg.ipod_mount, copied)
+
+    return SyncResult(
+        copied=copied,
+        failed=failed,
+        removed_count=len(diff.to_remove),
+        db_write_ok=db_ok,
+    )
+
+
+def retry_ipod_db_write(cfg: Config, copied: list[dict]) -> bool:
+    from clickwheel.ipod.sync import write_ipod_db
+
+    return write_ipod_db(cfg.ipod_mount, copied)
+
+
+# ---------------------------------------------------------------------------
+# Scrobbling
+# ---------------------------------------------------------------------------
+
+
+def read_pending_scrobbles(db: Database) -> list[dict]:
+    from clickwheel.scrobble import get_pending_scrobbles
+
+    return get_pending_scrobbles(db.conn)
+
+
+def collect_ipod_plays(cfg: Config, db: Database) -> dict:
+    """Read recent plays from iPod and cache them. Returns a status dict.
+
+    Useful as a step before submitting — separates the "read iPod" from the
+    "submit to Last.fm" flow.
+
+    Raises IpodNotFoundError.
+    """
+    from clickwheel.scrobble import cache_scrobbles, read_ipod_plays
+
+    require_ipod(cfg)  # validate mount only
+    plays = read_ipod_plays(cfg.ipod_mount)
+
+    oldest_age_days: float | None = None
+    if plays:
+        now = int(time.time())
+        oldest = min(p.timestamp for p in plays)
+        oldest_age_days = (now - oldest) / 86400
+
+    new_cached = cache_scrobbles(db.conn, plays) if plays else 0
+    return {
+        "plays_found": len(plays),
+        "new_cached": new_cached,
+        "oldest_age_days": oldest_age_days,
+    }
+
+
+def submit_pending_scrobbles(
+    cfg: Config,
+    db: Database,
+    pending: list[dict] | None = None,
+) -> ScrobbleSubmitResult:
+    """Submit pending scrobbles to Last.fm.
+
+    If `pending` is None, reads pending from the cache. Caller should verify
+    cfg.lastfm_session_key beforehand or accept the LastfmNotConfiguredError.
+
+    Raises LastfmNotConfiguredError.
+    """
+    from clickwheel.scrobble import get_pending_scrobbles, submit_scrobbles
+
+    if not cfg.lastfm_api_key or not cfg.lastfm_api_secret:
+        raise LastfmNotConfiguredError(
+            "Last.fm API key/secret missing. "
+            "Add them to ~/.clickwheel/config.yaml or .env."
+        )
+    if not cfg.lastfm_session_key:
+        raise LastfmNotConfiguredError(
+            "Last.fm not authorized. "
+            "Run `clickwheel scrobble --auth` to connect your account."
+        )
+
+    if pending is None:
+        pending = get_pending_scrobbles(db.conn)
+
+    if not pending:
+        return ScrobbleSubmitResult()
+
+    submitted, failed = submit_scrobbles(
+        cfg.lastfm_api_key,
+        cfg.lastfm_api_secret,
+        cfg.lastfm_username,
+        pending,
+        db.conn,
+        session_key=cfg.lastfm_session_key,
+    )
+    remaining = len(get_pending_scrobbles(db.conn))
+    return ScrobbleSubmitResult(
+        submitted=submitted,
+        failed=failed,
+        remaining_pending=remaining,
+    )

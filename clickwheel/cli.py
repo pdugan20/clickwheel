@@ -7,11 +7,19 @@ from pathlib import Path
 import typer
 from tqdm import tqdm
 
-from clickwheel import __version__
+from clickwheel import __version__, actions
+from clickwheel.actions import (
+    InsufficientSpaceError,
+    IpodNotFoundError,
+    LastfmNotConfiguredError,
+    LibraryNotFoundError,
+    PlaylistNotFoundError,
+    ScanProgress,
+    SyncEvent,
+)
 from clickwheel.autoscan import maybe_auto_scan
 from clickwheel.config import load_config
 from clickwheel.db import Database
-from clickwheel.library import find_audio_files, scan_file
 from clickwheel.output import (
     confirm,
     dim,
@@ -83,65 +91,46 @@ def scan(
         _print_stats(stats, formats, 0)
         return
 
-    if not cfg.music_dir.is_dir():
-        error(f"Music folder not found: {cfg.music_dir}")
-        raise typer.Exit(1)
-
-    if full:
-        db.clear_tracks()
-
     bar_fmt = "{desc}: {n_fmt}{unit}"
-    counter = tqdm(unit=" files", desc="Finding audio files", bar_format=bar_fmt)
+    discovery = tqdm(unit=" files", desc="Finding audio files", bar_format=bar_fmt)
+    scan_bar: tqdm | None = None
 
     def _on_found(count: int) -> None:
-        counter.n = count
-        counter.refresh()
+        discovery.n = count
+        discovery.refresh()
 
-    files = find_audio_files(cfg.music_dir, progress_callback=_on_found)
-    counter.close()
-    info(f"Found {len(files):,} tracks")
+    def _on_progress(p: ScanProgress) -> None:
+        nonlocal scan_bar
+        if scan_bar is None:
+            discovery.close()
+            info(f"Found {p.total:,} tracks")
+            scan_bar = tqdm(total=p.total, desc="Scanning", unit="file")
+        scan_bar.n = p.current
+        scan_bar.refresh()
 
-    import time as _time
+    try:
+        result = actions.scan_library(
+            cfg, db, full=full, on_found=_on_found, on_progress=_on_progress
+        )
+    except LibraryNotFoundError as exc:
+        discovery.close()
+        if scan_bar:
+            scan_bar.close()
+        error(str(exc))
+        db.close()
+        raise typer.Exit(1) from exc
 
-    scanned = 0
-    skipped = 0
-    scan_errors = 0
-    for f in tqdm(files, desc="Scanning", unit="file"):
-        # Incremental: skip files whose mtime+size haven't changed
-        if not full:
-            try:
-                stat = f.stat()
-                db_mtime, db_size = db.get_track_mtime(str(f))
-                if (
-                    db_mtime is not None
-                    and db_size is not None
-                    and stat.st_mtime == db_mtime
-                    and stat.st_size == db_size
-                ):
-                    skipped += 1
-                    continue
-            except OSError:
-                pass
-
-        track = scan_file(f)
-        if track:
-            db.upsert_track(track)
-            scanned += 1
-        else:
-            scan_errors += 1
-
-        if scanned % 500 == 0:
-            db.commit()
-
-    db.commit()
-    db.set_scan_meta("last_scan_completed", str(_time.time()))
+    if scan_bar is None:
+        discovery.close()
+    else:
+        scan_bar.close()
 
     stats = db.get_stats()
     formats = db.get_format_breakdown()
     db.close()
 
     info("")
-    _print_stats(stats, formats, scan_errors)
+    _print_stats(stats, formats, result.errors)
     dim("Run `clickwheel select` to pick music for your iPod.")
 
 
@@ -182,7 +171,7 @@ def select(
     db = Database(cfg.db_path)
     if not no_scan:
         maybe_auto_scan(cfg, db)
-    artists = db.get_artists()
+    artists = actions.list_artists(db)
 
     if not artists:
         warn("No music found. Run `clickwheel scan` first.")
@@ -217,11 +206,15 @@ def select(
         raise typer.Exit(0)
 
     selected_paths: list[str] = []
+    seen_paths: set[str] = set()
     for name in selected_names:
-        added = _add_artist_tracks(db, name, selected_paths)
-        confirm(f"+ {name}: {added} tracks")
+        artist_paths = actions.collect_tracks_for_artist(db, name)
+        new = [p for p in artist_paths if p not in seen_paths]
+        seen_paths.update(new)
+        selected_paths.extend(new)
+        confirm(f"+ {name}: {len(new)} tracks")
 
-    selected_size = _calc_size(db, selected_paths)
+    selected_size = actions.calc_size_of_paths(db, selected_paths)
     _print_capacity_bar(selected_size, capacity)
 
     if selected_size > capacity:
@@ -229,7 +222,7 @@ def select(
         warn(f"Over capacity by {_fmt_size(over)}.")
 
     if selected_paths:
-        db.save_playlist(playlist_name, selected_paths)
+        actions.save_playlist(db, playlist_name, selected_paths)
         success(
             f"Playlist '{playlist_name}' saved — "
             f"{len(selected_paths)} tracks, {_fmt_size(selected_size)}"
@@ -247,11 +240,12 @@ def playlist(
     db = Database(cfg.db_path)
 
     if name:
-        tracks = db.get_playlist(name)
-        if not tracks:
-            error(f"Playlist '{name}' not found.")
+        try:
+            tracks = actions.get_playlist(db, name)
+        except PlaylistNotFoundError as exc:
+            error(str(exc))
             db.close()
-            raise typer.Exit(1)
+            raise typer.Exit(1) from exc
 
         t = table(title=f"Playlist: {name}")
         t.add_column("#", style="dim", width=5)
@@ -276,7 +270,7 @@ def playlist(
         total_gb = total_size / (1024 * 1024 * 1024)
         status(f"\n{len(tracks)} tracks, {total_gb:.1f} GB")
     else:
-        playlists = db.list_playlists()
+        playlists = actions.list_playlists(db)
         if not playlists:
             warn("No playlists yet. Run `clickwheel select` to create one.")
             db.close()
@@ -306,11 +300,12 @@ def delete(
     cfg = load_config()
     db = Database(cfg.db_path)
 
-    tracks = db.get_playlist(playlist_name)
-    if not tracks:
-        error(f"Playlist '{playlist_name}' not found.")
+    try:
+        tracks = actions.get_playlist(db, playlist_name)
+    except PlaylistNotFoundError as exc:
+        error(str(exc))
         db.close()
-        raise typer.Exit(1)
+        raise typer.Exit(1) from exc
 
     if not force:
         warn(f"This will delete playlist '{playlist_name}' ({len(tracks)} tracks).")
@@ -319,7 +314,7 @@ def delete(
             db.close()
             return
 
-    db.delete_playlist(playlist_name)
+    actions.delete_playlist(db, playlist_name)
     success(f"Deleted playlist '{playlist_name}'.")
     db.close()
 
@@ -344,20 +339,20 @@ def edit(
         capacity = cfg.ipod_capacity_bytes
 
         for artist in add:
-            added = db.add_artist_to_playlist(playlist_name, artist)
+            added = actions.add_artist_to_playlist(db, playlist_name, artist)
             if added:
                 confirm(f"+ {artist}: {added} tracks added")
             else:
                 warn(f"No tracks found for '{artist}' (or already in playlist)")
 
         for artist in remove:
-            removed = db.remove_artist_from_playlist(playlist_name, artist)
+            removed = actions.remove_artist_from_playlist(db, playlist_name, artist)
             if removed:
                 info(f"- {artist}: {removed} tracks removed")
             else:
                 warn(f"'{artist}' not in playlist.")
 
-        final_size = db.get_playlist_size(playlist_name)
+        final_size = actions.get_playlist_size(db, playlist_name)
         tracks = db.get_playlist(playlist_name)
         success(
             f"Playlist '{playlist_name}' — "
@@ -384,9 +379,9 @@ def edit(
         raise typer.Exit(1)
 
     capacity = cfg.ipod_capacity_bytes
-    all_artists = db.get_artists()
-    playlist_artists = db.get_playlist_artists(playlist_name)
-    playlist_size = db.get_playlist_size(playlist_name)
+    all_artists = actions.list_artists(db)
+    playlist_artists = actions.get_playlist_artists(db, playlist_name)
+    playlist_size = actions.get_playlist_size(db, playlist_name)
     current_names = {a["name"] for a in playlist_artists}
 
     status(f"Editing playlist: {playlist_name}")
@@ -409,7 +404,7 @@ def edit(
             break
 
         if action == "Show current playlist":
-            playlist_artists = db.get_playlist_artists(playlist_name)
+            playlist_artists = actions.get_playlist_artists(db, playlist_name)
             if playlist_artists:
                 t = table(title="Artists in playlist")
                 t.add_column("Artist")
@@ -445,12 +440,12 @@ def edit(
             ).ask()
             if to_add:
                 for name in to_add:
-                    added = db.add_artist_to_playlist(playlist_name, name)
+                    added = actions.add_artist_to_playlist(db, playlist_name, name)
                     current_names.add(name)
                     confirm(f"+ {name}: {added} tracks added")
 
         if action == "Remove artists":
-            playlist_artists = db.get_playlist_artists(playlist_name)
+            playlist_artists = actions.get_playlist_artists(db, playlist_name)
             if not playlist_artists:
                 warn("Playlist is empty.")
                 continue
@@ -467,18 +462,20 @@ def edit(
             ).ask()
             if to_remove:
                 for name in to_remove:
-                    removed = db.remove_artist_from_playlist(playlist_name, name)
+                    removed = actions.remove_artist_from_playlist(
+                        db, playlist_name, name
+                    )
                     current_names.discard(name)
                     info(f"Removed {name} ({removed} tracks)")
 
-        playlist_size = db.get_playlist_size(playlist_name)
+        playlist_size = actions.get_playlist_size(db, playlist_name)
         _print_capacity_bar(playlist_size, capacity)
 
         if playlist_size > capacity:
             over = playlist_size - capacity
             warn(f"Over capacity by {_fmt_size(over)}.")
 
-    final_size = db.get_playlist_size(playlist_name)
+    final_size = actions.get_playlist_size(db, playlist_name)
     tracks = db.get_playlist(playlist_name)
     success(
         f"Playlist '{playlist_name}' saved — "
@@ -503,55 +500,41 @@ def diff(
     if not no_scan:
         maybe_auto_scan(cfg, db)
 
-    ipod = _require_ipod(cfg)
-    ipod_tracks = _get_ipod_track_list(ipod)
-    ipod_set = {
-        (t.get("artist", ""), t.get("album", ""), t.get("title", ""))
-        for t in ipod_tracks
-    }
-
-    playlist_tracks = db.get_playlist(playlist_name)
-    if not playlist_tracks:
-        error(f"Playlist '{playlist_name}' not found.")
+    try:
+        d = actions.compute_diff(cfg, db, playlist_name)
+    except (PlaylistNotFoundError, IpodNotFoundError) as exc:
+        error(str(exc))
         db.close()
-        raise typer.Exit(1)
-
-    playlist_set = {
-        (t["artist"] or "", t["album"] or "", t["title"] or "") for t in playlist_tracks
-    }
-
-    to_add = playlist_set - ipod_set
-    to_remove = ipod_set - playlist_set
-    unchanged = playlist_set & ipod_set
+        raise typer.Exit(1) from exc
 
     summary = (
-        f"{len(to_add)} to add, "
-        f"{len(to_remove)} to remove, "
-        f"{len(unchanged)} already on iPod"
+        f"{len(d.to_add)} to add, "
+        f"{len(d.to_remove)} to remove, "
+        f"{len(d.unchanged)} already on iPod"
     )
     print_panel(summary, title=f"Diff: {playlist_name}", style="cyan")
 
-    if to_add:
+    if d.to_add:
         info("")
         add_table = table(title="[green]+ To Add[/green]")
         add_table.add_column("Artist")
         add_table.add_column("Album")
         add_table.add_column("Title")
-        for artist, album, title in sorted(to_add):
+        for artist, album, title in d.to_add_display():
             add_table.add_row(artist, album, title)
         print_table(add_table)
 
-    if to_remove:
+    if d.to_remove:
         info("")
         rm_table = table(title="[red]- To Remove[/red]")
         rm_table.add_column("Artist")
         rm_table.add_column("Album")
         rm_table.add_column("Title")
-        for artist, album, title in sorted(to_remove):
+        for artist, album, title in d.to_remove:
             rm_table.add_row(artist, album, title)
         print_table(rm_table)
 
-    if not to_add and not to_remove:
+    if not d.to_add and not d.to_remove:
         confirm("Your iPod matches this playlist.")
 
     db.close()
@@ -569,45 +552,22 @@ def sync(
 ) -> None:
     """Send your playlist to the iPod."""
     _check_macos()
-    import shutil
-
-    from clickwheel.ipod.sync import copy_tracks_to_ipod, write_ipod_db
-
     cfg = load_config()
     db = Database(cfg.db_path)
     if not no_scan:
         maybe_auto_scan(cfg, db)
 
-    ipod = _require_ipod(cfg)
-    ipod_tracks = _get_ipod_track_list(ipod)
-    ipod_set = {
-        (t.get("artist", ""), t.get("album", ""), t.get("title", ""))
-        for t in ipod_tracks
-    }
-
-    playlist_tracks = db.get_playlist(playlist_name)
-    if not playlist_tracks:
-        error(f"Playlist '{playlist_name}' not found.")
+    try:
+        d = actions.compute_diff(cfg, db, playlist_name)
+    except (PlaylistNotFoundError, IpodNotFoundError) as exc:
+        error(str(exc))
         db.close()
-        raise typer.Exit(1)
-
-    playlist_set = {
-        (t["artist"] or "", t["album"] or "", t["title"] or "") for t in playlist_tracks
-    }
-
-    to_add = [
-        t
-        for t in playlist_tracks
-        if (t["artist"] or "", t["album"] or "", t["title"] or "") not in ipod_set
-    ]
-    to_remove_keys = ipod_set - playlist_set
-
-    add_size = sum(t["file_size"] or 0 for t in to_add)
+        raise typer.Exit(1) from exc
 
     status(f"Syncing playlist '{playlist_name}' to iPod")
     info(
-        f"  {len(to_add)} to add ({_fmt_size(add_size)}), "
-        f"{len(to_remove_keys)} to remove"
+        f"  {len(d.to_add)} to add ({_fmt_size(d.add_size_bytes)}), "
+        f"{len(d.to_remove)} to remove"
     )
 
     if dry_run:
@@ -615,7 +575,7 @@ def sync(
         db.close()
         return
 
-    if not to_add and not to_remove_keys:
+    if not d.to_add and not d.to_remove:
         confirm("Your iPod is up to date.")
         db.close()
         return
@@ -625,17 +585,6 @@ def sync(
         db.close()
         return
 
-    # Check available space on iPod
-    ipod_stat = shutil.disk_usage(str(cfg.ipod_mount))
-    if add_size > ipod_stat.free:
-        error(
-            f"Not enough space on iPod. "
-            f"Need {_fmt_size(add_size)} but only {_fmt_size(ipod_stat.free)} free."
-        )
-        db.close()
-        raise typer.Exit(1)
-
-    # Copy files
     info("")
     sync_table = table(title="Syncing to iPod")
     sync_table.add_column("#", style="dim", width=6)
@@ -644,44 +593,40 @@ def sync(
     sync_table.add_column("Size", justify="right")
     sync_table.add_column("Status", justify="right")
 
-    total_count = len(to_add)
-
-    def _on_progress(current: int, total: int) -> None:
-        if current <= total_count:
-            track = to_add[current - 1]
-            size = _fmt_size(track["file_size"] or 0)
-            sync_table.add_row(
-                f"{current}/{total_count}",
-                track["artist"] or "?",
-                track["title"] or "?",
-                size,
-                "[green]OK[/green]",
-            )
-
-    with live_table() as live:
-        live.update(sync_table)
-
-        def _on_progress_live(current: int, total: int) -> None:
-            _on_progress(current, total)
+    try:
+        with live_table() as live:
             live.update(sync_table)
 
-        copied, failed = copy_tracks_to_ipod(to_add, cfg.ipod_mount, _on_progress_live)
+            def _on_event(event: SyncEvent) -> None:
+                size = _fmt_size(event.track["file_size"] or 0)
+                sync_table.add_row(
+                    f"{event.current}/{event.total}",
+                    event.track["artist"] or "?",
+                    event.track["title"] or "?",
+                    size,
+                    "[green]OK[/green]",
+                )
+                live.update(sync_table)
 
-    success(f"Copied {len(copied)} tracks to iPod.")
-    if failed:
-        warn(f"{len(failed)} tracks couldn't be copied:")
-        # Group failures by artist + album
+            result = actions.sync_playlist(
+                cfg, db, playlist_name, diff=d, on_event=_on_event
+            )
+    except InsufficientSpaceError as exc:
+        error(str(exc))
+        db.close()
+        raise typer.Exit(1) from exc
+
+    success(f"Copied {len(result.copied)} tracks to iPod.")
+    if result.failed:
+        warn(f"{len(result.failed)} tracks couldn't be copied:")
         groups: dict[tuple[str, str], int] = {}
-        for t in failed:
+        for t in result.failed:
             key = (t.get("artist") or "Unknown", t.get("album") or "Unknown")
             groups[key] = groups.get(key, 0) + 1
         for (artist, album), count in sorted(groups.items()):
             dim(f"  {artist} — {album} ({count} tracks)")
 
-    # Write iTunesDB — include both existing iPod tracks and newly copied ones
-    with spinner("Updating iPod database..."):
-        db_ok = write_ipod_db(cfg.ipod_mount, copied)
-    if db_ok:
+    if result.db_write_ok:
         success("iPod database updated.")
     else:
         warn(
@@ -690,15 +635,15 @@ def sync(
         )
         if typer.confirm("Retry writing the iPod database?", default=True):
             with spinner("Retrying iPod database write..."):
-                db_ok = write_ipod_db(cfg.ipod_mount, copied)
-            if db_ok:
+                retry_ok = actions.retry_ipod_db_write(cfg, result.copied)
+            if retry_ok:
                 success("iPod database updated on retry.")
             else:
                 error("Still couldn't update iPod database.")
 
-    if to_remove_keys:
+    if result.removed_count:
         warn(
-            f"{len(to_remove_keys)} tracks on iPod aren't in this playlist. "
+            f"{result.removed_count} tracks on iPod aren't in this playlist. "
             "Run `clickwheel diff` to see them."
         )
 
@@ -710,14 +655,17 @@ def ls() -> None:
     """Show what's on your iPod."""
     _check_macos()
     cfg = load_config()
-    ipod = _require_ipod(cfg)
-    tracks = _get_ipod_track_list(ipod)
+    try:
+        contents = actions.read_ipod_contents(cfg)
+    except IpodNotFoundError as exc:
+        error(str(exc))
+        raise typer.Exit(1) from exc
 
+    tracks = contents["tracks"]
     if not tracks:
         warn("Your iPod is empty.")
         return
 
-    # Group by artist
     artists: dict[str, list[dict]] = {}
     total_size = 0
     for t in tracks:
@@ -746,7 +694,11 @@ def eject() -> None:
     import subprocess
 
     cfg = load_config()
-    _require_ipod(cfg)  # verify iPod is mounted
+    try:
+        actions.require_ipod(cfg)
+    except IpodNotFoundError as exc:
+        error(str(exc))
+        raise typer.Exit(1) from exc
 
     with spinner("Ejecting iPod..."):
         result = subprocess.run(
@@ -775,16 +727,11 @@ def scrobble(
     ),
 ) -> None:
     """Submit your recent iPod listens to Last.fm."""
-    import time as _time
-
     from clickwheel.scrobble import (
         authenticate_lastfm,
-        cache_scrobbles,
         complete_lastfm_auth,
         get_lastfm_profile,
         get_pending_scrobbles,
-        read_ipod_plays,
-        submit_scrobbles,
     )
 
     cfg = load_config()
@@ -836,33 +783,33 @@ def scrobble(
         )
         raise typer.Exit(1)
 
-    _require_ipod(cfg)
     db = Database(cfg.db_path)
 
-    # Read plays from iPod
+    # Pull plays from iPod and cache new ones
     with spinner("Checking iPod for recent listens..."):
-        plays = read_ipod_plays(cfg.ipod_mount)
+        try:
+            plays_status = actions.collect_ipod_plays(cfg, db)
+        except IpodNotFoundError as exc:
+            error(str(exc))
+            db.close()
+            raise typer.Exit(1) from exc
 
-    if not plays:
+    if plays_status["plays_found"] == 0:
         warn("No new listens found on iPod.")
         db.close()
         return
 
-    # Check for old plays
-    now = int(_time.time())
-    oldest = min(p.timestamp for p in plays)
-    age_days = (now - oldest) / 86400
-    if age_days > 12:
+    if (
+        plays_status["oldest_age_days"] is not None
+        and plays_status["oldest_age_days"] > 12
+    ):
         warn(
-            f"Some listens are {age_days:.0f} days old. "
+            f"Some listens are {plays_status['oldest_age_days']:.0f} days old. "
             "Last.fm won't accept anything older than 14 days — sync soon."
         )
 
-    info(f"Found {len(plays)} listens to submit")
-
-    # Cache to avoid duplicates
-    cached = cache_scrobbles(db.conn, plays)
-    info(f"  {cached} new, rest already submitted")
+    info(f"Found {plays_status['plays_found']} listens to submit")
+    info(f"  {plays_status['new_cached']} new, rest already submitted")
 
     pending = get_pending_scrobbles(db.conn)
     if not pending:
@@ -888,36 +835,28 @@ def scrobble(
         db.close()
         return
 
-    # Submit to Last.fm
     with spinner(f"Sending {len(pending)} listens to Last.fm..."):
-        submitted, submit_errors = submit_scrobbles(
-            cfg.lastfm_api_key,
-            cfg.lastfm_api_secret,
-            cfg.lastfm_username,
-            pending,
-            db.conn,
-            session_key=cfg.lastfm_session_key,
-        )
+        try:
+            result = actions.submit_pending_scrobbles(cfg, db, pending=pending)
+        except LastfmNotConfiguredError as exc:
+            error(str(exc))
+            db.close()
+            raise typer.Exit(1) from exc
 
-    success(f"Sent {submitted} listens to Last.fm.")
-    if submit_errors:
-        warn(f"{submit_errors} failed.")
+    success(f"Sent {result.submitted} listens to Last.fm.")
+    if result.failed:
+        warn(f"{result.failed} failed.")
         remaining = get_pending_scrobbles(db.conn)
         if remaining and typer.confirm("Retry failed scrobbles now?", default=True):
             with spinner(f"Retrying {len(remaining)} scrobbles..."):
-                retried, retry_errors = submit_scrobbles(
-                    cfg.lastfm_api_key,
-                    cfg.lastfm_api_secret,
-                    cfg.lastfm_username,
-                    remaining,
-                    db.conn,
-                    session_key=cfg.lastfm_session_key,
+                retry_result = actions.submit_pending_scrobbles(
+                    cfg, db, pending=remaining
                 )
-            if retried:
-                success(f"Sent {retried} more on retry.")
-            if retry_errors:
+            if retry_result.submitted:
+                success(f"Sent {retry_result.submitted} more on retry.")
+            if retry_result.failed:
                 warn(
-                    f"{retry_errors} still failed. "
+                    f"{retry_result.failed} still failed. "
                     "They'll be retried next time you scrobble."
                 )
 
@@ -1026,38 +965,10 @@ def _fmt_size(size_bytes: int) -> str:
     return f"{size_bytes / 1024:.1f} KB"
 
 
-def _add_artist_tracks(
-    db: Database, artist_name: str, selected_paths: list[str]
-) -> int:
-    """Add all tracks by an artist to the selected list. Returns count added."""
-    albums = db.get_albums_by_artist(artist_name)
-    added = 0
-    for album in albums:
-        tracks = db.get_tracks_by_album(artist_name, album["album"])
-        for t in tracks:
-            if t["path"] not in selected_paths:
-                selected_paths.append(t["path"])
-                added += 1
-    return added
-
-
-def _calc_size(db: Database, paths: list[str]) -> int:
-    """Calculate total file size for a list of track paths."""
-    total = 0
-    for p in paths:
-        row = db.conn.execute(
-            "SELECT file_size FROM tracks WHERE path = ?", (p,)
-        ).fetchone()
-        if row:
-            total += row["file_size"] or 0
-    return total
-
-
 def _save_session_key(cfg, session_key: str) -> None:
     """Append the Last.fm session key to the config file."""
     from clickwheel.config import CONFIG_FILE
 
-    # Read existing config, append session key
     lines = []
     replaced = False
     if CONFIG_FILE.exists():
@@ -1073,24 +984,6 @@ def _save_session_key(cfg, session_key: str) -> None:
 
     with open(CONFIG_FILE, "w") as f:
         f.writelines(lines)
-
-
-def _require_ipod(cfg) -> dict:
-    """Find and read the iPod, or exit with an error."""
-    from clickwheel.ipod import find_ipod, read_ipod
-
-    if not find_ipod(cfg.ipod_mount):
-        error("No iPod found. Make sure it's plugged in and shows up in Finder.")
-        raise typer.Exit(1)
-
-    return read_ipod(cfg.ipod_mount)
-
-
-def _get_ipod_track_list(ipod_db: dict) -> list[dict]:
-    """Extract the track list from a parsed iPod database."""
-    from clickwheel.ipod import get_ipod_tracks
-
-    return get_ipod_tracks(ipod_db)
 
 
 def _get_path() -> str:
@@ -1114,7 +1007,6 @@ def _run_beets_fix(cfg, target: str) -> None:
     beets_dir = cfg.project_dir / "beets"
     beets_dir.mkdir(parents=True, exist_ok=True)
 
-    # Auto-generate beets config if it doesn't exist
     beets_config = beets_dir / "config.yaml"
     if not beets_config.exists():
         _generate_beets_config(beets_config, cfg)
@@ -1138,7 +1030,6 @@ def _run_beets_fix(cfg, target: str) -> None:
         confirm(f"  {phase} Done")
         return True
 
-    # Check beets is installed
     check = subprocess.run(
         ["beet", "version"],
         env=env,
@@ -1154,8 +1045,6 @@ def _run_beets_fix(cfg, target: str) -> None:
         )
         raise typer.Exit(1)
 
-    # Step 1: Catalog — import each subdirectory individually so one
-    # bad folder (e.g. SMB 8.3 aliases) doesn't kill the whole run.
     target_path = Path(target)
     if target_path.is_dir() and target == str(cfg.music_dir):
         status("Step 1/5: Cataloging library...")
@@ -1185,7 +1074,6 @@ def _run_beets_fix(cfg, target: str) -> None:
     else:
         _beet(["import", "-A", target], "Step 1/5: Cataloging library...")
 
-    # Steps 2-5: art, genres, write
     remaining = [
         (["fetchart", "-f"], "Step 2/5: Fetching missing album art..."),
         (["embedart", "-y"], "Step 3/5: Embedding album art..."),
