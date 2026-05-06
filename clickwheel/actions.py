@@ -240,6 +240,58 @@ def library_stats(db: Database) -> dict:
     }
 
 
+def library_health(cfg: Config, db: Database) -> dict:
+    """Return a quick health probe of the library setup.
+
+    Useful as a "is everything wired up?" check from an MCP client.
+    """
+    last_scan = db.get_scan_meta("last_scan_completed")
+    last_scan_ts = float(last_scan) if last_scan else None
+
+    missing_count = db.conn.execute(
+        "SELECT COUNT(*) FROM tracks WHERE missing_since IS NOT NULL"
+    ).fetchone()[0]
+
+    total_count = db.conn.execute(
+        "SELECT COUNT(*) FROM tracks WHERE missing_since IS NULL"
+    ).fetchone()[0]
+
+    return {
+        "library_dir": str(cfg.music_dir),
+        "library_dir_exists": cfg.music_dir.is_dir(),
+        "total_tracks": total_count,
+        "missing_tracks": missing_count,
+        "last_scan_at": last_scan_ts,
+        "auto_scan_enabled": cfg.auto_scan,
+    }
+
+
+def search_tracks(db: Database, query: str, limit: int = 50) -> list[dict]:
+    """Substring search across artist, album, and title.
+
+    Case-insensitive. Returns at most `limit` results, newest scans first.
+    """
+    if not query.strip():
+        return []
+    pattern = f"%{query.strip()}%"
+    rows = db.conn.execute(
+        """
+        SELECT path, artist, album, title, duration_seconds, file_size, format
+        FROM tracks
+        WHERE missing_since IS NULL
+          AND (
+            artist LIKE ? COLLATE NOCASE
+            OR album LIKE ? COLLATE NOCASE
+            OR title LIKE ? COLLATE NOCASE
+          )
+        ORDER BY artist COLLATE NOCASE, album COLLATE NOCASE, track_number
+        LIMIT ?
+        """,
+        (pattern, pattern, pattern, limit),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
 # ---------------------------------------------------------------------------
 # Library and playlist queries (thin wrappers, here so callers don't need to
 # touch the Database API directly)

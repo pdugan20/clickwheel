@@ -27,23 +27,24 @@ Live tracker for the MCP integration. Update statuses as we go. See `design.md` 
 - ☒ Consolidate `autoscan.incremental_scan` into `actions.scan_library` — autoscan now decides _whether_ to scan, actions does the actual work.
 - ☒ Run full test suite — 92 passed, 41.6% coverage.
 - ☒ Manual smoke: `clickwheel scan --stats` and `clickwheel playlist` behave identically against real library.
-- ☐ Conventional commit: `refactor: extract action logic from cli.py into actions.py`.
+- ☒ Conventional commit: `refactor: extract action logic from cli.py into actions.py` (commit `741cdb0`).
 
 ## Phase 2 — Read-only MCP server (`feat:` commit)
 
-- ☐ Add `[mcp]` extra to `pyproject.toml` (`mcp>=1.2`)
-- ☐ Add `[project.scripts]` entry: `clickwheel-mcp = "clickwheel.mcp:main"`
-- ☐ Create `clickwheel/mcp/__init__.py` exporting `main`
-- ☐ Create `clickwheel/mcp/server.py` — FastMCP instance, lifespan management (DB open/close), stderr-only logging, env-driven log level
-- ☐ Create `clickwheel/mcp/tools_read.py` with the 10 read tools per `design.md`
-- ☐ Each tool: type hints + docstring (FastMCP infers schema), wraps an `actions.py` call, returns structured dict
-- ☐ Wire autoscan check into tools that depend on indexed library data (re-use `clickwheel.autoscan`)
-- ☐ Add `tests/test_mcp_server.py` — direct unit tests of tool functions (not full protocol roundtrip)
-- ☐ Add a `tests/test_mcp_smoke.py` that spawns `clickwheel-mcp` over stdio and exchanges a `tools/list` + one `list_playlists` call (skipped if `mcp` not installed)
-- ☐ Update `clickwheel/ipod` exclusion in `pyproject.toml` if needed (no — MCP isn't vendored)
-- ☐ Lint passes (`make lint`); tests pass (`make test`)
-- ☐ Manual: `pipx inject clickwheel 'clickwheel[mcp]'`, register with Claude Code via `claude mcp add` (verify the user-scope bug isn't blocking us — fall back to project scope or hand-edit if so), invoke from a chat session
-- ☐ Conventional commit: `feat: add read-only MCP server` (minor version bump)
+- ☒ Add `[mcp]` extra to `pyproject.toml` (`mcp>=1.2`)
+- ☒ Add `[project.scripts]` entry: `clickwheel-mcp = "clickwheel.mcp:main"`
+- ☒ Create `clickwheel/mcp/__init__.py` exporting `main`
+- ☒ Create `clickwheel/mcp/__main__.py` so `python -m clickwheel.mcp` works
+- ☒ Create `clickwheel/mcp/server.py` — FastMCP instance, per-call DB lifecycle, stderr-only logging, env-driven log level (`CLICKWHEEL_MCP_LOG_LEVEL`)
+- ☒ Implement the 10 read tools inline in `server.py` (kept as one file for now; split if it grows past ~500 lines)
+- ☒ Each tool: type hints + docstring (FastMCP picks up the schema), wraps an `actions.py` call, returns structured dict/list
+- ☒ Add `library_health` and `search_tracks` to `actions.py` (newly required by MCP surface)
+- ☒ Wire autoscan into library-data tools via `_open_session(autoscan=True)` — `IPod`/scrobble tools opt out
+- ☒ Add `tests/test_mcp_server.py` — 14 direct unit tests of tool functions
+- ☒ Add `tests/test_mcp_smoke.py` — spawns `python -m clickwheel.mcp` over stdio, runs a real `initialize` + `tools/list` round trip
+- ☒ Lint passes; tests pass — 107 passing, 45.5% coverage
+- ☐ Manual: register with Claude Code via `claude mcp add` (verify the 2.1.122 user-scope bug status; fall back to project scope or hand-edit if needed), invoke from a chat session
+- ☐ Conventional commit: `feat: add read-only mcp server` (minor version bump)
 
 ## Phase 3 — Mutation tools (`feat:` commit)
 
