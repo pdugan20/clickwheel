@@ -58,11 +58,10 @@ Live tracker for the MCP integration. Update statuses as we go. See `design.md` 
 
 ## Phase 4 — Docs and packaging
 
-- ☐ Add `## MCP server` section to `README.md`: install, register with Claude Code, example prompts, link to `docs/mcp/`
-- ☐ Update `clickwheel/CLAUDE.md` (this repo's): add `clickwheel/mcp/` to project layout, brief note in Critical Rules if any new invariants
-- ☐ Confirm `pyproject.toml` `description` still fits (probably unchanged — MCP is an add-on, not the headline feature)
-- ☐ Add `docs/mcp/` to whatever index docs exist (none currently — the existing `docs/architecture.md` is freestanding)
-- ☐ Conventional commit: `docs: document MCP server install and usage` (no version bump)
+- ☒ Add `## MCP server` section to `README.md`: install, register with Claude Code, tool table with read/mutation grouping, link to `docs/mcp/`
+- ☒ Update `CLAUDE.md`: `actions.py` and `clickwheel/mcp/` in project layout, three new Critical Rules (MCP tools wrap actions, destructive tools elicit, stderr logging only)
+- ☒ `pyproject.toml` description unchanged — MCP is an add-on, not the headline feature
+- ☐ Conventional commit: `docs: document mcp server install and usage`
 
 ## Phase 5 — Manual iPod testing
 

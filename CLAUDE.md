@@ -12,16 +12,18 @@ A Python CLI for syncing a music library to a classic iPod from a modern Mac.
 ## Project Layout
 
 - `clickwheel/cli.py` — Typer command definitions (entry point)
+- `clickwheel/actions.py` — pure-logic functions consumed by both the CLI and the MCP server (no Rich/tqdm/typer/questionary). Errors raised as a typed `ClickwheelError` hierarchy.
 - `clickwheel/output.py` — Rich console helpers (tables, spinners, panels, errors)
 - `clickwheel/config.py` — config loading (~/.clickwheel/config.yaml, env vars)
 - `clickwheel/db.py` — SQLite database (tracks, playlists, scrobble cache)
 - `clickwheel/library.py` — music file scanning (mutagen)
-- `clickwheel/autoscan.py` — automatic library scan before commands
+- `clickwheel/autoscan.py` — staleness check + CLI-friendly auto-scan wrapper around `actions.scan_library`
 - `clickwheel/scrobble.py` — Last.fm scrobbling (pylast)
+- `clickwheel/mcp/` — optional MCP server (gated by `[mcp]` extra). `clickwheel-mcp` console script and `python -m clickwheel.mcp` both work.
 - `clickwheel/ipod/` — vendored iOpenPodv2 (excluded from ruff)
 - `tests/` — pytest test suite
 - `scripts/` — bash utilities (audit, fix-metadata, setup, pre-push)
-- `docs/` — architecture, releasing, and testing docs
+- `docs/` — architecture, releasing, and testing docs (`docs/mcp/` covers the MCP project)
 
 ## Commands
 
@@ -68,6 +70,12 @@ pre-commit install --hook-type pre-commit --hook-type commit-msg
 9. **`select`, `edit`, `diff`, `sync` auto-scan** the library if stale. `--no-scan` skips this. Controlled by `auto_scan` and `auto_scan_staleness_minutes` in config.
 
 10. **`fix` requires beets extras** — `pip install 'clickwheel[fix]'`. Auto-generates beets config on first run.
+
+11. **MCP tools wrap `actions.py`, never `cli.py`** — CLI commands are display adapters, MCP tools are RPC adapters. Both consume the same pure functions. New library/iPod features should land in `actions.py` first, then get a thin wrapper in each surface.
+
+12. **MCP destructive tools elicit confirmation** — `delete_playlist` and `sync_playlist_to_ipod` use `Context.elicit()` to ask the user via the client when `confirm=False`. Don't bypass this on the server side; if a caller really needs no prompt they pass `confirm=True`.
+
+13. **MCP server logs to stderr only** — stdout is the wire protocol. Use `logger` from `clickwheel.mcp.server`, controlled by `CLICKWHEEL_MCP_LOG_LEVEL`.
 
 ## Code Style
 

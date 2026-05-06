@@ -118,6 +118,43 @@ clickwheel scrobble
 
 Scrobbles are cached locally so duplicates are never submitted, even if you run it multiple times.
 
+## MCP server
+
+clickwheel ships an optional MCP (Model Context Protocol) server so Claude Code (and other MCP clients) can read and modify your library conversationally — "what artists are on my iPod?", "add Big Thief to the ipod playlist", "sync the playlist".
+
+Install the extra:
+
+```bash
+pipx inject clickwheel 'clickwheel[mcp]'
+```
+
+Register the server with Claude Code:
+
+```bash
+claude mcp add clickwheel clickwheel-mcp --scope user
+```
+
+(Or add `{ "mcpServers": { "clickwheel": { "command": "clickwheel-mcp" } } }` to a project's `.mcp.json`.)
+
+The server is read-mostly: list/search tools require no confirmation, while destructive ones (`delete_playlist`, `sync_playlist_to_ipod`) ask the client to confirm via MCP elicitation before doing anything. You can also pass `confirm=true` to skip the prompt for scripted use.
+
+| Tool                                                            | Kind     | What it does                                        |
+| --------------------------------------------------------------- | -------- | --------------------------------------------------- |
+| `library_stats`, `library_health`                               | read     | Library overview and setup probe                    |
+| `list_artists`, `list_albums_by_artist`, `list_tracks_by_album` | read     | Browse the library                                  |
+| `search_tracks`                                                 | read     | Substring search across artist/album/title          |
+| `list_playlists`, `get_playlist`                                | read     | Saved playlists                                     |
+| `get_ipod_contents`, `get_pending_scrobbles`                    | read     | iPod state                                          |
+| `create_playlist`, `update_playlist`                            | mutation | Build playlists from track paths                    |
+| `add_artist_to_playlist`, `remove_artist_from_playlist`         | mutation | Adjust by artist                                    |
+| `delete_playlist`                                               | mutation | Destructive — elicits confirmation                  |
+| `submit_scrobbles`                                              | mutation | Push pending plays to Last.fm (`dry_run` available) |
+| `sync_playlist_to_ipod`                                         | mutation | Destructive — elicits confirmation showing the diff |
+
+Logging goes to stderr (stdout is reserved for the MCP wire protocol). Set `CLICKWHEEL_MCP_LOG_LEVEL=DEBUG` for verbose output.
+
+See [`docs/mcp/`](docs/mcp/) for design details, the full tool surface, and the manual test plan.
+
 ## Requirements
 
 - macOS (iPod sync depends on macOS disk utilities)
