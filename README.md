@@ -34,10 +34,6 @@ EOF
 
 Then run `clickwheel scan` to index your library and `clickwheel select` to start picking music for your iPod.
 
-Commands like `select`, `edit`, `diff`, and `sync` automatically check for library changes before running. The check is two-tier: a cheap probe of top-level music folders catches new albums; a full re-scan happens at most once a day (configurable via `auto_scan_staleness_minutes`). For metadata-only edits in existing files, run `clickwheel scan` manually after the edit. Pass `--no-scan` to any command to skip the autoscan entirely.
-
-The MCP server (see below) never autoscans — chat tool calls always serve the cached library data. Run `clickwheel scan` from the terminal when you've added new music; the next chat session will see it.
-
 ## Commands
 
 | Command               | Description                                                             |
@@ -47,6 +43,7 @@ The MCP server (see below) never autoscans — chat tool calls always serve the 
 | `clickwheel select`   | Interactive picker — checkbox artist selection                          |
 | `clickwheel playlist` | List saved playlists or show details for one                            |
 | `clickwheel edit`     | Add or remove artists via interactive menus or `--add`/`--remove` flags |
+| `clickwheel heal`     | Drop playlist references to tracks no longer on disk                    |
 | `clickwheel delete`   | Delete a saved playlist (with confirmation)                             |
 | `clickwheel diff`     | Preview what would be added or removed on the iPod                      |
 | `clickwheel sync`     | Push your playlist to the iPod (with live progress table)               |
@@ -69,6 +66,14 @@ lastfm_username: your_username
 ```
 
 Environment variables (`MUSIC_DIR`, `AUTO_SCAN`, etc.) override the config file.
+
+### Auto-scan
+
+`select`, `edit`, `diff`, and `sync` check for library changes before running. The check is two-tier: a cheap probe of top-level music folders catches new albums; a full re-scan happens at most once a day. Pass `--no-scan` to skip it. Tune the cadence with `auto_scan_staleness_minutes` (default: 1440).
+
+For metadata-only edits to existing files, run `clickwheel scan` manually — the probe only notices new files, not changed tags.
+
+The MCP server never autoscans (chat calls always serve cached data). Run `clickwheel scan` from the terminal when you've added music; the next chat session will see it.
 
 ### Metadata cleanup (`fix`)
 
@@ -98,27 +103,13 @@ clickwheel fix
 
 ### Last.fm scrobbling
 
-To submit your iPod listens to Last.fm, add your API credentials to the config (get them at [last.fm/api/account/create](https://www.last.fm/api/account/create)):
-
-```yaml
-lastfm_api_key: your_key
-lastfm_api_secret: your_secret
-lastfm_username: your_username
-```
-
-Then authorize clickwheel with your Last.fm account (one-time):
+Get an API key at [last.fm/api/account/create](https://www.last.fm/api/account/create), drop the credentials into `~/.clickwheel/config.yaml` (the `lastfm_*` keys above), then authorize once:
 
 ```bash
 clickwheel scrobble --auth
 ```
 
-After that, submit listens any time your iPod is connected:
-
-```bash
-clickwheel scrobble
-```
-
-Scrobbles are cached locally so duplicates are never submitted, even if you run it multiple times.
+After that, run `clickwheel scrobble` any time your iPod is connected. Plays are cached locally, so re-runs never duplicate-submit.
 
 ## MCP server
 
@@ -154,7 +145,15 @@ Use the absolute path `pipx` printed during install — Desktop doesn't always i
 
 > **Dev install note:** if you're running clickwheel from a clone inside `~/Documents/`, Claude Desktop's sandbox will refuse to read the in-tree venv's `pyvenv.cfg` (macOS applies a `com.apple.provenance` xattr to files in `Documents`). Either install with `pipx install --editable .` so the venv lives in `~/.local/pipx/`, or grant Claude Desktop access to your Documents folder under System Settings → Privacy & Security → Files & Folders.
 
-The server is read-mostly: list/search tools require no confirmation, while destructive ones (`delete_playlist`, `sync_playlist_to_ipod`) carry the MCP `destructiveHint=true` annotation, so compliant clients (Claude Code, Claude Desktop) gate the call behind their native Allow/Deny prompt.
+The server is read-mostly: list/search tools require no confirmation, while destructive ones (`delete_playlist`, `sync_playlist_to_ipod`) carry the MCP `destructiveHint=true` annotation. Different clients honor this differently — Claude Code shows a per-call Allow/Deny prompt; Claude Desktop asks once when a tool is first used in a conversation. The server-side `instructions` block also tells the model to summarize the impact in chat before running either tool, so the user has a chance to back out either way.
+
+Once configured, you can drive it conversationally:
+
+> Build me a 45-minute late-night indie folk playlist using only tracks I actually own.
+>
+> What's on my iPod, and how full is it?
+>
+> Sync the 'ipod' playlist to my iPod and then eject it.
 
 | Tool                                                            | Kind     | What it does                                                                          |
 | --------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------- |
@@ -166,9 +165,10 @@ The server is read-mostly: list/search tools require no confirmation, while dest
 | `get_pending_scrobbles`                                         | read     | Cached iPod plays not yet sent to Last.fm                                             |
 | `create_playlist`, `update_playlist`                            | mutation | Build playlists from track paths                                                      |
 | `add_artist_to_playlist`, `remove_artist_from_playlist`         | mutation | Adjust by artist                                                                      |
-| `delete_playlist`                                               | mutation | Destructive — gated by client's Allow/Deny prompt                                     |
+| `heal_playlist`                                                 | mutation | Drop references to tracks no longer on disk                                           |
+| `delete_playlist`                                               | mutation | Destructive — gated by client confirmation                                            |
 | `submit_scrobbles`                                              | mutation | Push pending plays to Last.fm (`dry_run` available)                                   |
-| `sync_playlist_to_ipod`                                         | mutation | Destructive — gated by client's Allow/Deny prompt                                     |
+| `sync_playlist_to_ipod`                                         | mutation | Destructive — gated by client confirmation                                            |
 | `eject_ipod`                                                    | mutation | Safely unmount the iPod                                                               |
 
 Logging goes to stderr (stdout is reserved for the MCP wire protocol). Set `CLICKWHEEL_MCP_LOG_LEVEL=DEBUG` for verbose output.
