@@ -39,7 +39,9 @@ jobs:
       - uses: actions/checkout@v6
       - uses: DavidAnson/markdownlint-cli2-action@v22
         with:
-          globs: '**/*.md'
+          globs: |
+            **/*.md
+            !CHANGELOG.md
 
   prettier:
     name: Prettier
