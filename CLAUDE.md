@@ -67,7 +67,7 @@ pre-commit install --hook-type pre-commit --hook-type commit-msg
 
 8. **Destructive operations require confirmation** — delete, sync. Use `typer.confirm()` with sensible defaults.
 
-9. **`select`, `edit`, `diff`, `sync` auto-scan** the library if stale. `--no-scan` skips this. Controlled by `auto_scan` and `auto_scan_staleness_minutes` in config.
+9. **`select`, `edit`, `diff`, `sync` auto-scan** the library via a two-tier strategy: cheap probe (stat music_dir + first-level dirs, ~5s on SMB) catches new artist/album folders; full incremental scan runs only when probe detects change OR the 24h fallback timer (default `auto_scan_staleness_minutes=1440`) expires. `--no-scan` skips both. The MCP server NEVER autoscans — chat tool calls always serve cached data. See `clickwheel/autoscan.py` for the detailed contract.
 
 10. **`fix` requires beets extras** — `pip install 'clickwheel[fix]'`. Auto-generates beets config on first run.
 

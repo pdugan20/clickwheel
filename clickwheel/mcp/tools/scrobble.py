@@ -29,7 +29,7 @@ def get_pending_scrobbles() -> list[dict]:
     After this: `submit_scrobbles` to push them, optionally with
     `dry_run=true` first to preview.
     """
-    with open_session(autoscan=False) as (_cfg, db):
+    with open_session() as (_cfg, db):
         result = actions.read_pending_scrobbles(db)
         if not result:
             return render(
@@ -75,7 +75,7 @@ def submit_scrobbles(
     history. Don't run repeatedly in a session — once submitted, scrobbles
     are flagged and won't re-send.
     """
-    with open_session(autoscan=False) as (cfg, db):
+    with open_session() as (cfg, db):
         plays_status = actions.collect_ipod_plays(cfg, db)
 
         if dry_run:

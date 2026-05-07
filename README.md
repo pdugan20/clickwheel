@@ -34,7 +34,9 @@ EOF
 
 Then run `clickwheel scan` to index your library and `clickwheel select` to start picking music for your iPod.
 
-Commands like `select`, `edit`, `diff`, and `sync` automatically check for library changes before running. To skip this, pass `--no-scan`.
+Commands like `select`, `edit`, `diff`, and `sync` automatically check for library changes before running. The check is two-tier: a cheap probe of top-level music folders catches new albums; a full re-scan happens at most once a day (configurable via `auto_scan_staleness_minutes`). For metadata-only edits in existing files, run `clickwheel scan` manually after the edit. Pass `--no-scan` to any command to skip the autoscan entirely.
+
+The MCP server (see below) never autoscans — chat tool calls always serve the cached library data. Run `clickwheel scan` from the terminal when you've added new music; the next chat session will see it.
 
 ## Commands
 

@@ -205,7 +205,7 @@ def library_health() -> dict:
     After this: nothing automatic. If `last_scan_at` is old or
     `library_dir_exists` is false, surface that to the user.
     """
-    with open_session(autoscan=False) as (cfg, db):
+    with open_session() as (cfg, db):
         health = actions.library_health(cfg, db)
         if health["last_scan_at"] is not None:
             health["last_scan_iso"] = datetime.fromtimestamp(

@@ -11,7 +11,10 @@ CONFIG_DIR = Path.home() / ".clickwheel"
 CONFIG_FILE = CONFIG_DIR / "config.yaml"
 DEFAULT_IPOD_MOUNT = "/Volumes/IPOD"
 DEFAULT_IPOD_CAPACITY_GB = 64
-DEFAULT_AUTO_SCAN_STALENESS_MINUTES = 30
+# 24h fallback. The cheap probe in autoscan.py catches changes between
+# scans, so this only kicks in to catch in-place metadata edits that
+# don't bump any directory mtime.
+DEFAULT_AUTO_SCAN_STALENESS_MINUTES = 1440
 
 # Config file keys mapped to env var names
 _YAML_TO_ENV = {

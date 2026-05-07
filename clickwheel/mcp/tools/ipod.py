@@ -47,7 +47,7 @@ def get_ipod_contents() -> dict:
     `sync_playlist_to_ipod` to push a saved playlist, `submit_scrobbles`
     to read recent plays, or `eject_ipod` when finished.
     """
-    with open_session(autoscan=False) as (cfg, _db):
+    with open_session() as (cfg, _db):
         contents = actions.read_ipod_contents(cfg)
         tracks = contents["tracks"]
         artist_counts = Counter(t.get("artist") or "Unknown" for t in tracks)
@@ -103,7 +103,7 @@ def list_ipod_tracks(
 
     Requires the iPod to be mounted.
     """
-    with open_session(autoscan=False) as (cfg, _db):
+    with open_session() as (cfg, _db):
         tracks = actions.list_ipod_tracks(
             cfg, artist=artist, limit=limit, offset=offset
         )
@@ -218,6 +218,6 @@ def eject_ipod() -> dict:
     When to use: after a successful sync or scrobble session, or any time
     the user says "eject", "safely disconnect", "unmount the iPod".
     """
-    with open_session(autoscan=False) as (cfg, _db):
+    with open_session() as (cfg, _db):
         data = actions.eject_ipod(cfg)
         return render("iPod ejected — safe to unplug.", data)

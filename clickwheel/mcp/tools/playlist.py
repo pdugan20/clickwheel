@@ -192,7 +192,7 @@ def delete_playlist(
     When to use: the user explicitly says "delete" or "remove" a playlist
     by name.
     """
-    with open_session(autoscan=False) as (_cfg, db):
+    with open_session() as (_cfg, db):
         if not actions.playlist_exists(db, name):
             data = {"deleted": False, "reason": f"Playlist '{name}' not found."}
             return render(f"Playlist '{name}' not found — nothing to delete.", data)
@@ -251,7 +251,7 @@ def heal_playlist(
     user explicitly says "remove dead links from my playlist" / "clean up
     my playlist".
     """
-    with open_session(autoscan=False) as (_cfg, db):
+    with open_session() as (_cfg, db):
         result = actions.heal_playlist(db, name)
         if result["dropped"] == 0:
             text = (
@@ -279,7 +279,7 @@ def remove_artist_from_playlist(
     When to use: the user says "drop Big Thief from my road-trip playlist".
     The playlist record stays even if it ends up empty.
     """
-    with open_session(autoscan=False) as (_cfg, db):
+    with open_session() as (_cfg, db):
         removed = actions.remove_artist_from_playlist(db, playlist, artist)
         data = {"removed": removed, "playlist": playlist, "artist": artist}
         if removed == 0:

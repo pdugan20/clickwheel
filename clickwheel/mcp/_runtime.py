@@ -15,9 +15,6 @@ from contextlib import contextmanager
 from mcp.server.fastmcp import FastMCP
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
 
-from clickwheel import actions
-from clickwheel.actions import LibraryNotFoundError
-from clickwheel.autoscan import should_auto_scan
 from clickwheel.config import Config, load_config
 from clickwheel.db import Database
 
@@ -117,26 +114,23 @@ DESTRUCTIVE = ToolAnnotations(
 
 
 @contextmanager
-def open_session(*, autoscan: bool = True) -> Iterator[tuple[Config, Database]]:
+def open_session() -> Iterator[tuple[Config, Database]]:
     """Open config + DB for one tool call.
 
-    SQLite is fast to open; per-call lifecycle keeps the server stateless and
-    handles config edits made mid-session. If `autoscan` is True (default),
-    runs an incremental scan when the DB is older than the configured
-    staleness threshold.
+    The MCP server NEVER autoscans. Library scans walk the music directory
+    (which can sit on a slow SMB share) — a synchronous scan from a chat
+    tool call would block the user for minutes. Instead, MCP tools always
+    serve cached data.
+
+    Users refresh by running `clickwheel scan` from the terminal when
+    they've added new music. This matches the manual-refresh model used
+    by beets, Picard, and Apple Music. The CLI's interactive commands
+    (`select`, `edit`) still autoscan with a cheap probe + 24h fallback —
+    see clickwheel.autoscan for that strategy.
     """
     cfg = load_config()
     db = Database(cfg.db_path)
     try:
-        if autoscan:
-            run, _reason = should_auto_scan(cfg, db)
-            if run:
-                try:
-                    actions.scan_library(cfg, db, full=False)
-                except LibraryNotFoundError:
-                    logger.warning(
-                        "Music dir not reachable during autoscan; serving cached data"
-                    )
         yield cfg, db
     finally:
         db.close()

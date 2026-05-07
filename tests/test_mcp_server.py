@@ -328,6 +328,32 @@ def test_tools_registered_with_fastmcp():
     assert expected <= registered
 
 
+def test_mcp_open_session_never_autoscans(tmp_path, monkeypatch):
+    """The MCP server must never autoscan — chat tool calls always serve
+    cached data. Users refresh by running `clickwheel scan` from the CLI.
+    """
+    from clickwheel.mcp._runtime import open_session
+
+    cfg = _setup(tmp_path, monkeypatch)
+    # Force conditions that would normally trigger an autoscan: no
+    # last_scan_completed, no probe baseline. If open_session is
+    # accidentally autoscanning, this would attempt to walk the
+    # (empty) music_dir and write scan_meta entries.
+    db = Database(cfg.db_path)
+    db.set_scan_meta("last_scan_completed", "")  # clear
+    db.close()
+
+    # Drain the context manager — no errors, no scan.
+    with open_session() as (_cfg, db):
+        pass
+
+    db = Database(cfg.db_path)
+    # If autoscan ran, scan_library would have written this back.
+    last = db.get_scan_meta("last_scan_completed")
+    assert last == "" or last is None
+    db.close()
+
+
 def test_destructive_tools_have_destructive_annotation():
     """delete_playlist and sync_playlist_to_ipod should be flagged
     destructiveHint=True so MCP clients can gate auto-approval."""

@@ -227,6 +227,15 @@ def scan_library(
             result.missing = db.mark_missing(missing_paths)
 
     db.set_scan_meta("last_scan_completed", str(time.time()))
+
+    # Write the cheap-probe baseline so future autoscan checks can skip
+    # full walks when nothing's changed at the top level.
+    from clickwheel.autoscan import _max_child_mtime
+
+    current_max = _max_child_mtime(cfg.music_dir)
+    if current_max is not None:
+        db.set_scan_meta("last_probe_max_child_mtime", str(current_max))
+
     return result
 
 
