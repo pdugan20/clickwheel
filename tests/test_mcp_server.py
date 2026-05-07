@@ -3,9 +3,16 @@
 We call tool functions directly — FastMCP's @mcp.tool() decorator registers
 the function but returns it unchanged, so it remains callable. The full
 stdio protocol is exercised separately in test_mcp_smoke.py.
+
+Tools return a CallToolResult with a text summary + structured data. The
+`_call()` helper unwraps the structured payload so assertions read like
+they did before this layer was added.
 """
 
 from __future__ import annotations
+
+import asyncio
+import inspect
 
 import pytest
 
@@ -14,6 +21,29 @@ pytest.importorskip("mcp", reason="mcp not installed")
 from clickwheel.actions import IpodNotFoundError, PlaylistNotFoundError  # noqa: E402
 from clickwheel.config import Config  # noqa: E402
 from clickwheel.db import Database  # noqa: E402
+
+
+def _call(fn, **kwargs):
+    """Invoke a tool function and return the structured payload an MCP
+    client would consume. Unwraps `{"result": [...]}` wrapping that lists
+    pick up automatically."""
+    if inspect.iscoroutinefunction(fn):
+        result = asyncio.run(fn(**kwargs))
+    else:
+        result = fn(**kwargs)
+    sc = result.structuredContent or {}
+    if list(sc.keys()) == ["result"]:
+        return sc["result"]
+    return sc
+
+
+def _call_text(fn, **kwargs) -> str:
+    """Return the rendered text summary of a tool call."""
+    if inspect.iscoroutinefunction(fn):
+        result = asyncio.run(fn(**kwargs))
+    else:
+        result = fn(**kwargs)
+    return result.content[0].text if result.content else ""
 
 
 def _setup(tmp_path, monkeypatch, *, populate=True):
@@ -73,9 +103,19 @@ def test_library_stats(tmp_path, monkeypatch):
 
     _setup(tmp_path, monkeypatch)
 
-    result = library_stats()
+    result = _call(library_stats)
     assert result["stats"]["total_tracks"] == 2
     assert any(f["format"] == "mp3" for f in result["formats"])
+
+
+def test_library_stats_text_summary(tmp_path, monkeypatch):
+    from clickwheel.mcp.tools.library import library_stats
+
+    _setup(tmp_path, monkeypatch)
+
+    text = _call_text(library_stats)
+    assert "2 tracks" in text
+    assert "2 artists" in text
 
 
 def test_list_artists(tmp_path, monkeypatch):
@@ -83,7 +123,7 @@ def test_list_artists(tmp_path, monkeypatch):
 
     _setup(tmp_path, monkeypatch)
 
-    result = list_artists()
+    result = _call(list_artists)
     names = {a["name"] for a in result}
     assert names == {"ArtistA", "ArtistB"}
 
@@ -93,7 +133,7 @@ def test_list_artists_respects_limit(tmp_path, monkeypatch):
 
     _setup(tmp_path, monkeypatch)
 
-    result = list_artists(limit=1)
+    result = _call(list_artists, limit=1)
     assert len(result) == 1
 
 
@@ -102,7 +142,7 @@ def test_list_albums_by_artist(tmp_path, monkeypatch):
 
     _setup(tmp_path, monkeypatch)
 
-    result = list_albums_by_artist(artist="ArtistA")
+    result = _call(list_albums_by_artist, artist="ArtistA")
     assert [a["album"] for a in result] == ["Album1"]
 
 
@@ -111,7 +151,7 @@ def test_list_tracks_by_album(tmp_path, monkeypatch):
 
     _setup(tmp_path, monkeypatch)
 
-    result = list_tracks_by_album(artist="ArtistA", album="Album1")
+    result = _call(list_tracks_by_album, artist="ArtistA", album="Album1")
     assert [t["title"] for t in result] == ["T1"]
 
 
@@ -120,7 +160,7 @@ def test_search_tracks_matches_artist(tmp_path, monkeypatch):
 
     _setup(tmp_path, monkeypatch)
 
-    result = search_tracks(query="ArtistB")
+    result = _call(search_tracks, query="ArtistB")
     assert len(result) == 1
     assert result[0]["title"] == "S1"
 
@@ -130,7 +170,18 @@ def test_search_tracks_empty_query(tmp_path, monkeypatch):
 
     _setup(tmp_path, monkeypatch)
 
-    assert search_tracks(query="   ") == []
+    assert _call(search_tracks, query="   ") == []
+    assert "Empty query" in _call_text(search_tracks, query="   ")
+
+
+def test_search_tracks_no_results_says_so(tmp_path, monkeypatch):
+    """Negative-result text — empty array used to be silent, now explains."""
+    from clickwheel.mcp.tools.library import search_tracks
+
+    _setup(tmp_path, monkeypatch)
+
+    text = _call_text(search_tracks, query="zzz_no_match_xyz")
+    assert "No tracks match" in text
 
 
 def test_list_playlists_empty(tmp_path, monkeypatch):
@@ -138,7 +189,8 @@ def test_list_playlists_empty(tmp_path, monkeypatch):
 
     _setup(tmp_path, monkeypatch)
 
-    assert list_playlists() == []
+    assert _call(list_playlists) == []
+    assert "No playlists" in _call_text(list_playlists)
 
 
 def test_list_and_get_playlist(tmp_path, monkeypatch):
@@ -150,12 +202,12 @@ def test_list_and_get_playlist(tmp_path, monkeypatch):
     db.save_playlist("test", ["/music/A/Album1/01.mp3", "/music/B/Album2/01.mp3"])
     db.close()
 
-    playlists = list_playlists()
+    playlists = _call(list_playlists)
     assert len(playlists) == 1
     assert playlists[0]["name"] == "test"
     assert playlists[0]["tracks"] == 2
 
-    pl = get_playlist(name="test")
+    pl = _call(get_playlist, name="test")
     assert pl["track_count"] == 2
     assert pl["size_bytes"] == 8_000_000
     assert {t["title"] for t in pl["tracks"]} == {"T1", "S1"}
@@ -176,7 +228,8 @@ def test_get_pending_scrobbles_empty(tmp_path, monkeypatch):
 
     _setup(tmp_path, monkeypatch)
 
-    assert get_pending_scrobbles() == []
+    assert _call(get_pending_scrobbles) == []
+    assert "No pending scrobbles" in _call_text(get_pending_scrobbles)
 
 
 def test_library_health(tmp_path, monkeypatch):
@@ -184,12 +237,14 @@ def test_library_health(tmp_path, monkeypatch):
 
     _setup(tmp_path, monkeypatch)
 
-    result = library_health()
+    result = _call(library_health)
     assert result["library_dir_exists"] is True
     assert result["total_tracks"] == 2
     assert result["missing_tracks"] == 0
     assert result["last_scan_at"] is None  # never scanned
     assert "last_scan_iso" not in result
+    # Negative-result text surfaces the never-scanned condition.
+    assert "never scanned" in _call_text(library_health)
 
 
 def test_get_ipod_contents_no_ipod(tmp_path, monkeypatch):
@@ -306,8 +361,10 @@ def test_create_playlist(tmp_path, monkeypatch):
 
     _setup(tmp_path, monkeypatch)
 
-    result = create_playlist(
-        name="new", track_paths=["/music/A/Album1/01.mp3", "/music/B/Album2/01.mp3"]
+    result = _call(
+        create_playlist,
+        name="new",
+        track_paths=["/music/A/Album1/01.mp3", "/music/B/Album2/01.mp3"],
     )
     assert result == {"name": "new", "track_count": 2}
 
@@ -330,7 +387,9 @@ def test_update_playlist_new(tmp_path, monkeypatch):
 
     _setup(tmp_path, monkeypatch)
 
-    result = update_playlist(name="fresh", track_paths=["/music/A/Album1/01.mp3"])
+    result = _call(
+        update_playlist, name="fresh", track_paths=["/music/A/Album1/01.mp3"]
+    )
     assert result["name"] == "fresh"
     assert result["track_count"] == 1
     assert result["replaced"] is False
@@ -344,15 +403,13 @@ def test_update_playlist_replaces(tmp_path, monkeypatch):
     db.save_playlist("p", ["/music/A/Album1/01.mp3"])
     db.close()
 
-    result = update_playlist(name="p", track_paths=["/music/B/Album2/01.mp3"])
+    result = _call(update_playlist, name="p", track_paths=["/music/B/Album2/01.mp3"])
     assert result["replaced"] is True
     assert result["track_count"] == 1
 
 
 def test_delete_playlist_confirm_true(tmp_path, monkeypatch):
     """confirm=True skips elicitation and deletes immediately."""
-    import asyncio
-
     from clickwheel.mcp.tools.playlist import delete_playlist
 
     cfg = _setup(tmp_path, monkeypatch)
@@ -360,14 +417,12 @@ def test_delete_playlist_confirm_true(tmp_path, monkeypatch):
     db.save_playlist("doomed", ["/music/A/Album1/01.mp3"])
     db.close()
 
-    result = asyncio.run(delete_playlist(ctx=_FakeCtx(), name="doomed", confirm=True))
+    result = _call(delete_playlist, ctx=_FakeCtx(), name="doomed", confirm=True)
     assert result == {"deleted": True, "name": "doomed"}
 
 
 def test_delete_playlist_user_declines(tmp_path, monkeypatch):
     """User declines via elicitation → playlist stays."""
-    import asyncio
-
     from clickwheel.mcp.tools.playlist import delete_playlist
 
     cfg = _setup(tmp_path, monkeypatch)
@@ -376,7 +431,7 @@ def test_delete_playlist_user_declines(tmp_path, monkeypatch):
     db.close()
 
     ctx = _FakeCtx(action="decline")
-    result = asyncio.run(delete_playlist(ctx=ctx, name="kept"))
+    result = _call(delete_playlist, ctx=ctx, name="kept")
     assert result == {"deleted": False, "reason": "user declined"}
 
     # Verify playlist still exists
@@ -387,8 +442,6 @@ def test_delete_playlist_user_declines(tmp_path, monkeypatch):
 
 def test_delete_playlist_user_accepts_via_elicit(tmp_path, monkeypatch):
     """User accepts via elicitation → playlist deleted, message includes track count."""
-    import asyncio
-
     from clickwheel.mcp.tools.playlist import delete_playlist
 
     cfg = _setup(tmp_path, monkeypatch)
@@ -397,19 +450,17 @@ def test_delete_playlist_user_accepts_via_elicit(tmp_path, monkeypatch):
     db.close()
 
     ctx = _FakeCtx(action="accept", confirm=True)
-    result = asyncio.run(delete_playlist(ctx=ctx, name="ok"))
+    result = _call(delete_playlist, ctx=ctx, name="ok")
     assert result["deleted"] is True
     assert "2 track" in (ctx.last_message or "")
 
 
 def test_delete_playlist_missing(tmp_path, monkeypatch):
-    import asyncio
-
     from clickwheel.mcp.tools.playlist import delete_playlist
 
     _setup(tmp_path, monkeypatch)
 
-    result = asyncio.run(delete_playlist(ctx=_FakeCtx(), name="ghost"))
+    result = _call(delete_playlist, ctx=_FakeCtx(), name="ghost")
     assert result == {"deleted": False, "reason": "Playlist 'ghost' not found."}
 
 
@@ -418,7 +469,7 @@ def test_add_artist_to_playlist(tmp_path, monkeypatch):
 
     _setup(tmp_path, monkeypatch)
 
-    result = add_artist_to_playlist(playlist="myset", artist="ArtistA")
+    result = _call(add_artist_to_playlist, playlist="myset", artist="ArtistA")
     assert result["added"] == 1
     assert result["playlist"] == "myset"
     assert result["artist"] == "ArtistA"
@@ -432,7 +483,7 @@ def test_remove_artist_from_playlist(tmp_path, monkeypatch):
     db.add_artist_to_playlist("myset", "ArtistA")
     db.close()
 
-    result = remove_artist_from_playlist(playlist="myset", artist="ArtistA")
+    result = _call(remove_artist_from_playlist, playlist="myset", artist="ArtistA")
     assert result["removed"] == 1
 
 
@@ -446,8 +497,6 @@ def test_submit_scrobbles_no_ipod(tmp_path, monkeypatch):
 
 
 def test_sync_playlist_to_ipod_no_ipod(tmp_path, monkeypatch):
-    import asyncio
-
     from clickwheel.mcp.tools.ipod import sync_playlist_to_ipod
 
     _setup(tmp_path, monkeypatch)

@@ -14,8 +14,10 @@ from clickwheel.mcp._runtime import (
     READ_ONLY,
     elicit_confirm,
     format_bytes,
+    format_count,
     mcp,
     open_session,
+    render,
 )
 
 
@@ -33,7 +35,15 @@ def get_ipod_contents() -> dict:
     `eject_ipod`.
     """
     with open_session(autoscan=False) as (cfg, _db):
-        return actions.read_ipod_contents(cfg)
+        data = actions.read_ipod_contents(cfg)
+        tracks = data["tracks"]
+        text = (
+            f"iPod: {format_count(len(tracks), 'track')}, "
+            f"{format_bytes(data['used_bytes'])} used / "
+            f"{format_bytes(data['capacity_bytes'])} total "
+            f"({format_bytes(data['free_bytes'])} free)."
+        )
+        return render(text, data)
 
 
 @mcp.tool(annotations=DESTRUCTIVE)
@@ -77,12 +87,13 @@ async def sync_playlist_to_ipod(
         diff = actions.compute_diff(cfg, db, playlist)
 
         if not diff.to_add and not diff.to_remove:
-            return {
+            data = {
                 "synced": False,
                 "reason": "iPod already matches this playlist.",
                 "playlist": playlist,
                 "next_step_hint": None,
             }
+            return render(f"iPod already matches '{playlist}' — nothing to do.", data)
 
         if not confirm:
             ok = await elicit_confirm(
@@ -94,27 +105,39 @@ async def sync_playlist_to_ipod(
                 "won't be in this playlist (they stay on the iPod for now).",
             )
             if not ok:
-                return {
+                data = {
                     "synced": False,
                     "reason": "user declined",
                     "next_step_hint": None,
                 }
+                return render("User declined the sync.", data)
 
         result = actions.sync_playlist(cfg, db, playlist, diff=diff)
 
-        next_hint: str | None = None
         if result.db_write_ok:
             next_hint = (
                 "Sync succeeded. Offer to call eject_ipod before the user "
                 "unplugs the device."
+            )
+            text = (
+                f"Synced '{playlist}': copied "
+                f"{format_count(len(result.copied), 'track')} "
+                f"({format_bytes(diff.add_size_bytes)}). "
+                "Call `eject_ipod` when ready to unplug."
             )
         else:
             next_hint = (
                 "Music copied but iTunesDB write failed. Surface this to "
                 "the user — the iPod may not see the new tracks."
             )
+            text = (
+                f"Synced '{playlist}' but the iTunesDB write FAILED. "
+                f"Copied {format_count(len(result.copied), 'track')}, but "
+                "the iPod may not see them. Try the CLI's `clickwheel sync` "
+                "for retry support."
+            )
 
-        return {
+        data = {
             "synced": True,
             "playlist": playlist,
             "copied": len(result.copied),
@@ -123,6 +146,7 @@ async def sync_playlist_to_ipod(
             "db_write_ok": result.db_write_ok,
             "next_step_hint": next_hint,
         }
+        return render(text, data)
 
 
 @mcp.tool(annotations=MUTATION)
@@ -142,4 +166,5 @@ def eject_ipod() -> dict:
     the user says "eject", "safely disconnect", "unmount the iPod".
     """
     with open_session(autoscan=False) as (cfg, _db):
-        return actions.eject_ipod(cfg)
+        data = actions.eject_ipod(cfg)
+        return render("iPod ejected — safe to unplug.", data)

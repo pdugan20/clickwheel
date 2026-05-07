@@ -13,7 +13,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 from mcp.server.fastmcp import Context, FastMCP
-from mcp.types import ToolAnnotations
+from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import BaseModel, Field
 
 from clickwheel import actions
@@ -143,6 +143,54 @@ def format_bytes(n: int) -> str:
     if n >= 1024**2:
         return f"{n / 1024**2:.1f} MB"
     return f"{n / 1024:.1f} KB"
+
+
+def format_duration_seconds(seconds: float | int | None) -> str:
+    """Format a track-or-playlist duration. >1h shows H:MM:SS, else M:SS."""
+    if not seconds:
+        return "0:00"
+    s = int(seconds)
+    h, rem = divmod(s, 3600)
+    m, s = divmod(rem, 60)
+    if h:
+        return f"{h}:{m:02d}:{s:02d}"
+    return f"{m}:{s:02d}"
+
+
+def format_count(n: int, singular: str, plural: str | None = None) -> str:
+    """Pluralization helper: '1 track' / '5 tracks'."""
+    return f"{n:,} {singular if n == 1 else (plural or singular + 's')}"
+
+
+def format_timestamp(ts: int | float | None) -> str:
+    """Format a unix timestamp as YYYY-MM-DD HH:MM."""
+    from datetime import datetime
+
+    if ts is None:
+        return "never"
+    return datetime.fromtimestamp(float(ts)).strftime("%Y-%m-%d %H:%M")
+
+
+def render(text: str, data: object | None = None) -> CallToolResult:
+    """Build a dual-content tool result: a one-line text summary plus the
+    structured data the LLM can use for follow-up questions.
+
+    The text block is what an MCP client renders to the user (and what the
+    LLM tends to paraphrase from); structuredContent is the precise dict
+    available for programmatic access.
+    """
+    if data is None:
+        sc: dict = {}
+    elif isinstance(data, dict):
+        sc = data
+    else:
+        # MCP requires structuredContent to be an object. Wrap lists/scalars
+        # under "result", matching FastMCP's own auto-wrap convention.
+        sc = {"result": data}
+    return CallToolResult(
+        content=[TextContent(type="text", text=text)],
+        structuredContent=sc,
+    )
 
 
 class Confirm(BaseModel):

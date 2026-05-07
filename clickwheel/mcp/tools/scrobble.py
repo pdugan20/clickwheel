@@ -10,8 +10,10 @@ from clickwheel import actions
 from clickwheel.mcp._runtime import (
     MUTATION_OPEN_WORLD,
     READ_ONLY,
+    format_count,
     mcp,
     open_session,
+    render,
 )
 
 
@@ -28,7 +30,18 @@ def get_pending_scrobbles() -> list[dict]:
     `dry_run=true` first to preview.
     """
     with open_session(autoscan=False) as (_cfg, db):
-        return actions.read_pending_scrobbles(db)
+        result = actions.read_pending_scrobbles(db)
+        if not result:
+            return render(
+                "No pending scrobbles. Connect the iPod and call "
+                "`submit_scrobbles` to pull recent plays.",
+                result,
+            )
+        text = (
+            f"{format_count(len(result), 'scrobble')} pending. "
+            "Call `submit_scrobbles` to push to Last.fm."
+        )
+        return render(text, result)
 
 
 @mcp.tool(annotations=MUTATION_OPEN_WORLD)
@@ -67,7 +80,7 @@ def submit_scrobbles(
 
         if dry_run:
             pending = actions.read_pending_scrobbles(db)
-            return {
+            data = {
                 "dry_run": True,
                 "plays_found_on_ipod": plays_status["plays_found"],
                 "newly_cached": plays_status["new_cached"],
@@ -75,17 +88,35 @@ def submit_scrobbles(
                 "oldest_age_days": plays_status["oldest_age_days"],
                 "next_step_hint": None,
             }
+            text = (
+                f"Dry run: {format_count(len(pending), 'scrobble')} ready, "
+                f"{plays_status['new_cached']} newly cached from iPod. "
+                "Re-run without dry_run to actually send."
+            )
+            return render(text, data)
 
         result = actions.submit_pending_scrobbles(cfg, db)
 
-        next_hint: str | None = None
         if result.submitted > 0 and result.failed == 0:
             next_hint = (
                 "Scrobbles sent successfully. Offer to call eject_ipod "
                 "before the user unplugs the device."
             )
+            text = (
+                f"Submitted {format_count(result.submitted, 'scrobble')} "
+                "to Last.fm. Call `eject_ipod` when ready to unplug."
+            )
+        elif result.submitted == 0 and result.failed == 0:
+            next_hint = None
+            text = "No scrobbles to submit."
+        else:
+            next_hint = None
+            text = (
+                f"Sent {result.submitted}, but {result.failed} failed. "
+                f"{result.remaining_pending} still pending — try again later."
+            )
 
-        return {
+        data = {
             "submitted": result.submitted,
             "failed": result.failed,
             "remaining_pending": result.remaining_pending,
@@ -93,3 +124,4 @@ def submit_scrobbles(
             "plays_found_on_ipod": plays_status["plays_found"],
             "next_step_hint": next_hint,
         }
+        return render(text, data)

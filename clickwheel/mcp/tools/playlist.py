@@ -14,8 +14,11 @@ from clickwheel.mcp._runtime import (
     MUTATION_NON_IDEMPOTENT,
     READ_ONLY,
     elicit_confirm,
+    format_bytes,
+    format_count,
     mcp,
     open_session,
+    render,
 )
 
 
@@ -31,7 +34,16 @@ def list_playlists() -> list[dict]:
     `sync_playlist_to_ipod` to push it.
     """
     with open_session() as (_cfg, db):
-        return actions.list_playlists(db)
+        result = actions.list_playlists(db)
+        if not result:
+            return render(
+                "No playlists yet — use `create_playlist` to build one, or "
+                "the `clickwheel select` CLI for an interactive picker.",
+                result,
+            )
+        names = ", ".join(f"'{p['name']}' ({p['tracks']})" for p in result)
+        text = f"{format_count(len(result), 'playlist')}: {names}."
+        return render(text, result)
 
 
 @mcp.tool(annotations=READ_ONLY)
@@ -52,13 +64,18 @@ def get_playlist(
         tracks = actions.get_playlist(db, name)
         artists = actions.get_playlist_artists(db, name)
         size = actions.get_playlist_size(db, name)
-        return {
+        data = {
             "name": name,
             "track_count": len(tracks),
             "size_bytes": size,
             "tracks": tracks,
             "artists": artists,
         }
+        text = (
+            f"'{name}': {format_count(len(tracks), 'track')} across "
+            f"{format_count(len(artists), 'artist')}, {format_bytes(size)}."
+        )
+        return render(text, data)
 
 
 @mcp.tool(annotations=MUTATION_NON_IDEMPOTENT)
@@ -86,7 +103,12 @@ def create_playlist(
     """
     with open_session() as (_cfg, db):
         count = actions.create_playlist(db, name, track_paths)
-        return {"name": name, "track_count": count}
+        data = {"name": name, "track_count": count}
+        text = (
+            f"Created '{name}' with {format_count(count, 'track')}. "
+            "Sync to iPod with `sync_playlist_to_ipod`."
+        )
+        return render(text, data)
 
 
 @mcp.tool(annotations=MUTATION)
@@ -108,7 +130,13 @@ def update_playlist(
     """
     with open_session() as (_cfg, db):
         count, replaced = actions.update_playlist(db, name, track_paths)
-        return {"name": name, "track_count": count, "replaced": replaced}
+        data = {"name": name, "track_count": count, "replaced": replaced}
+        verb = "Replaced" if replaced else "Created"
+        text = (
+            f"{verb} '{name}' (now {format_count(count, 'track')}). "
+            "Sync to iPod with `sync_playlist_to_ipod`."
+        )
+        return render(text, data)
 
 
 @mcp.tool(annotations=DESTRUCTIVE)
@@ -135,7 +163,8 @@ async def delete_playlist(
     """
     with open_session(autoscan=False) as (_cfg, db):
         if not actions.playlist_exists(db, name):
-            return {"deleted": False, "reason": f"Playlist '{name}' not found."}
+            data = {"deleted": False, "reason": f"Playlist '{name}' not found."}
+            return render(f"Playlist '{name}' not found — nothing to delete.", data)
 
         if not confirm:
             track_count = len(db.get_playlist(name))
@@ -145,10 +174,11 @@ async def delete_playlist(
                 "This cannot be undone.",
             )
             if not ok:
-                return {"deleted": False, "reason": "user declined"}
+                data = {"deleted": False, "reason": "user declined"}
+                return render("User declined the delete.", data)
 
         actions.delete_playlist(db, name)
-        return {"deleted": True, "name": name}
+        return render(f"Deleted '{name}'.", {"deleted": True, "name": name})
 
 
 @mcp.tool(annotations=MUTATION)
@@ -157,8 +187,8 @@ def add_artist_to_playlist(
     artist: Annotated[str, Field(description="Artist name (exact match).")],
 ) -> dict:
     """Add every track by `artist` to `playlist` (skipping duplicates).
-    Creates the playlist if it doesn't already exist. Returns the number of
-    tracks actually added (0 if all tracks were already present).
+    Creates the playlist if it doesn't already exist. Returns the number
+    of tracks actually added.
 
     When to use: the user says "add Big Thief to my road-trip playlist" or
     similar.
@@ -167,7 +197,18 @@ def add_artist_to_playlist(
     """
     with open_session() as (_cfg, db):
         added = actions.add_artist_to_playlist(db, playlist, artist)
-        return {"added": added, "playlist": playlist, "artist": artist}
+        data = {"added": added, "playlist": playlist, "artist": artist}
+        if added == 0:
+            text = (
+                f"No tracks added — '{artist}' is either already in "
+                f"'{playlist}' or has no library tracks."
+            )
+        else:
+            text = (
+                f"Added {format_count(added, 'track')} by {artist} "
+                f"to '{playlist}'. Sync with `sync_playlist_to_ipod`."
+            )
+        return render(text, data)
 
 
 @mcp.tool(annotations=MUTATION)
@@ -183,4 +224,12 @@ def remove_artist_from_playlist(
     """
     with open_session(autoscan=False) as (_cfg, db):
         removed = actions.remove_artist_from_playlist(db, playlist, artist)
-        return {"removed": removed, "playlist": playlist, "artist": artist}
+        data = {"removed": removed, "playlist": playlist, "artist": artist}
+        if removed == 0:
+            text = f"'{artist}' wasn't in '{playlist}' — nothing removed."
+        else:
+            text = (
+                f"Removed {format_count(removed, 'track')} by {artist} "
+                f"from '{playlist}'."
+            )
+        return render(text, data)

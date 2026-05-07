@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+import time
 from datetime import datetime
 from typing import Annotated
 
 from pydantic import Field
 
 from clickwheel import actions
-from clickwheel.mcp._runtime import READ_ONLY, mcp, open_session
+from clickwheel.mcp._runtime import (
+    READ_ONLY,
+    format_bytes,
+    format_count,
+    mcp,
+    open_session,
+    render,
+)
 
 
 @mcp.tool(annotations=READ_ONLY)
@@ -26,7 +34,24 @@ def library_stats() -> dict:
     to drill in.
     """
     with open_session() as (_cfg, db):
-        return actions.library_stats(db)
+        data = actions.library_stats(db)
+        s = data["stats"]
+        if not s["total_tracks"]:
+            return render(
+                "Library is empty — run `clickwheel scan` to index your music.",
+                data,
+            )
+        size = format_bytes(s["total_bytes"] or 0)
+        hours = (s["total_seconds"] or 0) / 3600
+        formats = ", ".join(
+            f"{f['format'].upper()} {f['count']:,}" for f in data["formats"]
+        )
+        text = (
+            f"Library: {s['total_tracks']:,} tracks, {s['artists']:,} artists, "
+            f"{s['albums']:,} albums ({size}, {hours:.0f} hours). "
+            f"Formats: {formats}."
+        )
+        return render(text, data)
 
 
 @mcp.tool(annotations=READ_ONLY)
@@ -47,7 +72,17 @@ def list_artists(
     `add_artist_to_playlist` to bulk-add an artist's whole catalog.
     """
     with open_session() as (_cfg, db):
-        return actions.list_artists(db)[:limit]
+        all_artists = actions.list_artists(db)
+        result = all_artists[:limit]
+        if not result:
+            return render("No artists indexed — run `clickwheel scan` first.", result)
+        truncated = (
+            f" (truncated from {len(all_artists):,})"
+            if len(all_artists) > limit
+            else ""
+        )
+        text = f"{format_count(len(result), 'artist')}, alphabetical{truncated}."
+        return render(text, result)
 
 
 @mcp.tool(annotations=READ_ONLY)
@@ -67,7 +102,21 @@ def list_albums_by_artist(
     (needed by `create_playlist` / `update_playlist`).
     """
     with open_session() as (_cfg, db):
-        return actions.list_albums_by_artist(db, artist)
+        result = actions.list_albums_by_artist(db, artist)
+        if not result:
+            return render(
+                f"No albums found for '{artist}'. Names are case-sensitive — "
+                "check spelling, or use `search_tracks` for a fuzzy match.",
+                result,
+            )
+        years = [a["year"] for a in result if a.get("year")]
+        span = (
+            f" ({min(years)}–{max(years)})"
+            if years and min(years) != max(years)
+            else (f" ({years[0]})" if years else "")
+        )
+        text = f"{format_count(len(result), 'album')} by {artist}{span}."
+        return render(text, result)
 
 
 @mcp.tool(annotations=READ_ONLY)
@@ -91,7 +140,20 @@ def list_tracks_by_album(
     or `update_playlist`.
     """
     with open_session() as (_cfg, db):
-        return actions.list_tracks_by_album(db, artist, album)
+        result = actions.list_tracks_by_album(db, artist, album)
+        if not result:
+            return render(
+                f"No tracks found for '{artist}' / '{album}'. "
+                "Both fields are case-sensitive.",
+                result,
+            )
+        total_seconds = sum(t.get("duration_seconds") or 0 for t in result)
+        minutes = total_seconds / 60
+        text = (
+            f"{format_count(len(result), 'track')} on '{album}' by {artist}, "
+            f"{minutes:.0f}m total."
+        )
+        return render(text, result)
 
 
 @mcp.tool(annotations=READ_ONLY)
@@ -115,7 +177,20 @@ def search_tracks(
     `update_playlist`, or call `list_tracks_by_album` for the full album.
     """
     with open_session() as (_cfg, db):
-        return actions.search_tracks(db, query, limit=limit)
+        result = actions.search_tracks(db, query, limit=limit)
+        if not result:
+            text = (
+                "Empty query — pass a search term."
+                if not query.strip()
+                else f"No tracks match '{query}'. Try a different word, or "
+                "broaden by artist/album."
+            )
+            return render(text, result)
+        truncated = " (capped at limit)" if len(result) == limit else ""
+        text = (
+            f"Found {format_count(len(result), 'track')} matching '{query}'{truncated}."
+        )
+        return render(text, result)
 
 
 @mcp.tool(annotations=READ_ONLY)
@@ -136,4 +211,23 @@ def library_health() -> dict:
             health["last_scan_iso"] = datetime.fromtimestamp(
                 health["last_scan_at"]
             ).isoformat()
-        return health
+
+        problems = []
+        if not health["library_dir_exists"]:
+            problems.append(f"music_dir '{health['library_dir']}' doesn't exist")
+        if health["missing_tracks"]:
+            problems.append(
+                f"{health['missing_tracks']:,} indexed tracks no longer on disk"
+            )
+        if health["last_scan_at"] is None:
+            problems.append("never scanned — run `clickwheel scan`")
+
+        if problems:
+            text = "Library issues: " + "; ".join(problems) + "."
+        else:
+            age_h = (time.time() - health["last_scan_at"]) / 3600
+            text = (
+                f"Library OK: {health['total_tracks']:,} tracks, no missing "
+                f"files. Last scan {age_h:.1f}h ago."
+            )
+        return render(text, health)

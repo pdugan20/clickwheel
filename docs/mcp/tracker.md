@@ -90,9 +90,11 @@ Tier-1 + Tier-2 + selected Tier-3 patterns sourced from a review of the rewind M
 
 ### Phase 4.5c — Dual-content responses (`feat:` commit)
 
-- ☐ Every tool returns `{ structuredContent, content: [text(...)] }` — pre-rendered text summary alongside the structured data
-- ☐ `_helpers.py`: `_format_duration_ms`, `_format_timestamp`, `_format_track_line`, `_format_bytes`
-- ☐ Negative-result text on empty queries ("no albums for 'Foo'")
+- ☒ Every tool returns `CallToolResult` with both a 1-line text summary AND `structuredContent` — via the new `render()` helper in `_runtime.py`
+- ☒ `_runtime.py` formatters: `format_bytes` (existing), `format_duration_seconds`, `format_timestamp`, `format_count` (pluralization)
+- ☒ Negative-result text on empty queries ("No albums found for 'Foo'", "No tracks match 'X'", "No playlists yet")
+- ☒ Tests updated via `_call()` and `_call_text()` helpers — 124 passing at 49.7% coverage; new tests cover negative-result text paths
+- ☒ Live protocol smoke confirms text + structured content both delivered over stdio
 
 ### Phase 4.5d — `build-playlist` MCP prompt (`feat:` commit)
 
