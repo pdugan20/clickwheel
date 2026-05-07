@@ -730,9 +730,9 @@ def sync(
             else:
                 error("Still couldn't update iPod database.")
 
-    if result.removed_count:
+    if result.kept_in_place_count:
         warn(
-            f"{result.removed_count} tracks on iPod aren't in this playlist. "
+            f"{result.kept_in_place_count} tracks on iPod aren't in this playlist. "
             "Run `clickwheel diff` to see them."
         )
 

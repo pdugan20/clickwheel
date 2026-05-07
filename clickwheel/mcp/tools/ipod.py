@@ -195,7 +195,10 @@ def sync_playlist_to_ipod(
             "playlist": playlist,
             "copied": len(result.copied),
             "failed": len(result.failed),
-            "removed_count": result.removed_count,
+            # Tracks already on the iPod that aren't in this playlist —
+            # kept in place; sync is additive. (Renamed from removed_count
+            # which used to lie about what it counted.)
+            "kept_in_place_count": result.kept_in_place_count,
             "db_write_ok": result.db_write_ok,
             "next_step_hint": next_hint,
         }

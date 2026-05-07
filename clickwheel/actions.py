@@ -120,7 +120,11 @@ class SyncEvent:
 class SyncResult:
     copied: list[dict] = field(default_factory=list)
     failed: list[dict] = field(default_factory=list)
-    removed_count: int = 0
+    # Tracks that exist on the iPod but aren't in the playlist being synced.
+    # NOT removed — sync is additive. Renamed from `removed_count` (which
+    # lied) after a Phase 5 finding where the LLM correctly flagged the
+    # contradiction with the "additive only" docstring.
+    kept_in_place_count: int = 0
     db_write_ok: bool = True
 
 
@@ -671,7 +675,7 @@ def sync_playlist(
     return SyncResult(
         copied=copied,
         failed=failed,
-        removed_count=len(diff.to_remove),
+        kept_in_place_count=len(diff.to_remove),
         db_write_ok=db_ok,
     )
 
