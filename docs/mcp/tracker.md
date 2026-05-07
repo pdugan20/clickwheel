@@ -61,7 +61,42 @@ Live tracker for the MCP integration. Update statuses as we go. See `design.md` 
 - ☒ Add `## MCP server` section to `README.md`: install, register with Claude Code, tool table with read/mutation grouping, link to `docs/mcp/`
 - ☒ Update `CLAUDE.md`: `actions.py` and `clickwheel/mcp/` in project layout, three new Critical Rules (MCP tools wrap actions, destructive tools elicit, stderr logging only)
 - ☒ `pyproject.toml` description unchanged — MCP is an add-on, not the headline feature
-- ☐ Conventional commit: `docs: document mcp server install and usage`
+- ☒ Conventional commit: `docs: document mcp server install and usage` (commit `40f2fe5`).
+
+## Phase 4.5 — Polish from rewind audit
+
+Tier-1 + Tier-2 + selected Tier-3 patterns sourced from a review of the rewind MCP server (`~/Documents/Github/rewind/mcp-server` and `docs/projects/mcp-richness/`). Resources and MCP Apps deferred — they don't apply to stdio servers / not enough evidence yet for clickwheel's data shape.
+
+### Phase 4.5a — Domain-split tools (`refactor:` commit)
+
+- ☒ Move tools out of `mcp/server.py` into `mcp/tools/{library,playlist,ipod,scrobble}.py`
+- ☒ Extract shared infrastructure into `mcp/_runtime.py` (FastMCP instance, `open_session`, `Confirm`, `elicit_confirm`, `format_bytes`) — keeps `server.py → tools/` import direction one-way
+- ☒ `server.py` becomes the thin entry point: `_setup_logging`, `main`, imports `tools` for side-effect registration
+- ☒ `tools/__init__.py` imports each domain module to trigger `@mcp.tool()` registration
+- ☒ Update test imports: `from clickwheel.mcp.tools.<domain> import <tool>`; monkeypatch `clickwheel.mcp._runtime.load_config` instead of `server.load_config`
+- ☒ Tests pass (119), smoke pass (17 tools registered over stdio)
+
+### Phase 4.5b — `eject_ipod` + richer tool descriptions (`feat:` commit)
+
+- ☐ Extract `actions.eject_ipod()` from `cli.eject` (subprocess + `diskutil eject`)
+- ☐ Add `eject_ipod` MCP tool
+- ☐ Add tool annotations: `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`
+- ☐ Beef up server `instructions`: anti-hallucination, linking conventions, workflow hints (sync→eject, scrobble→eject, create→sync)
+- ☐ Per-field `Annotated[..., Field(description=...)]` on every tool param
+- ☐ Tool description chaining hints (every tool says when to use it + what to call next)
+- ☐ Log prefix `[clickwheel-mcp]` in formatter
+- ☐ `next_step_hint` field on `sync_playlist_to_ipod` and `submit_scrobbles` results
+
+### Phase 4.5c — Dual-content responses (`feat:` commit)
+
+- ☐ Every tool returns `{ structuredContent, content: [text(...)] }` — pre-rendered text summary alongside the structured data
+- ☐ `_helpers.py`: `_format_duration_ms`, `_format_timestamp`, `_format_track_line`, `_format_bytes`
+- ☐ Negative-result text on empty queries ("no albums for 'Foo'")
+
+### Phase 4.5d — `build-playlist` MCP prompt (`feat:` commit)
+
+- ☐ `clickwheel/mcp/prompts.py`: one server-defined prompt (`build_playlist`) encoding anti-hallucination + tool-chaining rules
+- ☐ Register via `@mcp.prompt()`
 
 ## Phase 5 — Manual iPod testing
 

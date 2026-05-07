@@ -64,12 +64,12 @@ def _setup(tmp_path, monkeypatch, *, populate=True):
         db.commit()
     db.close()
 
-    monkeypatch.setattr("clickwheel.mcp.server.load_config", lambda: cfg)
+    monkeypatch.setattr("clickwheel.mcp._runtime.load_config", lambda: cfg)
     return cfg
 
 
 def test_library_stats(tmp_path, monkeypatch):
-    from clickwheel.mcp.server import library_stats
+    from clickwheel.mcp.tools.library import library_stats
 
     _setup(tmp_path, monkeypatch)
 
@@ -79,7 +79,7 @@ def test_library_stats(tmp_path, monkeypatch):
 
 
 def test_list_artists(tmp_path, monkeypatch):
-    from clickwheel.mcp.server import list_artists
+    from clickwheel.mcp.tools.library import list_artists
 
     _setup(tmp_path, monkeypatch)
 
@@ -89,7 +89,7 @@ def test_list_artists(tmp_path, monkeypatch):
 
 
 def test_list_artists_respects_limit(tmp_path, monkeypatch):
-    from clickwheel.mcp.server import list_artists
+    from clickwheel.mcp.tools.library import list_artists
 
     _setup(tmp_path, monkeypatch)
 
@@ -98,7 +98,7 @@ def test_list_artists_respects_limit(tmp_path, monkeypatch):
 
 
 def test_list_albums_by_artist(tmp_path, monkeypatch):
-    from clickwheel.mcp.server import list_albums_by_artist
+    from clickwheel.mcp.tools.library import list_albums_by_artist
 
     _setup(tmp_path, monkeypatch)
 
@@ -107,7 +107,7 @@ def test_list_albums_by_artist(tmp_path, monkeypatch):
 
 
 def test_list_tracks_by_album(tmp_path, monkeypatch):
-    from clickwheel.mcp.server import list_tracks_by_album
+    from clickwheel.mcp.tools.library import list_tracks_by_album
 
     _setup(tmp_path, monkeypatch)
 
@@ -116,7 +116,7 @@ def test_list_tracks_by_album(tmp_path, monkeypatch):
 
 
 def test_search_tracks_matches_artist(tmp_path, monkeypatch):
-    from clickwheel.mcp.server import search_tracks
+    from clickwheel.mcp.tools.library import search_tracks
 
     _setup(tmp_path, monkeypatch)
 
@@ -126,7 +126,7 @@ def test_search_tracks_matches_artist(tmp_path, monkeypatch):
 
 
 def test_search_tracks_empty_query(tmp_path, monkeypatch):
-    from clickwheel.mcp.server import search_tracks
+    from clickwheel.mcp.tools.library import search_tracks
 
     _setup(tmp_path, monkeypatch)
 
@@ -134,7 +134,7 @@ def test_search_tracks_empty_query(tmp_path, monkeypatch):
 
 
 def test_list_playlists_empty(tmp_path, monkeypatch):
-    from clickwheel.mcp.server import list_playlists
+    from clickwheel.mcp.tools.playlist import list_playlists
 
     _setup(tmp_path, monkeypatch)
 
@@ -142,7 +142,7 @@ def test_list_playlists_empty(tmp_path, monkeypatch):
 
 
 def test_list_and_get_playlist(tmp_path, monkeypatch):
-    from clickwheel.mcp.server import get_playlist, list_playlists
+    from clickwheel.mcp.tools.playlist import get_playlist, list_playlists
 
     cfg = _setup(tmp_path, monkeypatch)
 
@@ -163,7 +163,7 @@ def test_list_and_get_playlist(tmp_path, monkeypatch):
 
 
 def test_get_playlist_missing_raises(tmp_path, monkeypatch):
-    from clickwheel.mcp.server import get_playlist
+    from clickwheel.mcp.tools.playlist import get_playlist
 
     _setup(tmp_path, monkeypatch)
 
@@ -172,7 +172,7 @@ def test_get_playlist_missing_raises(tmp_path, monkeypatch):
 
 
 def test_get_pending_scrobbles_empty(tmp_path, monkeypatch):
-    from clickwheel.mcp.server import get_pending_scrobbles
+    from clickwheel.mcp.tools.scrobble import get_pending_scrobbles
 
     _setup(tmp_path, monkeypatch)
 
@@ -180,7 +180,7 @@ def test_get_pending_scrobbles_empty(tmp_path, monkeypatch):
 
 
 def test_library_health(tmp_path, monkeypatch):
-    from clickwheel.mcp.server import library_health
+    from clickwheel.mcp.tools.library import library_health
 
     _setup(tmp_path, monkeypatch)
 
@@ -193,7 +193,7 @@ def test_library_health(tmp_path, monkeypatch):
 
 
 def test_get_ipod_contents_no_ipod(tmp_path, monkeypatch):
-    from clickwheel.mcp.server import get_ipod_contents
+    from clickwheel.mcp.tools.ipod import get_ipod_contents
 
     _setup(tmp_path, monkeypatch)
 
@@ -260,7 +260,7 @@ class _FakeCtx:
 
 
 def test_create_playlist(tmp_path, monkeypatch):
-    from clickwheel.mcp.server import create_playlist
+    from clickwheel.mcp.tools.playlist import create_playlist
 
     _setup(tmp_path, monkeypatch)
 
@@ -272,7 +272,7 @@ def test_create_playlist(tmp_path, monkeypatch):
 
 def test_create_playlist_already_exists(tmp_path, monkeypatch):
     from clickwheel.actions import PlaylistAlreadyExistsError
-    from clickwheel.mcp.server import create_playlist
+    from clickwheel.mcp.tools.playlist import create_playlist
 
     cfg = _setup(tmp_path, monkeypatch)
     db = Database(cfg.db_path)
@@ -284,7 +284,7 @@ def test_create_playlist_already_exists(tmp_path, monkeypatch):
 
 
 def test_update_playlist_new(tmp_path, monkeypatch):
-    from clickwheel.mcp.server import update_playlist
+    from clickwheel.mcp.tools.playlist import update_playlist
 
     _setup(tmp_path, monkeypatch)
 
@@ -295,7 +295,7 @@ def test_update_playlist_new(tmp_path, monkeypatch):
 
 
 def test_update_playlist_replaces(tmp_path, monkeypatch):
-    from clickwheel.mcp.server import update_playlist
+    from clickwheel.mcp.tools.playlist import update_playlist
 
     cfg = _setup(tmp_path, monkeypatch)
     db = Database(cfg.db_path)
@@ -311,7 +311,7 @@ def test_delete_playlist_confirm_true(tmp_path, monkeypatch):
     """confirm=True skips elicitation and deletes immediately."""
     import asyncio
 
-    from clickwheel.mcp.server import delete_playlist
+    from clickwheel.mcp.tools.playlist import delete_playlist
 
     cfg = _setup(tmp_path, monkeypatch)
     db = Database(cfg.db_path)
@@ -326,7 +326,7 @@ def test_delete_playlist_user_declines(tmp_path, monkeypatch):
     """User declines via elicitation → playlist stays."""
     import asyncio
 
-    from clickwheel.mcp.server import delete_playlist
+    from clickwheel.mcp.tools.playlist import delete_playlist
 
     cfg = _setup(tmp_path, monkeypatch)
     db = Database(cfg.db_path)
@@ -347,7 +347,7 @@ def test_delete_playlist_user_accepts_via_elicit(tmp_path, monkeypatch):
     """User accepts via elicitation → playlist deleted, message includes track count."""
     import asyncio
 
-    from clickwheel.mcp.server import delete_playlist
+    from clickwheel.mcp.tools.playlist import delete_playlist
 
     cfg = _setup(tmp_path, monkeypatch)
     db = Database(cfg.db_path)
@@ -363,7 +363,7 @@ def test_delete_playlist_user_accepts_via_elicit(tmp_path, monkeypatch):
 def test_delete_playlist_missing(tmp_path, monkeypatch):
     import asyncio
 
-    from clickwheel.mcp.server import delete_playlist
+    from clickwheel.mcp.tools.playlist import delete_playlist
 
     _setup(tmp_path, monkeypatch)
 
@@ -372,7 +372,7 @@ def test_delete_playlist_missing(tmp_path, monkeypatch):
 
 
 def test_add_artist_to_playlist(tmp_path, monkeypatch):
-    from clickwheel.mcp.server import add_artist_to_playlist
+    from clickwheel.mcp.tools.playlist import add_artist_to_playlist
 
     _setup(tmp_path, monkeypatch)
 
@@ -383,7 +383,7 @@ def test_add_artist_to_playlist(tmp_path, monkeypatch):
 
 
 def test_remove_artist_from_playlist(tmp_path, monkeypatch):
-    from clickwheel.mcp.server import remove_artist_from_playlist
+    from clickwheel.mcp.tools.playlist import remove_artist_from_playlist
 
     cfg = _setup(tmp_path, monkeypatch)
     db = Database(cfg.db_path)
@@ -395,7 +395,7 @@ def test_remove_artist_from_playlist(tmp_path, monkeypatch):
 
 
 def test_submit_scrobbles_no_ipod(tmp_path, monkeypatch):
-    from clickwheel.mcp.server import submit_scrobbles
+    from clickwheel.mcp.tools.scrobble import submit_scrobbles
 
     _setup(tmp_path, monkeypatch)
 
@@ -406,7 +406,7 @@ def test_submit_scrobbles_no_ipod(tmp_path, monkeypatch):
 def test_sync_playlist_to_ipod_no_ipod(tmp_path, monkeypatch):
     import asyncio
 
-    from clickwheel.mcp.server import sync_playlist_to_ipod
+    from clickwheel.mcp.tools.ipod import sync_playlist_to_ipod
 
     _setup(tmp_path, monkeypatch)
 
