@@ -389,5 +389,6 @@ Format: `<round.section>` — `<observed>` — `<follow-up>`
 ### Open follow-ups for v0.5.1+
 
 - Progress streaming during sync via `ctx.report_progress()` so chat clients see "12 of 22 copied" instead of a spinner.
-- Auto-detect slow library scans on SMB and either skip or show better progress in `clickwheel diff` / `clickwheel sync` (currently autoscan blocks for 30-90s).
+- **Autoscan blocking MCP tool calls.** When `last_scan_completed` is older than `auto_scan_staleness_minutes`, every library-data MCP tool call triggers a synchronous SMB walk (30-90+ seconds on slow shares). Hit during Phase 5 — chat session hung for 3+ minutes on `list_albums_by_artist`. Workaround: set `auto_scan: false` or bump staleness to 1440 in `~/.clickwheel/config.yaml`. Real fix: either a `CLICKWHEEL_MCP_NO_AUTOSCAN` env var, or run autoscan in a background thread so tool calls return immediately with cached data while the scan completes async.
+- Auto-detect slow library scans on SMB in CLI and either skip or show better progress in `clickwheel diff` / `clickwheel sync`.
 - Investigate the zombie-process accumulation — may need a graceful shutdown handler or just file with anthropics/claude-code.
