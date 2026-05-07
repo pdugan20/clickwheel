@@ -317,6 +317,7 @@ def test_tools_registered_with_fastmcp():
         "create_playlist",
         "update_playlist",
         "delete_playlist",
+        "heal_playlist",
         "add_artist_to_playlist",
         "remove_artist_from_playlist",
         "submit_scrobbles",
@@ -527,3 +528,50 @@ def test_sync_playlist_to_ipod_no_ipod(tmp_path, monkeypatch):
 
     with pytest.raises(IpodNotFoundError):
         sync_playlist_to_ipod(playlist="any")
+
+
+def test_heal_playlist_clean(tmp_path, monkeypatch):
+    """Healing a playlist with no dead refs is a no-op."""
+    from clickwheel.mcp.tools.playlist import heal_playlist
+
+    cfg = _setup(tmp_path, monkeypatch)
+    db = Database(cfg.db_path)
+    db.save_playlist("clean", ["/music/A/Album1/01.mp3", "/music/B/Album2/01.mp3"])
+    db.close()
+
+    result = _call(heal_playlist, name="clean")
+    assert result["dropped"] == 0
+    assert result["remaining"] == 2
+    assert result["dropped_tracks"] == []
+
+
+def test_heal_playlist_drops_missing(tmp_path, monkeypatch):
+    """Tracks flagged missing_since are removed from the playlist."""
+    from clickwheel.mcp.tools.playlist import heal_playlist
+
+    cfg = _setup(tmp_path, monkeypatch)
+    db = Database(cfg.db_path)
+    db.save_playlist("p", ["/music/A/Album1/01.mp3", "/music/B/Album2/01.mp3"])
+    db.mark_missing({"/music/A/Album1/01.mp3"})
+    db.close()
+
+    result = _call(heal_playlist, name="p")
+    assert result["dropped"] == 1
+    assert result["remaining"] == 1
+    assert len(result["dropped_tracks"]) == 1
+    assert result["dropped_tracks"][0]["path"] == "/music/A/Album1/01.mp3"
+
+    # And the playlist now has only the remaining track.
+    db = Database(cfg.db_path)
+    remaining = db.get_playlist("p")
+    db.close()
+    assert [t["path"] for t in remaining] == ["/music/B/Album2/01.mp3"]
+
+
+def test_heal_playlist_missing_playlist(tmp_path, monkeypatch):
+    from clickwheel.mcp.tools.playlist import heal_playlist
+
+    _setup(tmp_path, monkeypatch)
+
+    with pytest.raises(PlaylistNotFoundError):
+        heal_playlist(name="ghost")

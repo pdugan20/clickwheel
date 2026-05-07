@@ -14,6 +14,7 @@ from clickwheel.actions import (
     IpodNotFoundError,
     LastfmNotConfiguredError,
     LibraryNotFoundError,
+    MissingTracksError,
     PlaylistNotFoundError,
     ScanProgress,
     SyncEvent,
@@ -321,6 +322,61 @@ def delete(
 
 
 @app.command()
+def heal(
+    playlist_name: str = typer.Argument(..., help="Playlist to heal"),
+    no_scan: bool = typer.Option(
+        False, "--no-scan", help="Skip automatic library scan"
+    ),
+) -> None:
+    """Drop playlist references to tracks no longer on disk.
+
+    Uses the missing-since flag set by `clickwheel scan`. Run a scan
+    first if you want freshness; pass --no-scan to skip the autoscan
+    if you've already scanned recently.
+    """
+    cfg = load_config()
+    db = Database(cfg.db_path)
+    if not no_scan:
+        maybe_auto_scan(cfg, db)
+
+    try:
+        result = actions.heal_playlist(db, playlist_name)
+    except PlaylistNotFoundError as exc:
+        error(str(exc))
+        db.close()
+        raise typer.Exit(1) from exc
+
+    if result["dropped"] == 0:
+        confirm(
+            f"'{playlist_name}' has no dead references "
+            f"({result['remaining']} tracks intact)."
+        )
+        db.close()
+        return
+
+    success(
+        f"Dropped {result['dropped']} dead reference(s) from "
+        f"'{playlist_name}' ({result['remaining']} tracks remaining)."
+    )
+    if result["dropped_tracks"]:
+        info("")
+        t = table(title="Dropped tracks")
+        t.add_column("Artist")
+        t.add_column("Album")
+        t.add_column("Title")
+        for tr in result["dropped_tracks"][:20]:
+            t.add_row(tr["artist"] or "?", tr["album"] or "?", tr["title"] or "?")
+        if len(result["dropped_tracks"]) > 20:
+            t.add_row("...", f"+ {len(result['dropped_tracks']) - 20} more", "")
+        print_table(t)
+        dim(
+            "Re-add the artist with `clickwheel edit "
+            f'{playlist_name} --add "<Artist>"` if needed.'
+        )
+    db.close()
+
+
+@app.command()
 def edit(
     playlist_name: str = typer.Argument("ipod", help="Playlist to edit"),
     add: list[str] = typer.Option([], "--add", "-a", help="Artist to add"),
@@ -565,6 +621,29 @@ def sync(
         db.close()
         raise typer.Exit(1) from exc
 
+    # Pre-flight: any tracks in the playlist that are flagged missing on
+    # disk? Bail with a clear pointer at `clickwheel heal` so the user
+    # doesn't sit through per-file timeouts.
+    missing_in_playlist = db.get_missing_tracks_in_playlist(playlist_name)
+    if missing_in_playlist:
+        to_add_keys = {
+            (t["artist"] or "", t["album"] or "", t["title"] or "") for t in d.to_add
+        }
+        blocking = [
+            t
+            for t in missing_in_playlist
+            if (t["artist"] or "", t["album"] or "", t["title"] or "") in to_add_keys
+        ]
+        if blocking:
+            error(
+                f"{len(blocking)} track(s) in '{playlist_name}' reference "
+                "files that no longer exist on disk."
+            )
+            warn(f"Run `clickwheel heal {playlist_name}` to drop the dead refs, ")
+            warn("then re-add the artist with `clickwheel edit --add`.")
+            db.close()
+            raise typer.Exit(1)
+
     status(f"Syncing playlist '{playlist_name}' to iPod")
     info(
         f"  {len(d.to_add)} to add ({_fmt_size(d.add_size_bytes)}), "
@@ -612,6 +691,15 @@ def sync(
             result = actions.sync_playlist(
                 cfg, db, playlist_name, diff=d, on_event=_on_event
             )
+    except LibraryNotFoundError as exc:
+        error(str(exc))
+        db.close()
+        raise typer.Exit(1) from exc
+    except MissingTracksError as exc:
+        error(str(exc))
+        warn(f"Run `clickwheel heal {playlist_name}` to drop dead references.")
+        db.close()
+        raise typer.Exit(1) from exc
     except InsufficientSpaceError as exc:
         error(str(exc))
         db.close()

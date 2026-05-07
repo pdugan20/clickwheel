@@ -231,6 +231,44 @@ def add_artist_to_playlist(
 
 
 @mcp.tool(annotations=MUTATION)
+def heal_playlist(
+    name: Annotated[str, Field(description="Playlist name.")],
+) -> dict:
+    """Drop references in a playlist to tracks whose files are no longer on
+    disk (flagged missing by `clickwheel scan`). Returns the number dropped,
+    the number remaining, and the list of removed track records.
+
+    Why this exists: `sync_playlist_to_ipod` errors with `MissingTracksError`
+    if a playlist references files that have been moved or deleted. Heal
+    drops the dead refs so sync can proceed. After healing, the user
+    typically wants to re-add the artist (`add_artist_to_playlist`) to
+    pick up replacement files at their new paths.
+
+    Uses the DB's missing flag — accuracy depends on scan freshness. If
+    the user just renamed/replaced files, suggest `clickwheel scan` first.
+
+    When to use: when sync errored with `MissingTracksError`, or when the
+    user explicitly says "remove dead links from my playlist" / "clean up
+    my playlist".
+    """
+    with open_session(autoscan=False) as (_cfg, db):
+        result = actions.heal_playlist(db, name)
+        if result["dropped"] == 0:
+            text = (
+                f"'{name}' is clean — no dead references "
+                f"({result['remaining']} tracks intact)."
+            )
+            return render(text, result)
+        text = (
+            f"Dropped {result['dropped']} dead reference(s) from '{name}'. "
+            f"{result['remaining']} tracks remain. "
+            f"Re-add the artist with `add_artist_to_playlist` if you want "
+            "replacement files (which now sit at different paths)."
+        )
+        return render(text, result)
+
+
+@mcp.tool(annotations=MUTATION)
 def remove_artist_from_playlist(
     playlist: Annotated[str, Field(description="Playlist name.")],
     artist: Annotated[str, Field(description="Artist name (exact match).")],

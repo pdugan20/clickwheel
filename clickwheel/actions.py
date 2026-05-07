@@ -49,6 +49,19 @@ class EjectFailedError(ClickwheelError):
     """`diskutil eject` returned a non-zero exit code."""
 
 
+class MissingTracksError(ClickwheelError):
+    """A playlist references tracks whose files are no longer on disk.
+
+    Carries a list of the offending tracks so callers can surface them
+    or hand them to `heal_playlist`. The text message is a short summary;
+    consult `.missing_tracks` for details.
+    """
+
+    def __init__(self, message: str, missing_tracks: list[dict]) -> None:
+        super().__init__(message)
+        self.missing_tracks = missing_tracks
+
+
 @dataclass
 class ScanResult:
     total: int = 0
@@ -389,6 +402,34 @@ def delete_playlist(db: Database, name: str) -> bool:
     return db.delete_playlist(name)
 
 
+def heal_playlist(db: Database, name: str) -> dict:
+    """Drop playlist references to tracks flagged missing on disk.
+
+    Uses the DB's `missing_since` flag (set by `clickwheel scan`), so the
+    accuracy depends on scan freshness. For real-time accuracy, run a
+    scan first.
+
+    Returns a dict with:
+      - dropped: number of references removed
+      - remaining: number of tracks still in the playlist
+      - dropped_tracks: list of removed track records (artist, album, title,
+        path) so callers can show the user what was dropped
+
+    Raises PlaylistNotFoundError if the playlist doesn't exist.
+    """
+    if not playlist_exists(db, name):
+        raise PlaylistNotFoundError(f"Playlist '{name}' not found.")
+
+    dropped_tracks = db.get_missing_tracks_in_playlist(name)
+    dropped = db.remove_missing_tracks_from_playlist(name)
+    remaining = len(db.get_playlist(name))
+    return {
+        "dropped": dropped,
+        "remaining": remaining,
+        "dropped_tracks": dropped_tracks,
+    }
+
+
 def add_artist_to_playlist(db: Database, playlist: str, artist: str) -> int:
     return db.add_artist_to_playlist(playlist, artist)
 
@@ -559,12 +600,43 @@ def sync_playlist(
     Pass a pre-computed `diff` (e.g. from a preview) to avoid re-reading the
     iPod.
 
+    Pre-flight checks:
+    - LibraryNotFoundError if cfg.music_dir isn't reachable (catches
+      unmounted-share cases before we hang on per-file timeouts).
+    - MissingTracksError if any playlist tracks are flagged missing on
+      disk (catches stale-playlist cases — files were moved/deleted since
+      the playlist was built). The error carries the missing tracks so
+      callers can suggest `heal_playlist`.
+
     Raises PlaylistNotFoundError, IpodNotFoundError, InsufficientSpaceError.
     """
     from clickwheel.ipod.sync import copy_tracks_to_ipod, write_ipod_db
 
+    if not cfg.music_dir.is_dir():
+        raise LibraryNotFoundError(
+            f"Music library at {cfg.music_dir} isn't mounted. "
+            "Mount the share before syncing."
+        )
+
     if diff is None:
         diff = compute_diff(cfg, db, playlist_name)
+
+    missing = db.get_missing_tracks_in_playlist(playlist_name)
+    if missing:
+        # Only block on missing tracks that are actually in the to-add set —
+        # tracks already on the iPod are safe even if their source files are
+        # gone (we're not re-copying them).
+        to_add_paths = {t["path"] for t in diff.to_add}
+        blocking = [t for t in missing if t["path"] in to_add_paths]
+        if blocking:
+            raise MissingTracksError(
+                f"{len(blocking)} track(s) in '{playlist_name}' reference "
+                "files that no longer exist on disk. Run `clickwheel heal "
+                f"{playlist_name}` (or the heal_playlist MCP tool) to drop "
+                "the dead references, then re-add via `clickwheel edit "
+                "--add` or `add_artist_to_playlist`.",
+                blocking,
+            )
 
     to_add = diff.to_add
     add_size = diff.add_size_bytes

@@ -232,6 +232,49 @@ class Database:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def get_missing_tracks_in_playlist(self, name: str) -> list[dict]:
+        """Tracks referenced by a playlist whose underlying file is flagged
+        missing (file no longer on disk per the last scan)."""
+        rows = self.conn.execute(
+            """
+            SELECT t.* FROM tracks t
+            JOIN playlist_tracks pt ON t.id = pt.track_id
+            JOIN playlists p ON pt.playlist_id = p.id
+            WHERE p.name = ? AND t.missing_since IS NOT NULL
+            ORDER BY pt.position
+            """,
+            (name,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def remove_missing_tracks_from_playlist(self, name: str) -> int:
+        """Drop playlist references to tracks flagged missing on disk.
+        Returns the number of references removed."""
+        row = self.conn.execute(
+            "SELECT id FROM playlists WHERE name = ?", (name,)
+        ).fetchone()
+        if not row:
+            return 0
+        pid = row["id"]
+        before = self.conn.total_changes
+        self.conn.execute(
+            """
+            DELETE FROM playlist_tracks WHERE playlist_id = ?
+            AND track_id IN (
+                SELECT id FROM tracks WHERE missing_since IS NOT NULL
+            )
+            """,
+            (pid,),
+        )
+        removed = self.conn.total_changes - before
+        if removed:
+            self.conn.execute(
+                "UPDATE playlists SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (pid,),
+            )
+        self.conn.commit()
+        return removed
+
     def list_playlists(self) -> list[dict]:
         """Return all playlists with track counts and total size."""
         rows = self.conn.execute("""
