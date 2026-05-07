@@ -49,6 +49,9 @@ LINKING & RENDERING:
   values back to the user; those are for tool inputs only.
 - Sizes come back as bytes — show them in human units (MB / GB).
 - Timestamps are unix seconds; format them locally.
+- Plain text only — no emoji or decorative symbols. The text summaries
+  are already concise; resist embellishing with warning glyphs or
+  status markers.
 
 WORKFLOWS:
 - After `sync_playlist_to_ipod` succeeds, the iTunesDB has just been
