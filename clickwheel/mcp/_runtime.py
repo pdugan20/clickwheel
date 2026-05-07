@@ -197,18 +197,22 @@ def render(text: str, data: object | None = None) -> CallToolResult:
 
 
 class Confirm(BaseModel):
-    """Schema for a yes/no elicitation prompt."""
+    """Schema for a yes/no elicitation prompt.
+
+    MCP elicitation requires at least one schema field, so we declare a
+    boolean — but in practice the Accept/Decline buttons in the client UI
+    are the real signal. The checkbox is decorative; we only act on
+    `result.action`. Pre-defaulting to True so clients that surface the
+    field don't show an unchecked box that the user has to toggle.
+    """
 
     confirm: bool = Field(
-        description=(
-            "Check this box and click Accept to proceed. Click Decline to cancel."
-        ),
+        default=True,
+        description="Click Accept to proceed; Decline to cancel.",
     )
 
 
 async def elicit_confirm(ctx: Context, message: str) -> bool:
-    """Ask the client to confirm. Returns True only on explicit accept+confirm."""
+    """Ask the client to confirm. Returns True iff the user clicked Accept."""
     result = await ctx.elicit(message=message, schema=Confirm)
-    if result.action != "accept" or result.data is None:
-        return False
-    return bool(result.data.confirm)
+    return result.action == "accept"
