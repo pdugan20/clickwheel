@@ -18,7 +18,7 @@ How to use this doc: each round is run from a **fresh Claude Code session** (or 
 - [ ] `clickwheel-mcp` is on PATH or reachable at an absolute path
 - [ ] `claude mcp add --scope user clickwheel <path-to-clickwheel-mcp>` returns "Added stdio MCP server"
 - [ ] `claude mcp list` shows `clickwheel: ... ✓ Connected`
-- [ ] In a fresh Claude Code session, "What tools does the clickwheel MCP expose?" lists all 18 tools and mentions the `build_playlist` prompt
+- [ ] In a fresh Claude Code session, "What tools does the clickwheel MCP expose?" lists all 20 tools and mentions the `build_playlist` prompt
 
 ## Round 1 — Read tools, no iPod, no mutation
 
@@ -75,8 +75,16 @@ Ask:
 > What playlists do I have, and what's in the 'ipod' playlist?
 
 - [ ] `list_playlists` returns 1 playlist
-- [ ] `get_playlist(name="ipod")` returns 357 tracks, ~3.0 GB
-- [ ] Tracks render as `Artist — Title (Album)`
+- [ ] `get_playlist(name="ipod")` returns the SUMMARY (track_count, size_bytes, artists breakdown). NOT the full track list.
+- [ ] Claude paraphrases the artist breakdown ("Taylor Swift 276, Sabrina Carpenter 58, …")
+- [ ] **Response stays well under the token cap** — no "result exceeds maximum allowed tokens" error, no jq fallback
+
+Then drill in:
+
+> Show me the first 10 tracks of the 'ipod' playlist.
+
+- [ ] Claude calls `list_playlist_tracks(name="ipod", limit=10)`
+- [ ] Returns 10 track records rendered as `Artist — Title (Album)`
 
 ### 1.6 Anti-hallucination probe
 
@@ -170,8 +178,17 @@ Ask:
 
 > What's currently on my iPod, and how full is it?
 
-- [ ] `get_ipod_contents` returns track count, capacity, used, free in human units
+- [ ] `get_ipod_contents` returns the summary: capacity, used, free, track_count, artist_count, top_artists. NOT the full track manifest.
+- [ ] **Response is small** — no "result exceeds maximum allowed tokens" error, no jq fallback
+- [ ] Claude paraphrases naturally (e.g. "Your iPod has 335 tracks, 5.2 GB used of 60 GB, mostly Taylor Swift…")
 - [ ] Cross-check against the CLI: `clickwheel ls` reports same counts
+
+Then drill in:
+
+> Show me 20 Taylor Swift tracks on my iPod.
+
+- [ ] Claude calls `list_ipod_tracks(artist="Taylor Swift", limit=20)`
+- [ ] Returns 20 (or fewer) track records, all by Taylor Swift
 
 ### 3.2 Sync — already-in-sync case
 

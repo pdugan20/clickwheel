@@ -207,11 +207,41 @@ def test_list_and_get_playlist(tmp_path, monkeypatch):
     assert playlists[0]["name"] == "test"
     assert playlists[0]["tracks"] == 2
 
+    # get_playlist returns the summary only (no full tracks array — use
+    # list_playlist_tracks to drill in).
     pl = _call(get_playlist, name="test")
     assert pl["track_count"] == 2
     assert pl["size_bytes"] == 8_000_000
-    assert {t["title"] for t in pl["tracks"]} == {"T1", "S1"}
+    assert "tracks" not in pl
     assert {a["name"] for a in pl["artists"]} == {"ArtistA", "ArtistB"}
+
+
+def test_list_playlist_tracks(tmp_path, monkeypatch):
+    from clickwheel.actions import PlaylistNotFoundError
+    from clickwheel.mcp.tools.playlist import list_playlist_tracks
+
+    cfg = _setup(tmp_path, monkeypatch)
+    db = Database(cfg.db_path)
+    db.save_playlist("test", ["/music/A/Album1/01.mp3", "/music/B/Album2/01.mp3"])
+    db.close()
+
+    tracks = _call(list_playlist_tracks, name="test")
+    assert {t["title"] for t in tracks} == {"T1", "S1"}
+
+    # Pagination
+    page1 = _call(list_playlist_tracks, name="test", limit=1, offset=0)
+    page2 = _call(list_playlist_tracks, name="test", limit=1, offset=1)
+    assert len(page1) == 1
+    assert len(page2) == 1
+    assert page1[0]["title"] != page2[0]["title"]
+
+    # Past the end
+    empty = _call(list_playlist_tracks, name="test", offset=100)
+    assert empty == []
+
+    # Missing playlist
+    with pytest.raises(PlaylistNotFoundError):
+        list_playlist_tracks(name="ghost")
 
 
 def test_get_playlist_missing_raises(tmp_path, monkeypatch):
@@ -256,6 +286,15 @@ def test_get_ipod_contents_no_ipod(tmp_path, monkeypatch):
         get_ipod_contents()
 
 
+def test_list_ipod_tracks_no_ipod(tmp_path, monkeypatch):
+    from clickwheel.mcp.tools.ipod import list_ipod_tracks
+
+    _setup(tmp_path, monkeypatch)
+
+    with pytest.raises(IpodNotFoundError):
+        list_ipod_tracks()
+
+
 def test_tools_registered_with_fastmcp():
     """All read + mutation tools should be registered with the FastMCP instance."""
     from clickwheel.mcp.server import mcp
@@ -269,7 +308,9 @@ def test_tools_registered_with_fastmcp():
         "search_tracks",
         "list_playlists",
         "get_playlist",
+        "list_playlist_tracks",
         "get_ipod_contents",
+        "list_ipod_tracks",
         "get_pending_scrobbles",
         "library_health",
         # mutation
@@ -311,7 +352,9 @@ def test_read_tools_have_read_only_annotation():
         "library_health",
         "list_playlists",
         "get_playlist",
+        "list_playlist_tracks",
         "get_ipod_contents",
+        "list_ipod_tracks",
         "get_pending_scrobbles",
     ):
         ann = by_name[name].annotations

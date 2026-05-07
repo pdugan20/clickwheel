@@ -469,6 +469,43 @@ def read_ipod_contents(cfg: Config) -> dict:
     }
 
 
+def list_ipod_tracks(
+    cfg: Config,
+    *,
+    artist: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict]:
+    """Paginated list of iPod tracks, optionally filtered by artist.
+
+    Caller passes an absolute offset/limit window. Use this to drill into
+    the iPod's contents without paying for the whole track manifest in one
+    response. Raises IpodNotFoundError.
+    """
+    ipod_db = require_ipod(cfg)
+    tracks = read_ipod_track_list(ipod_db)
+    if artist:
+        tracks = [t for t in tracks if t.get("artist") == artist]
+    return tracks[offset : offset + limit]
+
+
+def list_playlist_tracks(
+    db: Database,
+    name: str,
+    *,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict]:
+    """Paginated list of tracks in a saved playlist.
+
+    Raises PlaylistNotFoundError.
+    """
+    if not playlist_exists(db, name):
+        raise PlaylistNotFoundError(f"Playlist '{name}' not found.")
+    tracks = db.get_playlist(name)
+    return tracks[offset : offset + limit]
+
+
 # ---------------------------------------------------------------------------
 # Sync (diff + copy)
 # ---------------------------------------------------------------------------

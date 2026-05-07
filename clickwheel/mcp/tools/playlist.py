@@ -48,15 +48,19 @@ def list_playlists() -> list[dict]:
 def get_playlist(
     name: Annotated[str, Field(description="Playlist name.")],
 ) -> dict:
-    """One playlist's full contents: track list, artist breakdown, and
-    total size in bytes. Errors if the playlist doesn't exist.
+    """Summary of one playlist: total track count, total size, and the
+    artist breakdown (with track count + size per artist). Does NOT return
+    the full track list — use `list_playlist_tracks` to page through tracks.
 
-    When to use: showing the user what's in a saved playlist, or before
-    editing it.
+    Errors if the playlist doesn't exist.
 
-    After this: `update_playlist` to replace contents,
-    `add_artist_to_playlist` / `remove_artist_from_playlist` to adjust by
-    artist, or `sync_playlist_to_ipod` to push to the device.
+    When to use: showing the user a quick playlist overview, or before
+    deciding to edit/sync.
+
+    After this: `list_playlist_tracks` to drill into specific tracks,
+    `update_playlist` to replace contents, `add_artist_to_playlist` /
+    `remove_artist_from_playlist` to adjust by artist, or
+    `sync_playlist_to_ipod` to push to the device.
     """
     with open_session() as (_cfg, db):
         tracks = actions.get_playlist(db, name)
@@ -66,7 +70,6 @@ def get_playlist(
             "name": name,
             "track_count": len(tracks),
             "size_bytes": size,
-            "tracks": tracks,
             "artists": artists,
         }
         text = (
@@ -74,6 +77,43 @@ def get_playlist(
             f"{format_count(len(artists), 'artist')}, {format_bytes(size)}."
         )
         return render(text, data)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def list_playlist_tracks(
+    name: Annotated[str, Field(description="Playlist name.")],
+    limit: Annotated[
+        int,
+        Field(description="Max tracks to return.", ge=1, le=200),
+    ] = 50,
+    offset: Annotated[
+        int,
+        Field(description="Pagination offset (0 = first page).", ge=0),
+    ] = 0,
+) -> list[dict]:
+    """Paginated list of tracks in a saved playlist, in playlist order.
+    Returns full track records (artist, title, album, path, duration,
+    file_size, format) — the `path` values are needed if you're going to
+    pass them to `update_playlist`.
+
+    When to use: showing the user specific tracks in a playlist, or
+    collecting `path` values before an `update_playlist` call.
+
+    Errors if the playlist doesn't exist.
+    """
+    with open_session() as (_cfg, db):
+        tracks = actions.list_playlist_tracks(db, name, limit=limit, offset=offset)
+        if not tracks:
+            return render(
+                f"No tracks at offset {offset} for '{name}'.",
+                tracks,
+            )
+        text = (
+            f"{format_count(len(tracks), 'track')} from '{name}'"
+            + (f" (offset {offset})" if offset else "")
+            + "."
+        )
+        return render(text, tracks)
 
 
 @mcp.tool(annotations=MUTATION_NON_IDEMPOTENT)

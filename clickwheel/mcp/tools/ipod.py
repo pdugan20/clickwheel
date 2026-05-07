@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import Annotated
 
 from pydantic import Field
@@ -19,29 +20,108 @@ from clickwheel.mcp._runtime import (
 )
 
 
+def _summarize_track(t: dict) -> dict:
+    """Project an iPod track record down to chat-friendly fields."""
+    return {
+        "artist": t.get("artist") or "",
+        "title": t.get("title") or "",
+        "album": t.get("album") or "",
+        "size_bytes": t.get("size") or 0,
+    }
+
+
 @mcp.tool(annotations=READ_ONLY)
 def get_ipod_contents() -> dict:
-    """What's currently on the iPod: full track list, total capacity, used,
-    and free space (all in bytes). Requires the iPod to be mounted (typically
-    /Volumes/IPOD on macOS). Errors if no iPod is detected.
+    """High-level snapshot of what's on the iPod: capacity, used/free space,
+    track/artist/album counts, and the top 25 artists by track count.
+    Does NOT return the full track list — use `list_ipod_tracks` to page
+    through tracks (optionally filtered by artist).
 
-    When to use: the user asks "what's on my iPod?", or before a sync to
-    show what's already there.
+    Requires the iPod to be mounted (typically /Volumes/IPOD on macOS).
+    Errors if no iPod is detected.
 
-    After this: `sync_playlist_to_ipod` to push a saved playlist, or
-    `submit_scrobbles` to read recent plays. Eject when finished via
-    `eject_ipod`.
+    When to use: the user asks "what's on my iPod?" or "how full is it?".
+    Cheap and stays well under the tool-result token cap.
+
+    After this: `list_ipod_tracks` to drill into specific tracks,
+    `sync_playlist_to_ipod` to push a saved playlist, `submit_scrobbles`
+    to read recent plays, or `eject_ipod` when finished.
     """
     with open_session(autoscan=False) as (cfg, _db):
-        data = actions.read_ipod_contents(cfg)
-        tracks = data["tracks"]
+        contents = actions.read_ipod_contents(cfg)
+        tracks = contents["tracks"]
+        artist_counts = Counter(t.get("artist") or "Unknown" for t in tracks)
+        album_count = len({t.get("album") or "" for t in tracks})
+        top_artists = [
+            {"artist": a, "track_count": c} for a, c in artist_counts.most_common(25)
+        ]
+        data = {
+            "capacity_bytes": contents["capacity_bytes"],
+            "used_bytes": contents["used_bytes"],
+            "free_bytes": contents["free_bytes"],
+            "track_count": len(tracks),
+            "artist_count": len(artist_counts),
+            "album_count": album_count,
+            "top_artists": top_artists,
+        }
         text = (
-            f"iPod: {format_count(len(tracks), 'track')}, "
-            f"{format_bytes(data['used_bytes'])} used / "
-            f"{format_bytes(data['capacity_bytes'])} total "
-            f"({format_bytes(data['free_bytes'])} free)."
+            f"iPod: {format_count(len(tracks), 'track')} across "
+            f"{format_count(len(artist_counts), 'artist')}, "
+            f"{format_bytes(contents['used_bytes'])} used / "
+            f"{format_bytes(contents['capacity_bytes'])} total "
+            f"({format_bytes(contents['free_bytes'])} free)."
         )
         return render(text, data)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def list_ipod_tracks(
+    artist: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Optional artist filter (exact match). Omit to page through all tracks."
+            ),
+        ),
+    ] = None,
+    limit: Annotated[
+        int,
+        Field(description="Max tracks to return.", ge=1, le=200),
+    ] = 50,
+    offset: Annotated[
+        int,
+        Field(description="Pagination offset (0 = first page).", ge=0),
+    ] = 0,
+) -> list[dict]:
+    """Paginated list of tracks on the iPod, optionally filtered by artist.
+    Each track is the chat-friendly slice — artist, title, album, size in
+    bytes. For the full per-track payload, use the CLI.
+
+    When to use: the user asks for specific iPod tracks — "what Beatles
+    songs are on my iPod?", "show me the next batch", etc. Use after
+    `get_ipod_contents` to know the total count and top artists.
+
+    Requires the iPod to be mounted.
+    """
+    with open_session(autoscan=False) as (cfg, _db):
+        tracks = actions.list_ipod_tracks(
+            cfg, artist=artist, limit=limit, offset=offset
+        )
+        slim = [_summarize_track(t) for t in tracks]
+        if not slim:
+            text = (
+                f"No iPod tracks for '{artist}'."
+                if artist
+                else f"No iPod tracks at offset {offset}."
+            )
+            return render(text, slim)
+        text = (
+            f"{format_count(len(slim), 'track')}"
+            + (f" by {artist}" if artist else "")
+            + (f" (offset {offset})" if offset else "")
+            + "."
+        )
+        return render(text, slim)
 
 
 @mcp.tool(annotations=DESTRUCTIVE)

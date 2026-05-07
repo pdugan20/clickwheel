@@ -138,18 +138,20 @@ claude mcp add clickwheel clickwheel-mcp --scope user
 
 The server is read-mostly: list/search tools require no confirmation, while destructive ones (`delete_playlist`, `sync_playlist_to_ipod`) ask the client to confirm via MCP elicitation before doing anything. You can also pass `confirm=true` to skip the prompt for scripted use.
 
-| Tool                                                            | Kind     | What it does                                        |
-| --------------------------------------------------------------- | -------- | --------------------------------------------------- |
-| `library_stats`, `library_health`                               | read     | Library overview and setup probe                    |
-| `list_artists`, `list_albums_by_artist`, `list_tracks_by_album` | read     | Browse the library                                  |
-| `search_tracks`                                                 | read     | Substring search across artist/album/title          |
-| `list_playlists`, `get_playlist`                                | read     | Saved playlists                                     |
-| `get_ipod_contents`, `get_pending_scrobbles`                    | read     | iPod state                                          |
-| `create_playlist`, `update_playlist`                            | mutation | Build playlists from track paths                    |
-| `add_artist_to_playlist`, `remove_artist_from_playlist`         | mutation | Adjust by artist                                    |
-| `delete_playlist`                                               | mutation | Destructive — elicits confirmation                  |
-| `submit_scrobbles`                                              | mutation | Push pending plays to Last.fm (`dry_run` available) |
-| `sync_playlist_to_ipod`                                         | mutation | Destructive — elicits confirmation showing the diff |
+| Tool                                                            | Kind     | What it does                                                                          |
+| --------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------- |
+| `library_stats`, `library_health`                               | read     | Library overview and setup probe                                                      |
+| `list_artists`, `list_albums_by_artist`, `list_tracks_by_album` | read     | Browse the library                                                                    |
+| `search_tracks`                                                 | read     | Substring search across artist/album/title                                            |
+| `list_playlists`, `get_playlist`, `list_playlist_tracks`        | read     | Saved playlists (`get_playlist` is summary-only; use `list_playlist_tracks` to drill) |
+| `get_ipod_contents`, `list_ipod_tracks`                         | read     | iPod state (`get_ipod_contents` is summary-only; use `list_ipod_tracks` to drill)     |
+| `get_pending_scrobbles`                                         | read     | Cached iPod plays not yet sent to Last.fm                                             |
+| `create_playlist`, `update_playlist`                            | mutation | Build playlists from track paths                                                      |
+| `add_artist_to_playlist`, `remove_artist_from_playlist`         | mutation | Adjust by artist                                                                      |
+| `delete_playlist`                                               | mutation | Destructive — gated by client's Allow/Deny prompt                                     |
+| `submit_scrobbles`                                              | mutation | Push pending plays to Last.fm (`dry_run` available)                                   |
+| `sync_playlist_to_ipod`                                         | mutation | Destructive — gated by client's Allow/Deny prompt                                     |
+| `eject_ipod`                                                    | mutation | Safely unmount the iPod                                                               |
 
 Logging goes to stderr (stdout is reserved for the MCP wire protocol). Set `CLICKWHEEL_MCP_LOG_LEVEL=DEBUG` for verbose output.
 
