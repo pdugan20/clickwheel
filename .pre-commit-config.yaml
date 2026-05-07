@@ -54,6 +54,12 @@ repos:
         files: '^clickwheel/(?!output\.py).*\.py$'
         exclude: '^clickwheel/ipod/'
         types: [python]
+      - id: no-manual-version-bump
+        name: No manual version bumps (release-please owns __version__)
+        language: script
+        entry: scripts/no-manual-version-bump.sh
+        files: '^(clickwheel/__init__\.py|\.release-please-manifest\.json)$'
+        pass_filenames: false
 
   - repo: https://github.com/pre-commit/mirrors-prettier
     rev: v4.0.0-alpha.8
