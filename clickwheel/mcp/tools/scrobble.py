@@ -68,12 +68,13 @@ def submit_scrobbles(
     ~/.clickwheel/config.yaml). The CLI's `clickwheel scrobble --auth` runs
     one-time setup.
 
-    Returns include a `next_step_hint` — when submission succeeds, hints
-    that the iPod can be ejected.
-
     When to use: the user wants to update Last.fm with their iPod listening
     history. Don't run repeatedly in a session — once submitted, scrobbles
     are flagged and won't re-send.
+
+    After a successful submission, offer to eject the iPod. If submissions
+    failed, surface that count in plain language ("3 scrobbles couldn't
+    send right now — they'll retry next time").
     """
     with open_session() as (cfg, db):
         plays_status = actions.collect_ipod_plays(cfg, db)
@@ -86,7 +87,6 @@ def submit_scrobbles(
                 "newly_cached": plays_status["new_cached"],
                 "pending_total": len(pending),
                 "oldest_age_days": plays_status["oldest_age_days"],
-                "next_step_hint": None,
             }
             text = (
                 f"Dry run: {format_count(len(pending), 'scrobble')} ready, "
@@ -98,19 +98,14 @@ def submit_scrobbles(
         result = actions.submit_pending_scrobbles(cfg, db)
 
         if result.submitted > 0 and result.failed == 0:
-            next_hint = (
-                "Scrobbles sent successfully. Offer to call eject_ipod "
-                "before the user unplugs the device."
-            )
             text = (
                 f"Submitted {format_count(result.submitted, 'scrobble')} "
-                "to Last.fm. Call `eject_ipod` when ready to unplug."
+                "to Last.fm. Offer to eject the iPod when the user is "
+                "ready to unplug."
             )
         elif result.submitted == 0 and result.failed == 0:
-            next_hint = None
             text = "No scrobbles to submit."
         else:
-            next_hint = None
             text = (
                 f"Sent {result.submitted}, but {result.failed} failed. "
                 f"{result.remaining_pending} still pending — try again later."
@@ -122,6 +117,5 @@ def submit_scrobbles(
             "remaining_pending": result.remaining_pending,
             "newly_cached": plays_status["new_cached"],
             "plays_found_on_ipod": plays_status["plays_found"],
-            "next_step_hint": next_hint,
         }
         return render(text, data)

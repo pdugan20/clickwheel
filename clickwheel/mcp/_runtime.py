@@ -50,13 +50,14 @@ LINKING & RENDERING:
   status markers.
 
 WORKFLOWS:
-- After `sync_playlist_to_ipod` succeeds, the iTunesDB has just been
-  written; offer to call `eject_ipod` before the user unplugs.
+- After `sync_playlist_to_ipod` succeeds, offer to eject the iPod via
+  `eject_ipod` before the user unplugs it.
 - After `submit_scrobbles` finishes, similarly offer `eject_ipod`.
 - After `create_playlist` or `update_playlist`, the new playlist is
   ready to sync — offer `sync_playlist_to_ipod`.
-- If `sync_playlist_to_ipod` returns `db_write_ok=false`, the music
-  copied but the iTunesDB write failed; surface this to the user.
+- If a sync result reports `library_updated: false`, the music copied
+  but the iPod won't see the new tracks yet; surface this to the user
+  in plain language and suggest re-running the sync.
 
 SAFETY:
 - `delete_playlist` and `sync_playlist_to_ipod` are flagged destructive.
@@ -67,6 +68,14 @@ SAFETY:
   they need to allow or deny.
 - The CLI runs alongside this server with richer interactive UI; suggest
   it for complex flows (interactive picker, live sync progress).
+
+LANGUAGE:
+- Speak plainly. Don't mention internal jargon ("iTunesDB", "ArtworkDB",
+  "scan_meta", "missing_since", etc.) or response field names
+  (`library_updated`, `also_on_ipod`, etc.) directly to the user. Say
+  "the iPod's library", "your music", "tracks already on the iPod"
+  instead. Tool results carry these field names for your own reasoning;
+  translate them to natural language before quoting them back.
 """
 
 

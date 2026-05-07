@@ -125,7 +125,11 @@ class SyncResult:
     # lied) after a Phase 5 finding where the LLM correctly flagged the
     # contradiction with the "additive only" docstring.
     kept_in_place_count: int = 0
-    db_write_ok: bool = True
+    # Whether the iPod's library was successfully updated to reference the
+    # newly-copied tracks. False means the music files made it to the
+    # device but the iPod won't see them yet. Renamed from `db_write_ok`
+    # to keep user-facing copy free of the iTunesDB acronym.
+    library_updated: bool = True
 
 
 @dataclass
@@ -607,7 +611,7 @@ def sync_playlist(
     diff: Diff | None = None,
     on_event: Callable[[SyncEvent], None] | None = None,
 ) -> SyncResult:
-    """Copy tracks from a playlist to the iPod and rewrite iTunesDB.
+    """Copy tracks from a playlist to the iPod and update the iPod's library.
 
     Confirmation is the caller's job. This function actually performs the sync.
     Pass a pre-computed `diff` (e.g. from a preview) to avoid re-reading the
@@ -676,7 +680,7 @@ def sync_playlist(
         copied=copied,
         failed=failed,
         kept_in_place_count=len(diff.to_remove),
-        db_write_ok=db_ok,
+        library_updated=db_ok,
     )
 
 

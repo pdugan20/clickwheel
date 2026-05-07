@@ -128,30 +128,29 @@ def list_ipod_tracks(
 def sync_playlist_to_ipod(
     playlist: Annotated[str, Field(description="Saved playlist name to sync.")],
 ) -> dict:
-    """Permanently push a saved playlist to the iPod. Copies new tracks and
-    rewrites the iTunesDB. Tracks already on the iPod that aren't in the
-    playlist STAY on the iPod — this is an additive operation, never deletes.
+    """Push a saved playlist to the iPod. Copies new tracks and updates the
+    iPod's library so it sees them. Tracks already on the iPod that aren't
+    in the playlist stay where they are — sync is additive, never deletes.
 
-    Flagged `destructiveHint=true`, so MCP clients (Claude Code etc.) gate
-    this call with a native Allow/Deny prompt. Before invoking, summarize
-    the diff for the user — call `compute_diff`-equivalent context (e.g.
-    use `get_playlist` and `get_ipod_contents`) and tell them how many
-    tracks will be copied and how much space they'll use, so they can
-    Allow/Deny knowingly.
+    Flagged destructive, so MCP clients gate this call with a native
+    Allow/Deny prompt. Before invoking, summarize the diff for the user
+    (use `get_playlist` and `get_ipod_contents` for context): how many
+    tracks will be added, how much space they'll use. The user clicks
+    Allow knowing what's about to happen.
 
-    Requires the iPod to be mounted. Errors with InsufficientSpaceError if
-    the new tracks won't fit.
+    Requires the iPod to be mounted. Errors if the new tracks won't fit.
 
-    Returns a result dict including a `next_step_hint` field — when the
-    sync succeeds, that hint will tell you to call `eject_ipod`.
+    Talk to the user in plain language. Don't mention internal terms like
+    "iTunesDB" or field names like `library_updated`. Say things like
+    "the iPod's library was updated" or "your iPod is ready to unplug."
 
     When to use: the user says "sync my playlist", "push to the iPod",
     "load up the iPod".
 
-    After this: if `next_step_hint` is set, call `eject_ipod` (do confirm
-    with the user first since they may want to do something else with the
-    iPod before unplugging). If `db_write_ok=false`, the music copied but
-    the iTunesDB write failed — surface this to the user.
+    After a successful sync: offer to eject the iPod (call `eject_ipod`).
+    If the result reports `library_updated: false`, the music copied but
+    the iPod won't see it yet — tell the user that and suggest re-running
+    the sync or using the CLI for retry.
     """
     with open_session() as (cfg, db):
         diff = actions.compute_diff(cfg, db, playlist)
@@ -161,46 +160,35 @@ def sync_playlist_to_ipod(
                 "synced": False,
                 "reason": "iPod already matches this playlist.",
                 "playlist": playlist,
-                "next_step_hint": None,
             }
             return render(f"iPod already matches '{playlist}' — nothing to do.", data)
 
         result = actions.sync_playlist(cfg, db, playlist, diff=diff)
 
-        if result.db_write_ok:
-            next_hint = (
-                "Sync succeeded. Offer to call eject_ipod before the user "
-                "unplugs the device."
-            )
+        if result.library_updated:
             text = (
-                f"Synced '{playlist}': copied "
+                f"Synced '{playlist}': added "
                 f"{format_count(len(result.copied), 'track')} "
                 f"({format_bytes(diff.add_size_bytes)}). "
-                "Call `eject_ipod` when ready to unplug."
+                "Offer to eject the iPod when the user is ready to unplug."
             )
         else:
-            next_hint = (
-                "Music copied but iTunesDB write failed. Surface this to "
-                "the user — the iPod may not see the new tracks."
-            )
             text = (
-                f"Synced '{playlist}' but the iTunesDB write FAILED. "
-                f"Copied {format_count(len(result.copied), 'track')}, but "
-                "the iPod may not see them. Try the CLI's `clickwheel sync` "
-                "for retry support."
+                f"Synced '{playlist}', but the iPod's library wasn't "
+                f"fully updated. {format_count(len(result.copied), 'track')} "
+                "copied to the device, but the iPod may not see them yet. "
+                "Suggest the CLI (`clickwheel sync`) for retry support."
             )
 
         data = {
             "synced": True,
             "playlist": playlist,
-            "copied": len(result.copied),
+            "added": len(result.copied),
             "failed": len(result.failed),
             # Tracks already on the iPod that aren't in this playlist —
-            # kept in place; sync is additive. (Renamed from removed_count
-            # which used to lie about what it counted.)
-            "kept_in_place_count": result.kept_in_place_count,
-            "db_write_ok": result.db_write_ok,
-            "next_step_hint": next_hint,
+            # left alone; sync is additive.
+            "also_on_ipod": result.kept_in_place_count,
+            "library_updated": result.library_updated,
         }
         return render(text, data)
 

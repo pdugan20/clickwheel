@@ -715,20 +715,20 @@ def sync(
         for (artist, album), count in sorted(groups.items()):
             dim(f"  {artist} — {album} ({count} tracks)")
 
-    if result.db_write_ok:
-        success("iPod database updated.")
+    if result.library_updated:
+        success("iPod library updated.")
     else:
         warn(
-            "Couldn't update the iPod database. "
+            "Couldn't update the iPod's library. "
             "Your music was copied, but the iPod may not show it."
         )
-        if typer.confirm("Retry writing the iPod database?", default=True):
-            with spinner("Retrying iPod database write..."):
+        if typer.confirm("Retry updating the iPod library?", default=True):
+            with spinner("Retrying iPod library update..."):
                 retry_ok = actions.retry_ipod_db_write(cfg, result.copied)
             if retry_ok:
-                success("iPod database updated on retry.")
+                success("iPod library updated on retry.")
             else:
-                error("Still couldn't update iPod database.")
+                error("Still couldn't update the iPod library.")
 
     if result.kept_in_place_count:
         warn(
