@@ -9,6 +9,7 @@ from tqdm import tqdm
 
 from clickwheel import __version__, actions
 from clickwheel.actions import (
+    EjectFailedError,
     InsufficientSpaceError,
     IpodNotFoundError,
     LastfmNotConfiguredError,
@@ -691,27 +692,17 @@ def ls() -> None:
 def eject() -> None:
     """Safely disconnect the iPod."""
     _check_macos()
-    import subprocess
-
     cfg = load_config()
     try:
-        actions.require_ipod(cfg)
+        with spinner("Ejecting iPod..."):
+            actions.eject_ipod(cfg)
     except IpodNotFoundError as exc:
         error(str(exc))
         raise typer.Exit(1) from exc
-
-    with spinner("Ejecting iPod..."):
-        result = subprocess.run(
-            ["diskutil", "eject", str(cfg.ipod_mount)],
-            capture_output=True,
-            text=True,
-        )
-
-    if result.returncode == 0:
-        confirm("iPod ejected. Safe to unplug.")
-    else:
-        error(result.stderr.strip())
-        raise typer.Exit(1)
+    except EjectFailedError as exc:
+        error(str(exc))
+        raise typer.Exit(1) from exc
+    confirm("iPod ejected. Safe to unplug.")
 
 
 @app.command()

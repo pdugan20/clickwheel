@@ -45,6 +45,10 @@ class InsufficientSpaceError(ClickwheelError):
     """iPod doesn't have enough free space for the requested operation."""
 
 
+class EjectFailedError(ClickwheelError):
+    """`diskutil eject` returned a non-zero exit code."""
+
+
 @dataclass
 class ScanResult:
     total: int = 0
@@ -558,6 +562,27 @@ def retry_ipod_db_write(cfg: Config, copied: list[dict]) -> bool:
     from clickwheel.ipod.sync import write_ipod_db
 
     return write_ipod_db(cfg.ipod_mount, copied)
+
+
+def eject_ipod(cfg: Config) -> dict:
+    """Safely unmount the iPod via `diskutil eject`.
+
+    Verifies the iPod is mounted first. Returns a status dict with the mount
+    path. Raises IpodNotFoundError if the iPod isn't mounted, or
+    EjectFailedError if diskutil exits non-zero.
+    """
+    import subprocess
+
+    require_ipod(cfg)
+
+    result = subprocess.run(
+        ["diskutil", "eject", str(cfg.ipod_mount)],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise EjectFailedError(result.stderr.strip() or "diskutil eject failed")
+    return {"ejected": True, "mount": str(cfg.ipod_mount)}
 
 
 # ---------------------------------------------------------------------------

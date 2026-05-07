@@ -225,9 +225,51 @@ def test_tools_registered_with_fastmcp():
         "remove_artist_from_playlist",
         "submit_scrobbles",
         "sync_playlist_to_ipod",
+        "eject_ipod",
     }
     registered = {tool.name for tool in mcp._tool_manager.list_tools()}
     assert expected <= registered
+
+
+def test_destructive_tools_have_destructive_annotation():
+    """delete_playlist and sync_playlist_to_ipod should be flagged
+    destructiveHint=True so MCP clients can gate auto-approval."""
+    from clickwheel.mcp.server import mcp
+
+    by_name = {t.name: t for t in mcp._tool_manager.list_tools()}
+    for name in ("delete_playlist", "sync_playlist_to_ipod"):
+        ann = by_name[name].annotations
+        assert ann is not None and ann.destructiveHint is True, name
+
+
+def test_read_tools_have_read_only_annotation():
+    """All read tools should be flagged readOnlyHint=True."""
+    from clickwheel.mcp.server import mcp
+
+    by_name = {t.name: t for t in mcp._tool_manager.list_tools()}
+    for name in (
+        "library_stats",
+        "list_artists",
+        "list_albums_by_artist",
+        "list_tracks_by_album",
+        "search_tracks",
+        "library_health",
+        "list_playlists",
+        "get_playlist",
+        "get_ipod_contents",
+        "get_pending_scrobbles",
+    ):
+        ann = by_name[name].annotations
+        assert ann is not None and ann.readOnlyHint is True, name
+
+
+def test_eject_ipod_no_ipod(tmp_path, monkeypatch):
+    from clickwheel.mcp.tools.ipod import eject_ipod
+
+    _setup(tmp_path, monkeypatch)
+
+    with pytest.raises(IpodNotFoundError):
+        eject_ipod()
 
 
 # ---------------------------------------------------------------------------

@@ -25,7 +25,7 @@ def _setup_logging() -> None:
     level = getattr(logging, level_name, logging.WARNING)
     logging.basicConfig(
         level=level,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        format="[clickwheel-mcp] %(asctime)s [%(levelname)s] %(name)s: %(message)s",
         stream=sys.stderr,
         force=True,
     )

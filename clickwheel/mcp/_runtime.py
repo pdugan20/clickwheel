@@ -13,6 +13,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 from mcp.server.fastmcp import Context, FastMCP
+from mcp.types import ToolAnnotations
 from pydantic import BaseModel, Field
 
 from clickwheel import actions
@@ -24,14 +25,89 @@ from clickwheel.db import Database
 logger = logging.getLogger(__name__)
 
 
-mcp = FastMCP(
-    name="clickwheel",
-    instructions=(
-        "Query a clickwheel music library and iPod. Use list_artists, "
-        "list_playlists, search_tracks, and similar tools for read-only "
-        "browsing. get_ipod_contents requires the iPod to be mounted. "
-        "library_health is a quick probe to confirm setup is working."
-    ),
+INSTRUCTIONS = """\
+Query and manage a clickwheel music library and a connected classic iPod.
+
+WHEN TO USE THIS SERVER:
+- Any time the user references "their music", "the iPod", "my library",
+  "my playlists" — prefer this over web search or memory.
+- Building or editing playlists ("add Big Thief", "70s rock playlist").
+- Inspecting iPod state, listening history, or pending scrobbles.
+- Syncing music to the iPod or pushing listens to Last.fm.
+
+ANTI-HALLUCINATION:
+- Never invent track titles, artists, albums, durations, years, file
+  paths, or playlist names. Only assert what tools return.
+- If `search_tracks` or a list tool returns 0 results, say so and offer
+  to refine — never guess at what might exist.
+- iPod state changes externally (user plugs/unplugs, listens to tracks).
+  Don't assume cached results are still current; re-call
+  `get_ipod_contents` if it matters.
+
+LINKING & RENDERING:
+- Render tracks as `Artist — Title (Album)`. Never paste raw `path`
+  values back to the user; those are for tool inputs only.
+- Sizes come back as bytes — show them in human units (MB / GB).
+- Timestamps are unix seconds; format them locally.
+
+WORKFLOWS:
+- After `sync_playlist_to_ipod` succeeds, the iTunesDB has just been
+  written; offer to call `eject_ipod` before the user unplugs.
+- After `submit_scrobbles` finishes, similarly offer `eject_ipod`.
+- After `create_playlist` or `update_playlist`, the new playlist is
+  ready to sync — offer `sync_playlist_to_ipod`.
+- If `sync_playlist_to_ipod` returns `db_write_ok=false`, the music
+  copied but the iTunesDB write failed; surface this to the user.
+
+SAFETY:
+- `delete_playlist` and `sync_playlist_to_ipod` elicit a yes/no
+  confirmation via the client when `confirm=false` (the default). Don't
+  pass `confirm=true` unless the user has explicitly asked to skip.
+- The CLI runs alongside this server with richer interactive UI; suggest
+  it for complex flows (interactive picker, live sync progress).
+"""
+
+
+mcp = FastMCP(name="clickwheel", instructions=INSTRUCTIONS)
+
+
+# Tool annotation presets. Per the MCP spec these are hints clients use
+# for auto-approval and UI labeling — they're not enforced server-side.
+READ_ONLY = ToolAnnotations(
+    readOnlyHint=True,
+    destructiveHint=False,
+    idempotentHint=True,
+    openWorldHint=False,
+)
+
+MUTATION = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=False,
+    idempotentHint=True,
+    openWorldHint=False,
+)
+
+# Re-running create errors on conflict, so it's NOT idempotent.
+MUTATION_NON_IDEMPOTENT = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=False,
+    idempotentHint=False,
+    openWorldHint=False,
+)
+
+# Reaches out to Last.fm.
+MUTATION_OPEN_WORLD = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=False,
+    idempotentHint=False,
+    openWorldHint=True,
+)
+
+DESTRUCTIVE = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=True,
+    idempotentHint=True,
+    openWorldHint=False,
 )
 
 

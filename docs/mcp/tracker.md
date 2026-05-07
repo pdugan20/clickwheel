@@ -78,14 +78,15 @@ Tier-1 + Tier-2 + selected Tier-3 patterns sourced from a review of the rewind M
 
 ### Phase 4.5b — `eject_ipod` + richer tool descriptions (`feat:` commit)
 
-- ☐ Extract `actions.eject_ipod()` from `cli.eject` (subprocess + `diskutil eject`)
-- ☐ Add `eject_ipod` MCP tool
-- ☐ Add tool annotations: `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`
-- ☐ Beef up server `instructions`: anti-hallucination, linking conventions, workflow hints (sync→eject, scrobble→eject, create→sync)
-- ☐ Per-field `Annotated[..., Field(description=...)]` on every tool param
-- ☐ Tool description chaining hints (every tool says when to use it + what to call next)
-- ☐ Log prefix `[clickwheel-mcp]` in formatter
-- ☐ `next_step_hint` field on `sync_playlist_to_ipod` and `submit_scrobbles` results
+- ☒ Extract `actions.eject_ipod()` from `cli.eject` (`diskutil eject` subprocess); add `EjectFailedError`
+- ☒ Add `eject_ipod` MCP tool — total now 18 tools
+- ☒ Add tool annotation presets in `_runtime.py`: `READ_ONLY`, `MUTATION`, `MUTATION_NON_IDEMPOTENT`, `MUTATION_OPEN_WORLD`, `DESTRUCTIVE`. Apply to every tool.
+- ☒ Beef up server `instructions` (now ~1.6KB): anti-hallucination, linking conventions, workflow hints, safety reminders
+- ☒ Per-field `Annotated[..., Field(description=...)]` on every tool param
+- ☒ Tool descriptions follow rewind's "When to use / After this" structure
+- ☒ Log prefix `[clickwheel-mcp]` in formatter
+- ☒ `next_step_hint` field on `sync_playlist_to_ipod` and `submit_scrobbles` results — explicit nudge to chain `eject_ipod`
+- ☒ Tests: `test_eject_ipod_no_ipod`, `test_destructive_tools_have_destructive_annotation`, `test_read_tools_have_read_only_annotation` — 122 passing
 
 ### Phase 4.5c — Dual-content responses (`feat:` commit)
 
