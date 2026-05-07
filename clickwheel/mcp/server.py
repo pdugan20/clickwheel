@@ -13,7 +13,12 @@ import os
 import sys
 
 from clickwheel.actions import ClickwheelError
-from clickwheel.mcp import tools as _tools  # noqa: F401  side-effect: registers tools
+from clickwheel.mcp import (
+    prompts as _prompts,  # noqa: F401  side-effect: registers prompts
+)
+from clickwheel.mcp import (
+    tools as _tools,  # noqa: F401  side-effect: registers tools
+)
 from clickwheel.mcp._runtime import mcp
 
 logger = logging.getLogger(__name__)

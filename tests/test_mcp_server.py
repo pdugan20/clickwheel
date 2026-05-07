@@ -327,6 +327,34 @@ def test_eject_ipod_no_ipod(tmp_path, monkeypatch):
         eject_ipod()
 
 
+def test_build_playlist_prompt_registered():
+    """The build_playlist prompt should register on the FastMCP instance."""
+    from clickwheel.mcp.server import mcp
+
+    names = {p.name for p in mcp._prompt_manager.list_prompts()}
+    assert "build_playlist" in names
+
+
+def test_build_playlist_prompt_body():
+    """The prompt body should template in user-provided args and include
+    the anti-hallucination + tool-chaining rules."""
+    from clickwheel.mcp.prompts import build_playlist
+
+    messages = build_playlist(vibe="late-night jazz", target_minutes=45, name="quiet")
+    assert len(messages) == 1
+    assert messages[0]["role"] == "user"
+    body = messages[0]["content"]
+    assert "late-night jazz" in body
+    assert "45 minutes" in body
+    assert "'quiet'" in body
+    # Key behavioral rules surface in the prompt.
+    assert "library_stats" in body
+    assert "search_tracks" in body
+    assert "create_playlist" in body
+    assert "sync_playlist_to_ipod" in body
+    assert "NEVER invent" in body or "Don't invent" in body or "never" in body.lower()
+
+
 # ---------------------------------------------------------------------------
 # Mutation tools
 # ---------------------------------------------------------------------------

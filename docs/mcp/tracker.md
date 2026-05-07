@@ -98,8 +98,10 @@ Tier-1 + Tier-2 + selected Tier-3 patterns sourced from a review of the rewind M
 
 ### Phase 4.5d — `build-playlist` MCP prompt (`feat:` commit)
 
-- ☐ `clickwheel/mcp/prompts.py`: one server-defined prompt (`build_playlist`) encoding anti-hallucination + tool-chaining rules
-- ☐ Register via `@mcp.prompt()`
+- ☒ `clickwheel/mcp/prompts.py`: one server-defined prompt (`build_playlist`) with `vibe`, `target_minutes`, `name` args. Encodes anti-hallucination + the canonical search → list → create_playlist → sync chain.
+- ☒ Registered via `@mcp.prompt()` and wired through `server.py` (side-effect import alongside tools).
+- ☒ Tests: `test_build_playlist_prompt_registered`, `test_build_playlist_prompt_body` — 126 passing.
+- ☒ Live protocol smoke: prompt visible in `prompts/list`, `get_prompt` returns templated body.
 
 ## Phase 5 — Manual iPod testing
 
