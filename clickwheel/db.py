@@ -112,8 +112,24 @@ class Database:
         self.conn.execute("DELETE FROM tracks")
         self.conn.commit()
 
+    # ---------------------------------------------------------------------
+    # Library queries
+    #
+    # Contract: queries that build NEW state (artist/album/track listings,
+    # stats, "what's available to add to a playlist") filter
+    # `missing_since IS NULL` — they reflect playable music. Queries that
+    # report EXISTING playlist state (`get_playlist`, `list_playlists`,
+    # `get_playlist_artists`, `get_playlist_size`) preserve dead refs so
+    # users can see them and run `heal_playlist`.
+    # ---------------------------------------------------------------------
+
     def get_stats(self) -> dict:
-        """Return summary statistics about the indexed library."""
+        """Return summary statistics about the playable library.
+
+        Excludes tracks flagged missing on disk (set by the last scan).
+        For total-with-missing counts and missing-track stats, see
+        `actions.library_health`.
+        """
         row = self.conn.execute("""
             SELECT
                 COUNT(*) as total_tracks,
@@ -130,21 +146,24 @@ class Database:
                 SUM(CASE WHEN artist IS NULL OR artist = ''
                     THEN 1 ELSE 0 END) as missing_artist
             FROM tracks
+            WHERE missing_since IS NULL
         """).fetchone()
         return dict(row)
 
     def get_format_breakdown(self) -> list[dict]:
-        """Return track counts grouped by format."""
+        """Return track counts grouped by format. Playable tracks only."""
         rows = self.conn.execute("""
             SELECT format, COUNT(*) as count, SUM(file_size) as total_bytes
             FROM tracks
+            WHERE missing_since IS NULL
             GROUP BY format
             ORDER BY count DESC
         """).fetchall()
         return [dict(r) for r in rows]
 
     def get_artists(self) -> list[dict]:
-        """Return all artists with track/album counts and total size."""
+        """Return all artists with track/album counts and total size.
+        Playable tracks only — artists with all-missing tracks disappear."""
         rows = self.conn.execute("""
             SELECT
                 COALESCE(album_artist, artist) as name,
@@ -152,14 +171,15 @@ class Database:
                 COUNT(DISTINCT album) as albums,
                 SUM(file_size) as total_bytes
             FROM tracks
-            WHERE format != 'flac'
+            WHERE format != 'flac' AND missing_since IS NULL
             GROUP BY name
             ORDER BY name COLLATE NOCASE
         """).fetchall()
         return [dict(r) for r in rows]
 
     def get_albums_by_artist(self, artist: str) -> list[dict]:
-        """Return albums for a given artist with track counts and size."""
+        """Return albums for a given artist with track counts and size.
+        Playable tracks only — albums with all-missing tracks disappear."""
         rows = self.conn.execute(
             """
             SELECT
@@ -168,7 +188,9 @@ class Database:
                 SUM(file_size) as total_bytes,
                 MIN(year) as year
             FROM tracks
-            WHERE (album_artist = ? OR artist = ?) AND format != 'flac'
+            WHERE (album_artist = ? OR artist = ?)
+              AND format != 'flac'
+              AND missing_since IS NULL
             GROUP BY album
             ORDER BY year, album COLLATE NOCASE
         """,
@@ -177,11 +199,15 @@ class Database:
         return [dict(r) for r in rows]
 
     def get_tracks_by_album(self, artist: str, album: str) -> list[dict]:
-        """Return all tracks for a given artist/album."""
+        """Return all tracks for a given artist/album. Playable tracks only.
+        Used by `select` and `add_artist_to_playlist` flows; filtering here
+        prevents dead refs from being added to new playlists."""
         rows = self.conn.execute(
             """
             SELECT * FROM tracks
-            WHERE (album_artist = ? OR artist = ?) AND album = ?
+            WHERE (album_artist = ? OR artist = ?)
+              AND album = ?
+              AND missing_since IS NULL
             ORDER BY disc_number, track_number
         """,
             (artist, artist, album),
@@ -334,11 +360,13 @@ class Database:
         tracks = self.conn.execute(
             """
             SELECT id FROM tracks
-            WHERE (album_artist = ? OR artist = ?) AND format != 'flac'
-            AND id NOT IN (
+            WHERE (album_artist = ? OR artist = ?)
+              AND format != 'flac'
+              AND missing_since IS NULL
+              AND id NOT IN (
                 SELECT track_id FROM playlist_tracks
                 WHERE playlist_id = ?
-            )
+              )
             """,
             (artist, artist, pid),
         ).fetchall()
