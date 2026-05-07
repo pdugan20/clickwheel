@@ -11,13 +11,13 @@ permissions:
 
 jobs:
   release-please:
+    name: Release Please
     runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@v4
-        id: release
         with:
-          # Uses a PAT so the created tag triggers the publish.yml workflow.
-          # GITHUB_TOKEN events do not trigger downstream workflows.
-          # Create a fine-grained PAT with contents:write + pull-requests:write
-          # and store it as the RELEASE_PLEASE_TOKEN secret.
+          # PAT so the tag push triggers publish.yml. GITHUB_TOKEN doesn't
+          # cascade into downstream workflows.
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
