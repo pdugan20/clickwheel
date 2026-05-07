@@ -23,7 +23,10 @@ from clickwheel.mcp._runtime import mcp
         "theme, using only tracks the clickwheel library actually has. "
         "Encodes the canonical search → list → create_playlist → sync flow "
         "and the anti-hallucination rule that no track may be named unless "
-        "a tool returned it."
+        "a tool returned it. Best invoked conversationally (e.g. 'build me "
+        "a 45-minute late-night indie folk playlist named chill') — "
+        "Claude Code's slash-command parser splits args on whitespace "
+        "without honoring quotes, so multi-word values fail there."
     ),
 )
 def build_playlist(

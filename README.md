@@ -62,7 +62,7 @@ clickwheel reads from `~/.clickwheel/config.yaml`:
 music_dir: /Volumes/Music/Library
 ipod_capacity_gb: 64 # defaults to 64
 auto_scan: true # auto-check for library changes (default: true)
-auto_scan_staleness_minutes: 30 # how often to re-check (default: 30)
+auto_scan_staleness_minutes: 1440 # how often to re-check (default: 1440 = 24h)
 lastfm_api_key: your_key # last.fm/api/account/create
 lastfm_api_secret: your_secret
 lastfm_username: your_username
@@ -138,7 +138,23 @@ claude mcp add clickwheel clickwheel-mcp --scope user
 
 (Or add `{ "mcpServers": { "clickwheel": { "command": "clickwheel-mcp" } } }` to a project's `.mcp.json`.)
 
-The server is read-mostly: list/search tools require no confirmation, while destructive ones (`delete_playlist`, `sync_playlist_to_ipod`) ask the client to confirm via MCP elicitation before doing anything. You can also pass `confirm=true` to skip the prompt for scripted use.
+For Claude Desktop, edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) and add:
+
+```json
+{
+  "mcpServers": {
+    "clickwheel": {
+      "command": "/Users/YOU/.local/bin/clickwheel-mcp"
+    }
+  }
+}
+```
+
+Use the absolute path `pipx` printed during install — Desktop doesn't always inherit your shell's `PATH`. Quit and relaunch Desktop after editing.
+
+> **Dev install note:** if you're running clickwheel from a clone inside `~/Documents/`, Claude Desktop's sandbox will refuse to read the in-tree venv's `pyvenv.cfg` (macOS applies a `com.apple.provenance` xattr to files in `Documents`). Either install with `pipx install --editable .` so the venv lives in `~/.local/pipx/`, or grant Claude Desktop access to your Documents folder under System Settings → Privacy & Security → Files & Folders.
+
+The server is read-mostly: list/search tools require no confirmation, while destructive ones (`delete_playlist`, `sync_playlist_to_ipod`) carry the MCP `destructiveHint=true` annotation, so compliant clients (Claude Code, Claude Desktop) gate the call behind their native Allow/Deny prompt.
 
 | Tool                                                            | Kind     | What it does                                                                          |
 | --------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------- |
