@@ -200,7 +200,9 @@ class Confirm(BaseModel):
     """Schema for a yes/no elicitation prompt."""
 
     confirm: bool = Field(
-        description="Confirm the action. Set false to cancel.",
+        description=(
+            "Check this box and click Accept to proceed. Click Decline to cancel."
+        ),
     )
 
 
