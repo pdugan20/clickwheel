@@ -1,83 +1,146 @@
 # MCP manual test plan
 
-End-to-end manual test scenarios run against the user's real iPod (which already has content on it). Run this in Phase 5 after Phase 4 is shipped.
+End-to-end manual tests run from a chat client (Claude Code primarily; Claude Desktop as a secondary pass) against the user's real iPod and library. Walk this top-to-bottom in Phase 5; record findings under "Findings" at the bottom.
 
-Update this list before testing — Pat to mark up missing scenarios or unrealistic assumptions.
+The MCP surface today is **18 tools + 1 prompt**:
 
-## Setup
+- Read (10): `library_stats`, `library_health`, `list_artists`, `list_albums_by_artist`, `list_tracks_by_album`, `search_tracks`, `list_playlists`, `get_playlist`, `get_ipod_contents`, `get_pending_scrobbles`
+- Mutation (8): `create_playlist`, `update_playlist`, `delete_playlist`, `add_artist_to_playlist`, `remove_artist_from_playlist`, `submit_scrobbles`, `sync_playlist_to_ipod`, `eject_ipod`
+- Prompt (1): `build_playlist`
 
-- [ ] `pipx inject clickwheel 'clickwheel[mcp]'` succeeds
-- [ ] `clickwheel-mcp --help` (or equivalent) confirms binary on PATH
-- [ ] Register with Claude Code via `claude mcp add` (use whichever scope works — see research.md re: 2.1.122 bug)
-- [ ] In a fresh Claude Code session, ask "what tools does the clickwheel MCP expose?" — all 10 (or 17 in Phase 3) tools appear
+## 0. Setup
 
-## Read-only scenarios (Phase 2)
+- [ ] `pip install -e '.[mcp]'` (dev) **or** `pipx inject clickwheel 'clickwheel[mcp]'` (installed) succeeds
+- [ ] `clickwheel-mcp` (or `python -m clickwheel.mcp`) starts without errors
+- [ ] `claude mcp add --scope user clickwheel <abs path or 'clickwheel-mcp'>` registers the server
+- [ ] `claude mcp list` shows `clickwheel: ... ✓ Connected`
+- [ ] In a fresh Claude Code session: ask "what tools does the clickwheel MCP expose?" — all 18 tools + the `build_playlist` prompt appear
+
+## 1. Read-only tools
 
 ### Library inspection
 
-- [ ] "What's in my library?" → `library_stats` returns track count and format breakdown
-- [ ] "Show me my top 20 artists by track count" → `list_artists` returns sorted list
-- [ ] "What albums do I have by [artist]?" → `list_albums_by_artist`
-- [ ] "Search for tracks with 'love' in the title" → `search_tracks`
-- [ ] "Are there any missing files in my library?" → `library_health` reports `missing_tracks`
+- [ ] "What's in my library?" → `library_stats` returns track/artist/album counts; **text summary** reads naturally (e.g. "Library: 12,049 tracks, 734 artists, 803 albums (88.9 GB, 759 hours)")
+- [ ] "Show me my artists" → `list_artists` returns alphabetical list
+- [ ] "Cap at 50" → `list_artists(limit=50)` honors the limit; text says "(truncated from 734)"
+- [ ] "What albums do I have by Big Thief?" → `list_albums_by_artist` returns the discography with year span in the text
+- [ ] "What's on the album Two Hands?" → `list_tracks_by_album` returns ordered tracks; text shows total runtime
+- [ ] "Search for tracks with 'love'" → `search_tracks` returns matches
+- [ ] **Negative result test**: search for a guaranteed-no-match query like "zzzqqq" → tool returns `[]` AND text says "No tracks match …"
+- [ ] **Case-sensitivity guard**: ask for albums by an artist with the wrong capitalization → tool returns `[]` AND text says "Names are case-sensitive — use search_tracks for a fuzzy match"
 
 ### Playlist inspection
 
-- [ ] "List my saved playlists" → `list_playlists` matches output of `clickwheel playlist`
-- [ ] "What's in my [playlist name] playlist?" → `get_playlist` returns full track list
-- [ ] "Which artists are in [playlist]?" → derived from `get_playlist`
+- [ ] "List my saved playlists" → `list_playlists` matches `clickwheel playlist` output
+- [ ] "Show me what's in the 'ipod' playlist" → `get_playlist` returns track list, artist breakdown, total size
+- [ ] "Which artists are in 'ipod'?" → derived from `get_playlist.artists`
+- [ ] **Empty case**: ask about a playlist that doesn't exist → `PlaylistNotFoundError` surfaced clearly
 
-### iPod inspection (requires iPod mounted)
+### iPod inspection (iPod mounted)
 
-- [ ] iPod connected → "What's on my iPod right now?" → `get_ipod_contents` returns existing content correctly
-- [ ] iPod connected → "How full is the iPod?" → capacity/used reflected accurately
-- [ ] iPod disconnected → tool returns clear error ("iPod not mounted") rather than crashing
+- [ ] "What's on my iPod right now?" → `get_ipod_contents` returns the existing content correctly
+- [ ] "How full is the iPod?" → capacity / used / free in the text summary
+- [ ] **Disconnected case**: unplug the iPod, repeat → `IpodNotFoundError` with clear message
 
 ### Scrobble inspection
 
-- [ ] "Any pending scrobbles?" → `get_pending_scrobbles` returns cached plays
-- [ ] No pending scrobbles → returns empty list, no error
+- [ ] "Any pending scrobbles?" → `get_pending_scrobbles` returns cached plays (or empty + helpful text)
+- [ ] iPod disconnected and scrobble cache empty → empty list, no error
 
-### Autoscan
+### Library health
 
-- [ ] After modifying a file in the library, a tool call triggers autoscan (configurable via `auto_scan_staleness_minutes`)
-- [ ] `--no-scan` equivalent: tool calls don't autoscan if config disables it (or env var override)
+- [ ] "Is my clickwheel library OK?" → `library_health` reports `library_dir_exists`, `total_tracks`, `missing_tracks`, last scan age
+- [ ] **Stale library**: rename the music directory, ask again → text flags "music_dir … doesn't exist"
 
-## Mutation scenarios (Phase 3)
+## 2. Mutation tools
 
-### Playlist mutations
+### Playlist mutations (no iPod required)
 
-- [ ] "Create a playlist called 'test-mcp' with all tracks by [artist]" → `create_playlist` succeeds
-- [ ] Re-running same create → returns clear error suggesting `update_playlist`
-- [ ] "Add [artist 2] to test-mcp" → `add_artist_to_playlist` returns correct add count
-- [ ] "Remove [artist] from test-mcp" → `remove_artist_from_playlist` returns correct remove count
-- [ ] "Delete test-mcp" without confirmation → server elicits confirmation, LLM relays to user
-- [ ] User declines confirmation → tool returns `{deleted: false, reason: "user declined"}`, no DB change
-- [ ] User accepts → playlist is deleted; `list_playlists` no longer shows it
+- [ ] "Create a playlist called 'test-mcp' with all tracks by [artist X]" → Claude likely chains `list_albums_by_artist` → `list_tracks_by_album` → `create_playlist`. End state: new playlist exists.
+- [ ] **Duplicate guard**: re-run same create → `PlaylistAlreadyExistsError`; LLM offers `update_playlist`
+- [ ] "Replace 'test-mcp' with [artist Y]'s catalog" → `update_playlist`, `replaced: true`
+- [ ] "Add [artist Z] to 'test-mcp'" → `add_artist_to_playlist`, count > 0
+- [ ] "Remove [artist Y] from 'test-mcp'" → `remove_artist_from_playlist`, count > 0
+- [ ] "Delete 'test-mcp'" — Claude triggers elicitation. Decline once → playlist still exists. Accept → playlist gone, `list_playlists` confirms.
 
 ### Scrobble submission
 
-- [ ] Pending scrobbles present, Last.fm configured → `submit_scrobbles` submits, count matches what was pending
-- [ ] Pending scrobbles, Last.fm NOT configured → clear error pointing to `clickwheel scrobble --auth`
-- [ ] `dry_run=true` → no submission, count of what _would_ submit returned
+- [ ] Pending scrobbles present, Last.fm configured → `submit_scrobbles` submits; **`next_step_hint` field** in the result tells Claude to offer `eject_ipod`
+- [ ] `dry_run=true` → preview counts only, nothing submitted
+- [ ] Last.fm NOT configured → `LastfmNotConfiguredError` pointing to `clickwheel scrobble --auth`
 
-### Sync (the scary one)
+### Sync (the scary one — iPod connected)
 
-- [ ] iPod connected, target playlist exists → `sync_playlist_to_ipod` elicits confirmation, then runs
-- [ ] Diff is shown to user before sync (via elicitation payload or LLM-formatted summary)
-- [ ] Existing iPod content is preserved correctly (i.e. tracks not in target playlist that were already on iPod — confirm sync semantics match `clickwheel sync`)
-- [ ] iPod disconnected → clear error, no partial state
-- [ ] After sync, `get_ipod_contents` reflects new state
-- [ ] `clickwheel ls` (CLI) and `get_ipod_contents` (MCP) report identical contents post-sync — sanity check that we didn't fork the read paths
+- [ ] Pre-flight: `clickwheel ls` and `get_ipod_contents` report identical contents (sanity check)
+- [ ] "Sync 'ipod' to my iPod" → Claude calls `sync_playlist_to_ipod(playlist='ipod')`, server elicits confirmation showing "+N tracks (X MB), N tracks won't be removed"
+- [ ] **Decline path**: decline the elicitation → `synced: false, reason: "user declined"`; iPod state unchanged
+- [ ] **Accept path**: accept → tool runs; result includes `next_step_hint` ≈ "Offer to call eject_ipod"
+- [ ] Existing iPod tracks NOT in the playlist are preserved (additive semantics — sanity check after the sync)
+- [ ] After sync, `get_ipod_contents` reflects the new state; `clickwheel ls` matches
+- [ ] **Disconnected case**: pull the iPod cable, retry → clear `IpodNotFoundError`, no partial state
+- [ ] **Already-in-sync case**: re-run sync immediately → "iPod already matches 'ipod' — nothing to do"
 
-## Cross-cutting
+### Eject
 
-- [ ] All tools handle a missing config file gracefully (clear error, not stack trace)
-- [ ] All tools handle an empty DB (fresh install, never scanned) gracefully
-- [ ] Server logs to stderr, never stdout (would corrupt MCP protocol stream)
+- [ ] After a successful sync, Claude proactively offers `eject_ipod` (driven by the `next_step_hint`)
+- [ ] "Yes, eject" → `eject_ipod` succeeds; iPod is unmounted; `get_ipod_contents` would now error
+- [ ] **Already-ejected case**: re-run `eject_ipod` → `IpodNotFoundError` (the gentle "no iPod mounted" message)
+
+## 3. Build-playlist prompt
+
+This is a slash-command in the client (`/build_playlist` in Claude Code; available in the Desktop prompt menu).
+
+- [ ] Prompt is discoverable in the client's slash-command picker
+- [ ] Invoking with `vibe="late-night jazz"`, `target_minutes=45`, `name="quiet"` seeds the conversation with the templated body
+- [ ] Claude follows the steps: starts with `library_stats`, runs multiple `search_tracks`, drills in with `list_albums_by_artist`/`list_tracks_by_album`, ends with `create_playlist`
+- [ ] **Anti-hallucination check**: Claude does NOT invent any track titles. Every track in the final playlist appears in a tool result earlier in the chat.
+- [ ] Final output renders tracks as `Artist — Title (Album)` (per server `instructions`), never as raw paths
+- [ ] Claude offers `sync_playlist_to_ipod` as the natural next step
+
+## 4. Cross-cutting
+
+- [ ] Server logs to stderr only — `~/.clickwheel/clickwheel-mcp.log` (if you redirect) or `claude mcp inspect clickwheel` shows clean output, no MCP protocol stream corruption
+- [ ] Tools handle a missing config file gracefully (clear error, not stack trace) — to test, temporarily rename `~/.clickwheel/config.yaml`
+- [ ] Tools handle an empty DB gracefully (fresh install, never scanned) — `library_stats` returns "Library is empty — run `clickwheel scan`"
+- [ ] Concurrent CLI use (`clickwheel scan` running while a chat session is calling MCP tools) doesn't deadlock SQLite (WAL mode should make this fine but worth verifying once)
 - [ ] Killing Claude Code mid-tool-call doesn't leave the DB in a corrupt state
-- [ ] Concurrent CLI use (`clickwheel scan` running while MCP server is also up) doesn't deadlock SQLite
+
+## 5. Claude Desktop pass (Mac)
+
+The same `clickwheel-mcp` binary runs in Claude Desktop. Register by editing
+`~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "clickwheel": {
+      "command": "/Users/patrickdugan/Documents/Github/clickwheel/.venv/bin/clickwheel-mcp"
+    }
+  }
+}
+```
+
+Quit and relaunch Claude Desktop. Then a smaller pass to confirm UX:
+
+- [ ] Tools and the `build_playlist` prompt show up in the Desktop UI
+- [ ] Read tools work (`library_stats`, `list_playlists`)
+- [ ] Tool descriptions render in Desktop's tool inspector
+- [ ] Text summaries (the bit we built in 4.5c) display naturally in Desktop's tool-result UI rather than just JSON
+- [ ] Elicitation prompts surface as a Desktop dialog (not a bare API error) for `delete_playlist` and `sync_playlist_to_ipod`
+- [ ] One end-to-end sync from Desktop → eject
+
+Desktop and Claude Code share the protocol, so failures here usually mean a UX issue, not a server bug. Note any rendering quirks for follow-up.
+
+## 6. Tool annotations
+
+These don't have user-visible behavior yet, but worth confirming the metadata is correct so future client UI features (auto-approval lists, "destructive action" badges) work.
+
+- [ ] `claude mcp inspect clickwheel` (or equivalent) shows annotations
+- [ ] Read tools: `readOnlyHint=true`
+- [ ] `delete_playlist` and `sync_playlist_to_ipod`: `destructiveHint=true`
+- [ ] `submit_scrobbles`: `openWorldHint=true`
+- [ ] `create_playlist`: `idempotentHint=false`
 
 ## Findings
 
-(Populate during Phase 5.)
+(Populate during the run. Format: `<scenario>` — `<observed>` — `<follow-up>`.)
