@@ -183,19 +183,31 @@ def render(text: str, data: object | None = None) -> CallToolResult:
     """Build a dual-content tool result: a one-line text summary plus the
     structured data the LLM can use for follow-up questions.
 
-    The text block is what an MCP client renders to the user (and what the
-    LLM tends to paraphrase from); structuredContent is the precise dict
-    available for programmatic access.
+    Emits the structured payload BOTH as a JSON string inside `content` AND
+    as `structuredContent`. Some clients (Claude Code) surface
+    structuredContent to the model directly; others (Claude Desktop) only
+    feed text content to the model and treat structuredContent as user-only
+    accordion data. Including the JSON in content keeps the LLM functional
+    everywhere — the spec endorses this for backwards compatibility.
     """
+    import json
+
     if data is None:
         sc: dict = {}
-    elif isinstance(data, dict):
-        sc = data
+        content = [TextContent(type="text", text=text)]
     else:
-        # MCP requires structuredContent to be an object. Wrap lists/scalars
-        # under "result", matching FastMCP's own auto-wrap convention.
-        sc = {"result": data}
+        if isinstance(data, dict):
+            sc = data
+        else:
+            # MCP requires structuredContent to be an object. Wrap lists/scalars
+            # under "result", matching FastMCP's own auto-wrap convention.
+            sc = {"result": data}
+        json_block = json.dumps(sc, default=str, separators=(",", ":"))
+        content = [
+            TextContent(type="text", text=text),
+            TextContent(type="text", text=json_block),
+        ]
     return CallToolResult(
-        content=[TextContent(type="text", text=text)],
+        content=content,
         structuredContent=sc,
     )
