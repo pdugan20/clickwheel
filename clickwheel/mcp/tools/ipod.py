@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from mcp.server.fastmcp import Context
 from pydantic import Field
 
 from clickwheel import actions
@@ -12,7 +11,6 @@ from clickwheel.mcp._runtime import (
     DESTRUCTIVE,
     MUTATION,
     READ_ONLY,
-    elicit_confirm,
     format_bytes,
     format_count,
     mcp,
@@ -47,27 +45,19 @@ def get_ipod_contents() -> dict:
 
 
 @mcp.tool(annotations=DESTRUCTIVE)
-async def sync_playlist_to_ipod(
-    ctx: Context,
+def sync_playlist_to_ipod(
     playlist: Annotated[str, Field(description="Saved playlist name to sync.")],
-    confirm: Annotated[
-        bool,
-        Field(
-            description=(
-                "Pass true to skip the elicited confirmation prompt. "
-                "Default false — server shows the diff and asks the user."
-            ),
-        ),
-    ] = False,
 ) -> dict:
-    """Sync a saved playlist to the iPod. Computes the diff between the
-    playlist and what's already on the device, copies new tracks, and
+    """Permanently push a saved playlist to the iPod. Copies new tracks and
     rewrites the iTunesDB. Tracks already on the iPod that aren't in the
-    playlist STAY on the iPod (this is an additive operation).
+    playlist STAY on the iPod — this is an additive operation, never deletes.
 
-    By default, asks the user to confirm via the client and shows the diff
-    counts in the prompt. Pass `confirm=true` only when explicitly told to
-    skip prompts.
+    Flagged `destructiveHint=true`, so MCP clients (Claude Code etc.) gate
+    this call with a native Allow/Deny prompt. Before invoking, summarize
+    the diff for the user — call `compute_diff`-equivalent context (e.g.
+    use `get_playlist` and `get_ipod_contents`) and tell them how many
+    tracks will be copied and how much space they'll use, so they can
+    Allow/Deny knowingly.
 
     Requires the iPod to be mounted. Errors with InsufficientSpaceError if
     the new tracks won't fit.
@@ -94,23 +84,6 @@ async def sync_playlist_to_ipod(
                 "next_step_hint": None,
             }
             return render(f"iPod already matches '{playlist}' — nothing to do.", data)
-
-        if not confirm:
-            ok = await elicit_confirm(
-                ctx,
-                f"Sync '{playlist}' to iPod? "
-                f"Will add {len(diff.to_add)} track(s) "
-                f"({format_bytes(diff.add_size_bytes)}) "
-                f"and {len(diff.to_remove)} track(s) currently on iPod "
-                "won't be in this playlist (they stay on the iPod for now).",
-            )
-            if not ok:
-                data = {
-                    "synced": False,
-                    "reason": "user declined",
-                    "next_step_hint": None,
-                }
-                return render("User declined the sync.", data)
 
         result = actions.sync_playlist(cfg, db, playlist, diff=diff)
 

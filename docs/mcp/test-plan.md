@@ -128,24 +128,26 @@ Ask:
 - [ ] `remove_artist_from_playlist` returns count > 0
 - [ ] `get_playlist` confirms the removal
 
-### 2.5 Delete with elicitation — decline path
+### 2.5 Delete — deny path (client-side gating)
+
+`delete_playlist` is flagged `destructiveHint=true`. Claude Code shows its native Allow/Deny permission prompt before invoking — the server doesn't elicit anything. (Earlier revisions used MCP elicitation here, which created a confusing double-prompt; we removed it. See findings entry from May 2026.)
 
 Ask:
 
 > Delete the 'test-mcp' playlist.
 
-- [ ] Claude triggers `delete_playlist(name="test-mcp")` with no `confirm` arg
-- [ ] Server elicits a confirmation prompt — Claude relays it to you
-- [ ] Decline. Result: `{deleted: false, reason: "user declined"}`. Playlist still exists.
+- [ ] Claude summarizes the impact in its message ("This will delete 'test-mcp', N tracks, cannot be undone…") before invoking
+- [ ] Claude Code surfaces an Allow / Deny prompt for the `delete_playlist` tool call
+- [ ] **Deny**. Tool isn't called. Playlist still exists. (Verify with "list my playlists".)
 
-### 2.6 Delete with elicitation — accept path
+### 2.6 Delete — allow path
 
 Ask again:
 
 > Actually go ahead and delete 'test-mcp'.
 
-- [ ] Elicitation appears again
-- [ ] Accept. Result: `{deleted: true}`
+- [ ] Allow / Deny prompt reappears
+- [ ] **Allow**. Tool runs. Result: `{deleted: true, name: "test-mcp"}`
 - [ ] `list_playlists` no longer shows `test-mcp`
 
 ### 2.7 Scrobble dry-run **(needs iPod)**
@@ -182,7 +184,9 @@ Ask:
 - [ ] If everything matches: result says "iPod already matches 'ipod' — nothing to do"
 - [ ] If there's a diff: skip to 3.3
 
-### 3.3 Sync — real diff, decline path
+### 3.3 Sync — real diff, deny path (client-side gating)
+
+`sync_playlist_to_ipod` is flagged `destructiveHint=true`. Claude Code's native Allow / Deny prompt is the confirmation step.
 
 Make a real diff first (e.g. `clickwheel edit ipod --add "Some artist"` from the CLI to add something not currently on the iPod).
 
@@ -190,13 +194,15 @@ Ask:
 
 > Sync the 'ipod' playlist to my iPod.
 
-- [ ] Server elicits confirmation showing add/remove counts and total MB
-- [ ] Decline. Result: `{synced: false, reason: "user declined"}`. iPod unchanged.
+- [ ] Claude summarizes the diff in its message before invoking ("Will add N tracks (X MB), Y tracks already on iPod stay…")
+- [ ] Claude Code surfaces an Allow / Deny prompt for `sync_playlist_to_ipod`
+- [ ] **Deny**. Tool isn't called. iPod state unchanged.
 
-### 3.4 Sync — accept path
+### 3.4 Sync — allow path
 
-Repeat the prompt, accept this time.
+Repeat the prompt, allow this time.
 
+- [ ] Allow / Deny prompt reappears; **Allow**.
 - [ ] Server runs the sync; result includes `db_write_ok: true` and `next_step_hint` mentioning eject
 - [ ] **Claude proactively offers** `eject_ipod` as the next step (driven by `next_step_hint`)
 - [ ] Files are copied — verify by checking iPod from Finder before ejecting
@@ -319,7 +325,7 @@ Quit and relaunch Claude Desktop.
 - [ ] Tools and the `build_playlist` prompt appear in Desktop's UI
 - [ ] Tool descriptions render in Desktop's tool inspector
 - [ ] Re-run Round 1.2 in Desktop — text summary shows naturally; structuredContent is also accessible (e.g. via the tool-result accordion)
-- [ ] Re-run 2.5/2.6 in Desktop — elicitation surfaces as a Desktop dialog, not a bare protocol error
+- [ ] Re-run 2.5/2.6 in Desktop — Desktop's permission prompt surfaces for `delete_playlist`
 - [ ] Re-run Round 4 in Desktop — `build_playlist` works from Desktop's prompt picker
 - [ ] One real sync (3.3 + 3.4 + 3.6) end-to-end from Desktop
 

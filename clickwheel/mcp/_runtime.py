@@ -1,7 +1,7 @@
 """Shared runtime for the MCP server.
 
-Holds the FastMCP instance, the per-tool session context manager, and small
-utilities (formatters, the elicitation helper). Tool modules under
+Holds the FastMCP instance, the per-tool session context manager, tool
+annotation presets, and small formatting utilities. Tool modules under
 `clickwheel.mcp.tools` import from here and never from `server.py`, which
 keeps the `server.py → tools/` import direction one-way.
 """
@@ -12,9 +12,8 @@ import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.fastmcp import FastMCP
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
-from pydantic import BaseModel, Field
 
 from clickwheel import actions
 from clickwheel.actions import LibraryNotFoundError
@@ -63,9 +62,12 @@ WORKFLOWS:
   copied but the iTunesDB write failed; surface this to the user.
 
 SAFETY:
-- `delete_playlist` and `sync_playlist_to_ipod` elicit a yes/no
-  confirmation via the client when `confirm=false` (the default). Don't
-  pass `confirm=true` unless the user has explicitly asked to skip.
+- `delete_playlist` and `sync_playlist_to_ipod` are flagged destructive.
+  Claude Code (and other compliant clients) surface a native Allow/Deny
+  prompt before invoking them — that is the user's confirmation moment.
+  Before calling either tool, summarize the impact in your reply
+  (playlist name, track count, target iPod) so the user has the context
+  they need to allow or deny.
 - The CLI runs alongside this server with richer interactive UI; suggest
   it for complex flows (interactive picker, live sync progress).
 """
@@ -194,25 +196,3 @@ def render(text: str, data: object | None = None) -> CallToolResult:
         content=[TextContent(type="text", text=text)],
         structuredContent=sc,
     )
-
-
-class Confirm(BaseModel):
-    """Schema for a yes/no elicitation prompt.
-
-    MCP elicitation requires at least one schema field, so we declare a
-    boolean — but in practice the Accept/Decline buttons in the client UI
-    are the real signal. The checkbox is decorative; we only act on
-    `result.action`. Pre-defaulting to True so clients that surface the
-    field don't show an unchecked box that the user has to toggle.
-    """
-
-    confirm: bool = Field(
-        default=True,
-        description="Click Accept to proceed; Decline to cancel.",
-    )
-
-
-async def elicit_confirm(ctx: Context, message: str) -> bool:
-    """Ask the client to confirm. Returns True iff the user clicked Accept."""
-    result = await ctx.elicit(message=message, schema=Confirm)
-    return result.action == "accept"

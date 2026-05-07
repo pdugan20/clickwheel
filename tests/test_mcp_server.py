@@ -357,31 +357,13 @@ def test_build_playlist_prompt_body():
 
 # ---------------------------------------------------------------------------
 # Mutation tools
+#
+# Destructive tools (delete_playlist, sync_playlist_to_ipod) used to elicit
+# server-side confirmation. That was the wrong primitive — Claude Code (and
+# other compliant clients) gate `destructiveHint=true` tools natively, and
+# our extra elicitation produced a confusing double-prompt UX. Tools are now
+# regular functions; the client owns the Allow/Deny step.
 # ---------------------------------------------------------------------------
-
-
-class _FakeElicitResult:
-    def __init__(self, *, action: str, confirm: bool | None = None) -> None:
-        self.action = action
-        if confirm is None:
-            self.data = None
-        else:
-            from types import SimpleNamespace
-
-            self.data = SimpleNamespace(confirm=confirm)
-
-
-class _FakeCtx:
-    """Mock FastMCP Context that returns a canned elicit response."""
-
-    def __init__(self, *, action: str = "accept", confirm: bool = True) -> None:
-        self._action = action
-        self._confirm = confirm
-        self.last_message: str | None = None
-
-    async def elicit(self, message, schema):  # noqa: ARG002
-        self.last_message = message
-        return _FakeElicitResult(action=self._action, confirm=self._confirm)
 
 
 def test_create_playlist(tmp_path, monkeypatch):
@@ -436,8 +418,9 @@ def test_update_playlist_replaces(tmp_path, monkeypatch):
     assert result["track_count"] == 1
 
 
-def test_delete_playlist_confirm_true(tmp_path, monkeypatch):
-    """confirm=True skips elicitation and deletes immediately."""
+def test_delete_playlist(tmp_path, monkeypatch):
+    """Tool deletes the playlist and returns the expected shape. The client
+    is responsible for gating the call via the destructiveHint annotation."""
     from clickwheel.mcp.tools.playlist import delete_playlist
 
     cfg = _setup(tmp_path, monkeypatch)
@@ -445,42 +428,12 @@ def test_delete_playlist_confirm_true(tmp_path, monkeypatch):
     db.save_playlist("doomed", ["/music/A/Album1/01.mp3"])
     db.close()
 
-    result = _call(delete_playlist, ctx=_FakeCtx(), name="doomed", confirm=True)
+    result = _call(delete_playlist, name="doomed")
     assert result == {"deleted": True, "name": "doomed"}
 
-
-def test_delete_playlist_user_declines(tmp_path, monkeypatch):
-    """User declines via elicitation → playlist stays."""
-    from clickwheel.mcp.tools.playlist import delete_playlist
-
-    cfg = _setup(tmp_path, monkeypatch)
     db = Database(cfg.db_path)
-    db.save_playlist("kept", ["/music/A/Album1/01.mp3"])
+    assert not db.get_playlist("doomed")
     db.close()
-
-    ctx = _FakeCtx(action="decline")
-    result = _call(delete_playlist, ctx=ctx, name="kept")
-    assert result == {"deleted": False, "reason": "user declined"}
-
-    # Verify playlist still exists
-    db = Database(cfg.db_path)
-    assert db.get_playlist("kept")
-    db.close()
-
-
-def test_delete_playlist_user_accepts_via_elicit(tmp_path, monkeypatch):
-    """User accepts via elicitation → playlist deleted, message includes track count."""
-    from clickwheel.mcp.tools.playlist import delete_playlist
-
-    cfg = _setup(tmp_path, monkeypatch)
-    db = Database(cfg.db_path)
-    db.save_playlist("ok", ["/music/A/Album1/01.mp3", "/music/B/Album2/01.mp3"])
-    db.close()
-
-    ctx = _FakeCtx(action="accept", confirm=True)
-    result = _call(delete_playlist, ctx=ctx, name="ok")
-    assert result["deleted"] is True
-    assert "2 track" in (ctx.last_message or "")
 
 
 def test_delete_playlist_missing(tmp_path, monkeypatch):
@@ -488,7 +441,7 @@ def test_delete_playlist_missing(tmp_path, monkeypatch):
 
     _setup(tmp_path, monkeypatch)
 
-    result = _call(delete_playlist, ctx=_FakeCtx(), name="ghost")
+    result = _call(delete_playlist, name="ghost")
     assert result == {"deleted": False, "reason": "Playlist 'ghost' not found."}
 
 
@@ -530,4 +483,4 @@ def test_sync_playlist_to_ipod_no_ipod(tmp_path, monkeypatch):
     _setup(tmp_path, monkeypatch)
 
     with pytest.raises(IpodNotFoundError):
-        asyncio.run(sync_playlist_to_ipod(ctx=_FakeCtx(), playlist="any", confirm=True))
+        sync_playlist_to_ipod(playlist="any")

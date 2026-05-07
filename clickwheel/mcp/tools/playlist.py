@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from mcp.server.fastmcp import Context
 from pydantic import Field
 
 from clickwheel import actions
@@ -13,7 +12,6 @@ from clickwheel.mcp._runtime import (
     MUTATION,
     MUTATION_NON_IDEMPOTENT,
     READ_ONLY,
-    elicit_confirm,
     format_bytes,
     format_count,
     mcp,
@@ -140,43 +138,24 @@ def update_playlist(
 
 
 @mcp.tool(annotations=DESTRUCTIVE)
-async def delete_playlist(
-    ctx: Context,
+def delete_playlist(
     name: Annotated[str, Field(description="Playlist name.")],
-    confirm: Annotated[
-        bool,
-        Field(
-            description=(
-                "Pass true to skip the user confirmation prompt. Default "
-                "false — server elicits a yes/no via the client."
-            ),
-        ),
-    ] = False,
 ) -> dict:
-    """Delete a saved playlist. Destructive — cannot be undone (the playlist
-    record is removed; the underlying music files are untouched).
+    """Permanently delete a saved playlist. Cannot be undone — the playlist
+    record is removed; the underlying music files are untouched.
 
-    By default, asks the user to confirm via the client. Pass `confirm=true`
-    only when the user explicitly says to skip prompts.
+    Flagged `destructiveHint=true`, so MCP clients (Claude Code etc.) gate
+    this call with a native Allow/Deny prompt. Before invoking, summarize
+    the impact (playlist name + track count from a prior `get_playlist`
+    or `list_playlists` call) so the user has context for the decision.
 
-    When to use: the user says "delete" or "remove" a playlist by name.
+    When to use: the user explicitly says "delete" or "remove" a playlist
+    by name.
     """
     with open_session(autoscan=False) as (_cfg, db):
         if not actions.playlist_exists(db, name):
             data = {"deleted": False, "reason": f"Playlist '{name}' not found."}
             return render(f"Playlist '{name}' not found — nothing to delete.", data)
-
-        if not confirm:
-            track_count = len(db.get_playlist(name))
-            ok = await elicit_confirm(
-                ctx,
-                f"Delete playlist '{name}'? It contains {track_count} track(s). "
-                "This cannot be undone.",
-            )
-            if not ok:
-                data = {"deleted": False, "reason": "user declined"}
-                return render("User declined the delete.", data)
-
         actions.delete_playlist(db, name)
         return render(f"Deleted '{name}'.", {"deleted": True, "name": name})
 
