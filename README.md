@@ -5,9 +5,7 @@
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?logo=opensourceinitiative&logoColor=white)](https://opensource.org/licenses/MIT)
 
-A CLI for syncing a music library to a classic iPod from a modern Mac — no iTunes required.
-
-Handles the full workflow: scan and clean up your library's metadata, interactively pick what goes on the iPod, and sync — all with a modern terminal UI.
+Sync a music library to a classic iPod from a modern Mac — no iTunes required. Scan, clean up metadata, pick what goes on the iPod, and sync, all from the terminal. Optional MCP server lets Claude or other AI clients drive it conversationally.
 
 ## Install
 
@@ -15,15 +13,16 @@ Handles the full workflow: scan and clean up your library's metadata, interactiv
 pipx install clickwheel
 ```
 
-To use `clickwheel fix` (metadata cleanup, album art, genre tagging):
+Optional extras:
 
 ```bash
-pipx inject clickwheel 'clickwheel[fix]'
+pipx inject clickwheel 'clickwheel[fix]'   # metadata cleanup via beets
+pipx inject clickwheel 'clickwheel[mcp]'   # MCP server for Claude / AI clients
 ```
 
 ## Quick Start
 
-Create a config file pointing to your music library:
+Point clickwheel at your music:
 
 ```bash
 mkdir -p ~/.clickwheel
@@ -32,7 +31,13 @@ music_dir: /path/to/your/music
 EOF
 ```
 
-Then run `clickwheel scan` to index your library and `clickwheel select` to start picking music for your iPod.
+Then index it and pick what goes on the iPod:
+
+```bash
+clickwheel scan      # build the library index
+clickwheel select    # interactive checkbox picker
+clickwheel sync      # push to the iPod
+```
 
 ## Commands
 
@@ -53,127 +58,39 @@ Then run `clickwheel scan` to index your library and `clickwheel select` to star
 
 ## Configuration
 
-clickwheel reads from `~/.clickwheel/config.yaml`:
-
 ```yaml
+# ~/.clickwheel/config.yaml
 music_dir: /Volumes/Music/Library
-ipod_capacity_gb: 64 # defaults to 64
-auto_scan: true # auto-check for library changes (default: true)
-auto_scan_staleness_minutes: 1440 # how often to re-check (default: 1440 = 24h)
-lastfm_api_key: your_key # last.fm/api/account/create
+ipod_capacity_gb: 64
+auto_scan: true
+auto_scan_staleness_minutes: 1440 # default: 24h
+lastfm_api_key: your_key
 lastfm_api_secret: your_secret
 lastfm_username: your_username
 ```
 
-Environment variables (`MUSIC_DIR`, `AUTO_SCAN`, etc.) override the config file.
-
-### Auto-scan
-
-`select`, `edit`, `diff`, and `sync` check for library changes before running. The check is two-tier: a cheap probe of top-level music folders catches new albums; a full re-scan happens at most once a day. Pass `--no-scan` to skip it. Tune the cadence with `auto_scan_staleness_minutes` (default: 1440).
-
-For metadata-only edits to existing files, run `clickwheel scan` manually — the probe only notices new files, not changed tags.
-
-The MCP server never autoscans (chat calls always serve cached data). Run `clickwheel scan` from the terminal when you've added music; the next chat session will see it.
-
-### Metadata cleanup (`fix`)
-
-`clickwheel fix` uses [beets](https://beets.io/) to fetch album art, fill genres, and clean up tags. Install the extras first:
-
-```bash
-# If installed with pipx:
-pipx inject clickwheel 'clickwheel[fix]'
-
-# If installed with pip:
-pip install 'clickwheel[fix]'
-```
-
-On first run, clickwheel generates a beets config at `~/.clickwheel/beets/config.yaml`. You can edit it to customize sources, matching thresholds, etc. The config is set up to never move or rename your files.
-
-Fix a single artist/album folder:
-
-```bash
-clickwheel fix "Artist - Album Name"
-```
-
-Or fix the entire library:
-
-```bash
-clickwheel fix
-```
-
-### Last.fm scrobbling
-
-Get an API key at [last.fm/api/account/create](https://www.last.fm/api/account/create), drop the credentials into `~/.clickwheel/config.yaml` (the `lastfm_*` keys above), then authorize once:
-
-```bash
-clickwheel scrobble --auth
-```
-
-After that, run `clickwheel scrobble` any time your iPod is connected. Plays are cached locally, so re-runs never duplicate-submit.
+Environment variables (`MUSIC_DIR`, `AUTO_SCAN`, etc.) override config values. See [`docs/configuration.md`](docs/configuration.md) for the full schema, auto-scan internals, and `fix` / Last.fm walkthroughs.
 
 ## MCP server
 
-clickwheel ships an optional MCP (Model Context Protocol) server so Claude Code (and other MCP clients) can read and modify your library conversationally — "what artists are on my iPod?", "add Big Thief to the ipod playlist", "sync the playlist".
+clickwheel ships an optional MCP server so Claude Code, Claude Desktop, and other MCP-aware clients can drive your library conversationally:
 
-Install the extra:
-
-```bash
-pipx inject clickwheel 'clickwheel[mcp]'
-```
-
-Register the server with Claude Code:
-
-```bash
-claude mcp add clickwheel clickwheel-mcp --scope user
-```
-
-(Or add `{ "mcpServers": { "clickwheel": { "command": "clickwheel-mcp" } } }` to a project's `.mcp.json`.)
-
-For Claude Desktop, edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) and add:
-
-```json
-{
-  "mcpServers": {
-    "clickwheel": {
-      "command": "/Users/YOU/.local/bin/clickwheel-mcp"
-    }
-  }
-}
-```
-
-Use the absolute path `pipx` printed during install — Desktop doesn't always inherit your shell's `PATH`. Quit and relaunch Desktop after editing.
-
-> **Dev install note:** if you're running clickwheel from a clone inside `~/Documents/`, Claude Desktop's sandbox will refuse to read the in-tree venv's `pyvenv.cfg` (macOS applies a `com.apple.provenance` xattr to files in `Documents`). Either install with `pipx install --editable .` so the venv lives in `~/.local/pipx/`, or grant Claude Desktop access to your Documents folder under System Settings → Privacy & Security → Files & Folders.
-
-The server is read-mostly: list/search tools require no confirmation, while destructive ones (`delete_playlist`, `sync_playlist_to_ipod`) carry the MCP `destructiveHint=true` annotation. Different clients honor this differently — Claude Code shows a per-call Allow/Deny prompt; Claude Desktop asks once when a tool is first used in a conversation. The server-side `instructions` block also tells the model to summarize the impact in chat before running either tool, so the user has a chance to back out either way.
-
-Once configured, you can drive it conversationally:
-
-> Build me a 45-minute late-night indie folk playlist using only tracks I actually own.
->
 > What's on my iPod, and how full is it?
+>
+> Build me a 45-minute late-night indie folk playlist using only tracks I actually own.
 >
 > Sync the 'ipod' playlist to my iPod and then eject it.
 
-| Tool                                                            | Kind     | What it does                                                                          |
-| --------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------- |
-| `library_stats`, `library_health`                               | read     | Library overview and setup probe                                                      |
-| `list_artists`, `list_albums_by_artist`, `list_tracks_by_album` | read     | Browse the library                                                                    |
-| `search_tracks`                                                 | read     | Substring search across artist/album/title                                            |
-| `list_playlists`, `get_playlist`, `list_playlist_tracks`        | read     | Saved playlists (`get_playlist` is summary-only; use `list_playlist_tracks` to drill) |
-| `get_ipod_contents`, `list_ipod_tracks`                         | read     | iPod state (`get_ipod_contents` is summary-only; use `list_ipod_tracks` to drill)     |
-| `get_pending_scrobbles`                                         | read     | Cached iPod plays not yet sent to Last.fm                                             |
-| `create_playlist`, `update_playlist`                            | mutation | Build playlists from track paths                                                      |
-| `add_artist_to_playlist`, `remove_artist_from_playlist`         | mutation | Adjust by artist                                                                      |
-| `heal_playlist`                                                 | mutation | Drop references to tracks no longer on disk                                           |
-| `delete_playlist`                                               | mutation | Destructive — gated by client confirmation                                            |
-| `submit_scrobbles`                                              | mutation | Push pending plays to Last.fm (`dry_run` available)                                   |
-| `sync_playlist_to_ipod`                                         | mutation | Destructive — gated by client confirmation                                            |
-| `eject_ipod`                                                    | mutation | Safely unmount the iPod                                                               |
+Quick start with Claude Code:
 
-Logging goes to stderr (stdout is reserved for the MCP wire protocol). Set `CLICKWHEEL_MCP_LOG_LEVEL=DEBUG` for verbose output.
+```bash
+pipx inject clickwheel 'clickwheel[mcp]'
+claude mcp add clickwheel clickwheel-mcp --scope user
+```
 
-See [`docs/mcp/`](docs/mcp/) for design details, the full tool surface, and the manual test plan.
+The server exposes 21 tools across library, playlist, iPod, and Last.fm domains, plus a `build_playlist` prompt with anti-hallucination rules. Destructive operations (`delete_playlist`, `sync_playlist_to_ipod`) are gated by client confirmation.
+
+For Claude Desktop config, the full tool reference, and other clients (Cursor, Continue, Cline, Zed), see [`docs/mcp/`](docs/mcp/).
 
 ## Requirements
 

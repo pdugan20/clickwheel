@@ -1,24 +1,135 @@
-# MCP integration project
+# MCP server
 
-Tracks the work to add an MCP server to clickwheel so Claude Code (and other MCP clients) can query and operate on the user's music library and iPod conversationally.
+clickwheel ships an optional MCP (Model Context Protocol) server so AI clients like Claude Code or Claude Desktop can read and modify your library conversationally — "what artists are on my iPod?", "add Big Thief to the ipod playlist", "sync the playlist".
 
-**Status:** Phase 0 complete (research + design). Awaiting design review before code.
+This page covers per-client install/config, the full tool reference, and behavior notes. For the high-level pitch and one-liner install, see the [main README](../../README.md#mcp-server).
 
-## Documents
+## Install
 
-- [`research.md`](research.md) — Findings from web research on the Python MCP SDK, spec features, Claude Code integration, naming conventions. Sources cited.
-- [`design.md`](design.md) — Locked design: package layout, tool surface (read + mutation), error model, lifecycle.
-- [`tracker.md`](tracker.md) — Live phased task list. Update statuses as work progresses.
-- [`test-plan.md`](test-plan.md) — Manual iPod test scenarios for Phase 5.
+```bash
+pipx inject clickwheel 'clickwheel[mcp]'
+```
 
-## TL;DR
+That puts the `clickwheel-mcp` binary in `~/.local/bin/` (with `pipx`) or your active venv's `bin/` (with `pip`).
 
-Adding `clickwheel/mcp/` — a stdio MCP server using the official `mcp` Python SDK with FastMCP-style decorators. Ships as a `[mcp]` extra and a `clickwheel-mcp` console script. Phase 1 is a CLI refactor that extracts pure logic from `cli.py` into `actions.py` (valuable on its own); Phase 2 builds 10 read-only tools on top; Phase 3 adds 7 mutation tools using MCP's elicitation feature for confirmations. Final phase is manual iPod testing.
+## Client configuration
 
-## Why now
+### Claude Code
 
-Three concrete wins over CLI + `--json` flags: typed tool schemas Claude discovers automatically, stateful process (DB connection + scan cache held open), structured progress streaming during long ops. None individually killer; together they're enough to justify the work — especially because the prerequisite refactor improves the CLI regardless.
+```bash
+claude mcp add clickwheel clickwheel-mcp --scope user
+```
 
-## Why not now
+Or add to a project's `.mcp.json`:
 
-If conversational queries against the library don't sound appealing in practice, skip MCP and add `--json` flags to existing CLI commands instead. ~30 lines, done.
+```json
+{ "mcpServers": { "clickwheel": { "command": "clickwheel-mcp" } } }
+```
+
+### Claude Desktop
+
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS):
+
+```json
+{
+  "mcpServers": {
+    "clickwheel": {
+      "command": "/Users/YOU/.local/bin/clickwheel-mcp"
+    }
+  }
+}
+```
+
+Use the absolute path `pipx` printed during install — Desktop doesn't always inherit your shell's `PATH`. Quit (⌘Q) and relaunch Desktop after editing.
+
+### Other clients (Cursor, Continue, Cline, Zed, etc.)
+
+Any MCP-aware client works — point it at the `clickwheel-mcp` binary as a stdio server. Most clients use a similar JSON config schema.
+
+## Usage
+
+Once configured, drive it conversationally:
+
+> Build me a 45-minute late-night indie folk playlist using only tracks I actually own.
+>
+> What's on my iPod, and how full is it?
+>
+> Sync the 'ipod' playlist to my iPod and then eject it.
+
+The server includes a built-in `build_playlist` prompt that walks the model through a vibe-based playlist build with anti-hallucination rules (never invent track names; only assert what tools return). Claude Code surfaces it in the slash-command picker; Claude Desktop currently doesn't expose stdio prompts in its UI, so use natural language.
+
+## Tool reference
+
+21 tools, grouped by domain.
+
+### Library (read)
+
+| Tool                    | What it does                                                                          |
+| ----------------------- | ------------------------------------------------------------------------------------- |
+| `library_stats`         | Track/artist/album counts, total size, format breakdown                               |
+| `library_health`        | Setup probe — does the music dir exist, when was the last scan, how many missing refs |
+| `list_artists`          | All artists alphabetically with track/album counts                                    |
+| `list_albums_by_artist` | Albums for one artist, ordered by year                                                |
+| `list_tracks_by_album`  | Tracks on one album, ordered by disc/track number                                     |
+| `search_tracks`         | Substring search across artist, album, title                                          |
+
+### Playlist (read + mutation)
+
+| Tool                          | What it does                                                          |
+| ----------------------------- | --------------------------------------------------------------------- |
+| `list_playlists`              | All saved playlists with track counts and total size                  |
+| `get_playlist`                | One playlist's summary (use `list_playlist_tracks` for the full list) |
+| `list_playlist_tracks`        | Paginated tracks in a playlist, in order                              |
+| `create_playlist`             | New playlist from a list of track paths                               |
+| `update_playlist`             | Replace a playlist's contents wholesale                               |
+| `add_artist_to_playlist`      | Add every track by an artist (skips duplicates)                       |
+| `remove_artist_from_playlist` | Remove every track by an artist                                       |
+| `heal_playlist`               | Drop references to tracks no longer on disk                           |
+| `delete_playlist`             | Permanently delete a playlist (destructive)                           |
+
+### iPod (read + mutation)
+
+| Tool                    | What it does                                              |
+| ----------------------- | --------------------------------------------------------- |
+| `get_ipod_contents`     | iPod summary — capacity, used/free space, top artists     |
+| `list_ipod_tracks`      | Paginated track list, optionally filtered by artist       |
+| `sync_playlist_to_ipod` | Push a saved playlist to the iPod (destructive, additive) |
+| `eject_ipod`            | Safely unmount via `diskutil eject`                       |
+
+### Last.fm scrobbling
+
+| Tool                    | What it does                                  |
+| ----------------------- | --------------------------------------------- |
+| `get_pending_scrobbles` | Cached iPod plays not yet sent to Last.fm     |
+| `submit_scrobbles`      | Pull recent plays and submit (`dry_run` flag) |
+
+## Destructive-tool gating
+
+`delete_playlist` and `sync_playlist_to_ipod` carry the MCP `destructiveHint=true` annotation. Different clients honor that differently:
+
+- **Claude Code** shows a per-call Allow/Deny prompt before each invocation.
+- **Claude Desktop** asks once when the tool is first used in a conversation, then runs freely thereafter.
+- The server-side `instructions` block tells the model to summarize the impact in chat before invoking either tool, so users get a chance to back out regardless of the client's gating model.
+
+`sync_playlist_to_ipod` is also additive — tracks already on the iPod that aren't in the playlist stay where they are. Sync never deletes from the iPod.
+
+## Behavior notes
+
+- **Logging** goes to stderr (stdout is reserved for the MCP wire protocol). Set `CLICKWHEEL_MCP_LOG_LEVEL=DEBUG` for verbose output.
+- **No auto-scan.** Chat tool calls always serve cached data. Run `clickwheel scan` from the terminal when you've added music; the next chat session sees it.
+- **FLAC tracks are excluded** from sync (stock iPod firmware doesn't play FLAC).
+
+## Dev install (clone-based)
+
+If you're hacking on clickwheel from a clone in `~/Documents/`, Claude Desktop's sandbox will refuse to read the in-tree venv's `pyvenv.cfg` (macOS applies a `com.apple.provenance` xattr to files in `Documents`). Either:
+
+- Install with `pipx install --editable .` so the venv lives in `~/.local/pipx/`, or
+- Grant Claude Desktop access to your Documents folder under System Settings → Privacy & Security → Files & Folders.
+
+Claude Code is unaffected.
+
+## Internal docs
+
+- [`test-plan.md`](test-plan.md) — manual iPod test runbook plus the findings log from Phase 5 (sync merge bug, autoscan rework, dual-emit fix, Round 6 Desktop quirks). Reusable for future regression testing.
+
+For high-level architecture, see [`docs/architecture.md`](../architecture.md).
