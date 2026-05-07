@@ -375,4 +375,19 @@ for t in sorted(mcp._tool_manager.list_tools(), key=lambda x: x.name):
 
 Format: `<round.section>` — `<observed>` — `<follow-up>`
 
-(Populate as you go.)
+- **1.1** — Asked for "tools", Claude listed tools but not the `build_playlist` prompt. Expected behavior; reword the test prompt or accept (prompts surface via `/` picker, covered in Round 4).
+- **1.4** — Claude said "100-result limit" but the actual default is `limit=50` (max 500). Minor prose inaccuracy; not a server bug. No follow-up needed.
+- **1.3 (initial)** — Claude added a `⚠️` emoji to flag the unmounted-share warning. Fixed by adding "Plain text only — no emoji or decorative symbols" to the LINKING & RENDERING block of server `instructions` (commit `1a61e4c`).
+- **2.5/2.6 (initial)** — MCP elicitation produced a confusing double-prompt (Confirm checkbox AND Accept/Decline buttons). Investigation showed elicitation is for collecting structured INPUT, not yes/no consent — Claude Code already gates `destructiveHint=true` tools natively. Removed server-side elicitation; rely on client gating (commit `99290de`/`8509362`).
+- **3.1 (initial)** — `get_ipod_contents` returned the full 335-track manifest in `structuredContent` (~395K characters), blew past Claude Code's per-tool-result token cap, forced jq fallback. Restructured: `get_ipod_contents` is now summary-only; added paginated `list_ipod_tracks` and `list_playlist_tracks` (commit `8dbe9d3`).
+- **3.3/3.4 (initial)** — Sync hung in uninterruptible I/O for ~20 minutes when music share was unmounted (per-file timeouts) and again when playlist contained 22 stale references to deleted files. Added pre-flight checks: `LibraryNotFoundError` if music dir not mounted; `MissingTracksError` if any `to_add` track is flagged missing on disk. Plus new `heal_playlist` tool / CLI command for recovering stale-ref playlists (commit `14eb218`).
+- **Heal/add cycle bug** — After `clickwheel heal` dropped 22 dead refs, `clickwheel edit --add Taylor Swift` re-added the same 22 dead refs because `db.add_artist_to_playlist` and friends didn't filter `missing_since IS NULL`. Established a contract (documented inline in `db.py`): library queries that build NEW state filter missing; playlist-state queries preserve dead refs so users can see them and run heal. Filters added to 6 queries, 10 contract tests guard the boundary (commit `ae41f17`).
+- **5.1 (skipped)** — Empty-config error path can't be cleanly tested without disrupting Last.fm setup. clickwheel reads from both `~/.clickwheel/config.yaml` and `~/.clickwheel/.env`; removing the YAML alone leaves the env-file fallback intact. To actually trigger the error path you'd nuke `.env` too, which would invalidate the Last.fm session key. Skipped.
+- **3.7 (partial)** — Full Last.fm submission path untestable: no new plays on the iPod (recently scrobbled). `--status` and `--dry-run` paths verified working.
+- **Zombie `clickwheel-mcp` processes** — Multiple instances accumulated across Claude Code sessions, one stuck in uninterruptible I/O wait (`U+` state) on a stale SMB handle for ~6 minutes. Cleaned up manually with `pkill -9`. This is a Claude Code subprocess-cleanup quirk, not our bug. Mitigation: `pkill -f clickwheel-mcp` recovery command documented in tracker.
+
+### Open follow-ups for v0.5.1+
+
+- Progress streaming during sync via `ctx.report_progress()` so chat clients see "12 of 22 copied" instead of a spinner.
+- Auto-detect slow library scans on SMB and either skip or show better progress in `clickwheel diff` / `clickwheel sync` (currently autoscan blocks for 30-90s).
+- Investigate the zombie-process accumulation — may need a graceful shutdown handler or just file with anthropics/claude-code.
