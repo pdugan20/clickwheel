@@ -119,6 +119,41 @@ The server includes a built-in `build_playlist` prompt that walks the model thro
 - **No auto-scan.** Chat tool calls always serve cached data. Run `clickwheel scan` from the terminal when you've added music; the next chat session sees it.
 - **FLAC tracks are excluded** from sync (stock iPod firmware doesn't play FLAC).
 
+## Inline UI bundles (MCP Apps)
+
+Clickwheel ships an MCP Apps extension that lets compatible hosts (Claude Desktop, Claude.ai, VS Code Copilot, Goose) render an interactive iframe inline beneath certain tool results.
+
+| Tool                    | Bundle              | What it shows                                                                 |
+| ----------------------- | ------------------- | ----------------------------------------------------------------------------- |
+| `get_ipod_contents`     | iPod capacity bar   | Used/free + segments per top artist; click a row to ask a follow-up           |
+| `library_stats`         | Library overview    | Track/artist/album counts, size, hours, artwork %, format breakdown           |
+| `library_health`        | Library health card | Music-folder reachability, last-scan age, missing-file count, auto-scan flag  |
+| `sync_playlist_to_ipod` | _no iframe_         | Streams per-track `notifications/progress` so the host renders a progress bar |
+
+Hosts without MCP Apps support fall back to the same text + structured-content payload the Python tools have always returned — nothing breaks, the iframe just doesn't appear.
+
+The bundles live under [`web/`](../../web/) (React 19 + Vite). They're built into a single inlined HTML each via `vite-plugin-singlefile`, then concatenated into [`clickwheel/mcp/_ui_bundles.py`](../../clickwheel/mcp/_ui_bundles.py) by `web/scripts/inline_bundles.mjs`. That generated module is checked in so `pip install clickwheel[mcp]` works without a Node toolchain.
+
+### Editing a bundle
+
+```bash
+make dev-web        # http://localhost:5174/workbench/ — live preview with fixtures
+# edit web/<bundle>.tsx, components/, lib/...
+make build-web      # rebuild bundles + regenerate the Python module
+make lint-web       # eslint + tsc
+```
+
+CI rebuilds the bundles and fails if the checked-in `_ui_bundles.py` drifts from `web/` — so don't forget `make build-web` before committing.
+
+### Adding a new bundle
+
+1. Drop `web/<name>.html`, `web/<name>.tsx`, `web/<name>.fixtures.ts`. Use an existing bundle as a template.
+2. Register it in `web/workbench/registry.ts` so the workbench sidebar lists it.
+3. Run `make build-web`.
+4. In `clickwheel/mcp/ui_resources.py`, add a `register_ui_resource(...)` call pointing at the new bundle's `*_HTML` constant.
+5. In the matching tool, add `meta=ui_tool_meta(URI)` to the `@mcp.tool` decorator.
+6. Test with `npm run dev` (workbench) and a real Claude Desktop call.
+
 ## Dev install (clone-based)
 
 If you're hacking on clickwheel from a clone in `~/Documents/`, Claude Desktop's sandbox will refuse to read the in-tree venv's `pyvenv.cfg` (macOS applies a `com.apple.provenance` xattr to files in `Documents`). Either:
