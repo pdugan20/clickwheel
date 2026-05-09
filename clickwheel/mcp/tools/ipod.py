@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections import Counter
 from typing import Annotated
 
+from mcp.server.fastmcp import Context
 from pydantic import Field
 
 from clickwheel import actions
+from clickwheel.config import load_config
+from clickwheel.db import Database
 from clickwheel.mcp._runtime import (
     DESTRUCTIVE,
     MUTATION,
@@ -130,12 +134,17 @@ def list_ipod_tracks(
 
 
 @mcp.tool(annotations=DESTRUCTIVE)
-def sync_playlist_to_ipod(
+async def sync_playlist_to_ipod(
     playlist: Annotated[str, Field(description="Saved playlist name to sync.")],
+    ctx: Context,
 ) -> dict:
     """Push a saved playlist to the iPod. Copies new tracks and updates the
     iPod's library so it sees them. Tracks already on the iPod that aren't
     in the playlist stay where they are — sync is additive, never deletes.
+
+    Reports progress per track via MCP `notifications/progress` so the host
+    can render a live progress bar (Claude Desktop shows the per-track
+    artist/title beneath the tool result while files copy).
 
     Flagged destructive, so MCP clients gate this call with a native
     Allow/Deny prompt. Before invoking, summarize the diff for the user
@@ -157,45 +166,79 @@ def sync_playlist_to_ipod(
     the iPod won't see it yet — tell the user that and suggest re-running
     the sync or using the CLI for retry.
     """
-    with open_session() as (cfg, db):
-        diff = actions.compute_diff(cfg, db, playlist)
+    # actions.sync_playlist is synchronous and blocking (file copies,
+    # iPod database write). Running it directly in the async tool would
+    # pin the event loop and prevent progress notifications from flushing
+    # to the client until the sync finishes. So we hand the work to a
+    # worker thread and bridge per-track on_event callbacks back to the
+    # main loop via run_coroutine_threadsafe.
+    #
+    # Each worker reopens its own SQLite connection because the default
+    # check_same_thread=True forbids cross-thread reuse.
+    cfg = load_config()
+    loop = asyncio.get_running_loop()
 
-        if not diff.to_add and not diff.to_remove:
-            data = {
-                "synced": False,
-                "reason": "iPod already matches this playlist.",
-                "playlist": playlist,
-            }
-            return render(f"iPod already matches '{playlist}' — nothing to do.", data)
+    def worker() -> tuple[actions.Diff, actions.SyncResult | None]:
+        db = Database(cfg.db_path)
+        try:
+            diff = actions.compute_diff(cfg, db, playlist)
+            if not diff.to_add and not diff.to_remove:
+                return diff, None
 
-        result = actions.sync_playlist(cfg, db, playlist, diff=diff)
+            def on_event(ev: actions.SyncEvent) -> None:
+                artist = ev.track.get("artist") or "Unknown"
+                title = ev.track.get("title") or "Unknown"
+                # Fire-and-forget — progress notifications are best-effort.
+                # If the host didn't supply a progressToken, FastMCP's
+                # report_progress is a no-op; the future just resolves.
+                asyncio.run_coroutine_threadsafe(
+                    ctx.report_progress(ev.current, ev.total, f"{artist} — {title}"),
+                    loop,
+                )
 
-        if result.library_updated:
-            text = (
-                f"Synced '{playlist}': added "
-                f"{format_count(len(result.copied), 'track')} "
-                f"({format_bytes(diff.add_size_bytes)}). "
-                "Offer to eject the iPod when the user is ready to unplug."
+            result = actions.sync_playlist(
+                cfg, db, playlist, diff=diff, on_event=on_event
             )
-        else:
-            text = (
-                f"Synced '{playlist}', but the iPod's library wasn't "
-                f"fully updated. {format_count(len(result.copied), 'track')} "
-                "copied to the device, but the iPod may not see them yet. "
-                "Suggest the CLI (`clickwheel sync`) for retry support."
-            )
+            return diff, result
+        finally:
+            db.close()
 
+    diff, result = await asyncio.to_thread(worker)
+
+    if result is None:
         data = {
-            "synced": True,
+            "synced": False,
+            "reason": "iPod already matches this playlist.",
             "playlist": playlist,
-            "added": len(result.copied),
-            "failed": len(result.failed),
-            # Tracks already on the iPod that aren't in this playlist —
-            # left alone; sync is additive.
-            "also_on_ipod": result.kept_in_place_count,
-            "library_updated": result.library_updated,
         }
-        return render(text, data)
+        return render(f"iPod already matches '{playlist}' — nothing to do.", data)
+
+    if result.library_updated:
+        text = (
+            f"Synced '{playlist}': added "
+            f"{format_count(len(result.copied), 'track')} "
+            f"({format_bytes(diff.add_size_bytes)}). "
+            "Offer to eject the iPod when the user is ready to unplug."
+        )
+    else:
+        text = (
+            f"Synced '{playlist}', but the iPod's library wasn't "
+            f"fully updated. {format_count(len(result.copied), 'track')} "
+            "copied to the device, but the iPod may not see them yet. "
+            "Suggest the CLI (`clickwheel sync`) for retry support."
+        )
+
+    data = {
+        "synced": True,
+        "playlist": playlist,
+        "added": len(result.copied),
+        "failed": len(result.failed),
+        # Tracks already on the iPod that aren't in this playlist —
+        # left alone; sync is additive.
+        "also_on_ipod": result.kept_in_place_count,
+        "library_updated": result.library_updated,
+    }
+    return render(text, data)
 
 
 @mcp.tool(annotations=MUTATION)

@@ -552,8 +552,15 @@ def test_sync_playlist_to_ipod_no_ipod(tmp_path, monkeypatch):
 
     _setup(tmp_path, monkeypatch)
 
+    # The async tool takes a Context for progress reporting. Pass a stub
+    # whose report_progress is a no-op coroutine; we only care that the
+    # iPod-not-mounted error still propagates.
+    class _StubCtx:
+        async def report_progress(self, *_a, **_k):
+            return None
+
     with pytest.raises(IpodNotFoundError):
-        sync_playlist_to_ipod(playlist="any")
+        asyncio.run(sync_playlist_to_ipod(playlist="any", ctx=_StubCtx()))
 
 
 def test_heal_playlist_clean(tmp_path, monkeypatch):
