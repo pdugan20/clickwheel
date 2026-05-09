@@ -8,11 +8,16 @@ resources are bound to the FastMCP instance at import time, before
 from __future__ import annotations
 
 from clickwheel.mcp._runtime import mcp
-from clickwheel.mcp._ui_bundles import IPOD_CAPACITY_HTML, LIBRARY_STATS_HTML
+from clickwheel.mcp._ui_bundles import (
+    IPOD_CAPACITY_HTML,
+    LIBRARY_HEALTH_HTML,
+    LIBRARY_STATS_HTML,
+)
 from clickwheel.mcp.ui import register_ui_resource
 
 IPOD_CAPACITY_URI = "ui://clickwheel/ipod-capacity.html"
 LIBRARY_STATS_URI = "ui://clickwheel/library-stats.html"
+LIBRARY_HEALTH_URI = "ui://clickwheel/library-health.html"
 
 
 register_ui_resource(
@@ -37,5 +42,18 @@ register_ui_resource(
         "Headline counts (tracks, artists, albums, size, hours) plus a "
         "format-breakdown bar. Consumes the structured payload from "
         "library_stats."
+    ),
+)
+
+
+register_ui_resource(
+    mcp,
+    uri=LIBRARY_HEALTH_URI,
+    html=LIBRARY_HEALTH_HTML,
+    name="clickwheel — library health",
+    description=(
+        "Status grid for the library scan: music-folder reachability, "
+        "indexed/missing counts, last-scan freshness, auto-scan toggle. "
+        "Consumes the structured payload from library_health."
     ),
 )
