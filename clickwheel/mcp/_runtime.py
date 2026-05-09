@@ -82,6 +82,14 @@ LANGUAGE:
 mcp = FastMCP(name="clickwheel", instructions=INSTRUCTIONS)
 
 
+# Advertise the MCP Apps extension in the initialize handshake so hosts
+# render `_meta.ui.resourceUri` iframes alongside tool results. Without
+# this, Claude Desktop sees the meta but skips iframe rendering.
+from clickwheel.mcp.ui import enable_mcp_apps  # noqa: E402
+
+enable_mcp_apps(mcp)
+
+
 # Tool annotation presets. Per the MCP spec these are hints clients use
 # for auto-approval and UI labeling — they're not enforced server-side.
 READ_ONLY = ToolAnnotations(

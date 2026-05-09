@@ -1,0 +1,16 @@
+{
+  "singleQuote": true,
+  "trailingComma": "all",
+  "semi": true,
+  "printWidth": 88,
+  "arrowParens": "always",
+  "overrides": [
+    {
+      "files": ["*.md", "changelog.md"],
+      "options": {
+        "printWidth": 100,
+        "proseWrap": "preserve"
+      }
+    }
+  ]
+}

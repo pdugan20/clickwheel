@@ -18,6 +18,8 @@ from clickwheel.mcp._runtime import (
     open_session,
     render,
 )
+from clickwheel.mcp.ui import ui_tool_meta
+from clickwheel.mcp.ui_resources import IPOD_CAPACITY_URI
 
 
 def _summarize_track(t: dict) -> dict:
@@ -30,7 +32,7 @@ def _summarize_track(t: dict) -> dict:
     }
 
 
-@mcp.tool(annotations=READ_ONLY)
+@mcp.tool(annotations=READ_ONLY, meta=ui_tool_meta(IPOD_CAPACITY_URI))
 def get_ipod_contents() -> dict:
     """High-level snapshot of what's on the iPod: capacity, used/free space,
     track/artist/album counts, and the top 25 artists by track count.

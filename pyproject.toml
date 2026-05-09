@@ -90,5 +90,11 @@ exclude = ["clickwheel/ipod/"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
 
+[tool.ruff.lint.per-file-ignores]
+# UI bundle is a giant inline HTML/JS string. E501 fires on lines inside
+# the string literal where wrapping would mangle the JS. Stage B replaces
+# this file with auto-generated output anyway.
+"clickwheel/mcp/_ui_bundles.py" = ["E501"]
+
 [tool.ruff.lint.isort]
 known-first-party = ["clickwheel"]

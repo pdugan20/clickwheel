@@ -7,6 +7,10 @@ repos:
       - id: check-yaml
       - id: check-json
       - id: check-added-large-files
+        # MCP Apps bundle is a Vite single-file build of React + the
+        # ext-apps SDK; ~500-600 KB is normal. Bump the threshold and
+        # let the bundle through.
+        args: ['--maxkb=1024']
       - id: check-merge-conflict
       - id: mixed-line-ending
 
@@ -28,14 +32,18 @@ repos:
     hooks:
       - id: ruff
         args: ['--fix']
-        exclude: '^clickwheel/ipod/'
+        exclude: '^(clickwheel/ipod/|clickwheel/mcp/_ui_bundles\.py$)'
       - id: ruff-format
-        exclude: '^clickwheel/ipod/'
+        exclude: '^(clickwheel/ipod/|clickwheel/mcp/_ui_bundles\.py$)'
 
   - repo: https://github.com/pre-commit/pygrep-hooks
     rev: v1.10.0
     hooks:
       - id: python-no-log-warn
+        # Bundled JS contains console.warn / .warn( strings from React
+        # devtools — not Python logger calls. Skip the auto-generated
+        # bundle module to keep this hook useful for real Python code.
+        exclude: '^clickwheel/mcp/_ui_bundles\.py$'
       - id: text-unicode-replacement-char
 
   - repo: local
@@ -65,7 +73,23 @@ repos:
     rev: v4.0.0-alpha.8
     hooks:
       - id: prettier
-        types_or: [json, yaml, markdown]
+        types_or: [json, yaml, markdown, ts, tsx, javascript]
+        exclude: '^(clickwheel/mcp/_ui_bundles\.py|web/dist/|clickwheel/ipod/)'
+
+  - repo: local
+    hooks:
+      - id: eslint-web
+        name: ESLint (web bundles)
+        language: system
+        entry: bash -c 'cd web && npm run --silent lint -- --max-warnings=0'
+        files: '^web/.*\.(ts|tsx|js|mjs)$'
+        pass_filenames: false
+      - id: typecheck-web
+        name: tsc (web bundles)
+        language: system
+        entry: bash -c 'cd web && npm run --silent typecheck'
+        files: '^web/.*\.(ts|tsx)$'
+        pass_filenames: false
 
   - repo: https://github.com/igorshubovych/markdownlint-cli
     rev: v0.48.0

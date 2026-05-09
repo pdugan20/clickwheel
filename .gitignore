@@ -13,5 +13,11 @@ clickwheel.db-shm
 clickwheel.db-wal
 .ruff_cache/
 node_modules/
-package.json
-package-lock.json
+# Top-level package.json/lock are gitignored historically (commitlint
+# scratch from pre-commit). The `web/` workspace ships its own checked-in
+# package.json + lockfile — anchor these patterns to the repo root so
+# they don't swallow the bundle workspace.
+/package.json
+/package-lock.json
+web/dist/
+.eslintcache

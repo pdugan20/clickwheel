@@ -2,3 +2,19 @@ reports/
 beets/config.yaml
 beets/library.db
 CHANGELOG.md
+
+# Auto-generated artifacts.
+clickwheel/mcp/_ui_bundles.py
+web/dist/
+
+# Vendored — keep upstream formatting intact.
+clickwheel/ipod/
+
+# Dependencies.
+web/node_modules/
+node_modules/
+
+# Build output.
+dist/
+build/
+*.egg-info/
