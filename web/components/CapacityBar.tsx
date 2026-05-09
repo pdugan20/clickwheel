@@ -16,6 +16,12 @@ export type CapacityBarProps = {
   top_artists: CapacityArtist[];
   /** Cap segments shown by name; remainder rolls into a single "other" stripe. */
   maxSegments?: number;
+  /**
+   * Called when the user clicks an artist in the legend. Wired by the
+   * entry to `app.sendMessage` so the host treats it as a follow-up
+   * prompt ("Show me Taylor Swift songs on my iPod").
+   */
+  onArtistClick?: (artist: string) => void;
 };
 
 function fmtBytes(n: number): string {
@@ -37,6 +43,7 @@ export function CapacityBar({
   free_bytes,
   top_artists,
   maxSegments = 8,
+  onArtistClick,
 }: CapacityBarProps) {
   if (!capacity_bytes) {
     return <div style={{ opacity: 0.6 }}>No capacity data.</div>;
@@ -117,23 +124,52 @@ export function CapacityBar({
           opacity: 0.85,
         }}
       >
-        {segments.map((s, i) => (
-          <div
-            key={`${s.name}-${i}`}
-            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-          >
-            <span
+        {segments.map((s, i) => {
+          // The "other artists" rollup isn't a real artist, so it can't
+          // turn into a follow-up prompt — render it inert.
+          const clickable = !!onArtistClick && s.name !== 'other artists';
+          const Row = clickable ? 'button' : 'div';
+          return (
+            <Row
+              key={`${s.name}-${i}`}
+              type={clickable ? 'button' : undefined}
+              onClick={clickable ? () => onArtistClick!(s.name) : undefined}
               style={{
-                width: 10,
-                height: 10,
-                borderRadius: 2,
-                background: s.color,
-                flexShrink: 0,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                background: 'transparent',
+                border: 'none',
+                padding: 0,
+                margin: 0,
+                font: 'inherit',
+                color: 'inherit',
+                textAlign: 'left',
+                cursor: clickable ? 'pointer' : 'default',
               }}
-            />
-            <span>{s.name}</span>
-          </div>
-        ))}
+            >
+              <span
+                style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: 2,
+                  background: s.color,
+                  flexShrink: 0,
+                }}
+              />
+              <span
+                style={{
+                  textDecoration: clickable ? 'underline' : 'none',
+                  textDecorationColor: 'currentcolor',
+                  textDecorationStyle: 'dotted',
+                  textUnderlineOffset: 3,
+                }}
+              >
+                {s.name}
+              </span>
+            </Row>
+          );
+        })}
       </div>
     </div>
   );

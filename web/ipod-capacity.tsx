@@ -3,9 +3,9 @@
  * pattern: useApp() to handshake with the host, ontoolresult to receive
  * the structuredContent, render the relevant component below.
  */
-import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode, useCallback, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { useApp } from '@modelcontextprotocol/ext-apps/react';
+import { useApp, useHostStyles } from '@modelcontextprotocol/ext-apps/react';
 import { CapacityBar, type CapacityArtist } from './components/CapacityBar.js';
 import { rootStyle } from './lib/root-style.js';
 
@@ -25,6 +25,12 @@ function IpodCapacityApp() {
     capabilities: {},
   });
 
+  // Pull the host's theme tokens (background, text, font, etc.) onto
+  // the document root as CSS variables. Components reference them via
+  // `var(--color-text-primary, fallback)` so this is the only place we
+  // need to opt in.
+  useHostStyles(app);
+
   const [payload, setPayload] = useState<IpodContents | null>(null);
 
   useEffect(() => {
@@ -34,6 +40,24 @@ function IpodCapacityApp() {
       if (sc?.capacity_bytes != null) setPayload(sc);
     };
   }, [app]);
+
+  // Surface a follow-up prompt to the host as if the user typed it.
+  // Claude responds in the conversation thread; the iframe stays put.
+  const onArtistClick = useCallback(
+    (artist: string) => {
+      if (!app) return;
+      app.sendMessage({
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: `Show me ${artist} songs on my iPod.`,
+          },
+        ],
+      });
+    },
+    [app]
+  );
 
   if (error) {
     return <div style={rootStyle}>Error: {error.message}</div>;
@@ -50,6 +74,7 @@ function IpodCapacityApp() {
         used_bytes={payload.used_bytes}
         free_bytes={payload.free_bytes}
         top_artists={payload.top_artists}
+        onArtistClick={onArtistClick}
       />
     </div>
   );

@@ -10,6 +10,7 @@ error surface (typer.Exit, McpError, etc.).
 
 from __future__ import annotations
 
+import re
 import shutil
 import time
 from collections.abc import Callable
@@ -19,6 +20,34 @@ from pathlib import Path
 from clickwheel.config import Config
 from clickwheel.db import Database
 from clickwheel.library import AUDIO_EXTENSIONS, scan_file
+
+# Strips trailing "feat./featuring/with X" annotations from an artist
+# tag. Anchored to a word boundary on the keyword so band names that
+# happen to contain "feat" (none we know of, but be defensive) survive.
+# Optional opening paren handles "(feat. X)" formatting too.
+_FEAT_SUFFIX_RE = re.compile(
+    r"\s+\(?(?:feat\.?|featuring|with)\s+.*$",
+    re.IGNORECASE,
+)
+
+
+def primary_artist(name: str | None) -> str:
+    """Reduce a multi-artist tag to the primary artist.
+
+    iTunes-style exports concatenate collaborators with commas
+    ("Taylor Swift, Ed Sheeran"). For top-N rollups we want the lead
+    artist so collabs aggregate under their primary. Splits on the
+    first comma and strips trailing "feat. X" / "featuring X" / "with X"
+    clauses.
+
+    `&` is intentionally NOT a split delimiter — it appears in legitimate
+    band names ("Simon & Garfunkel", "Earth, Wind & Fire").
+    """
+    if not name:
+        return "Unknown"
+    cleaned = _FEAT_SUFFIX_RE.sub("", name).strip()
+    head = cleaned.split(",", 1)[0].strip()
+    return head or "Unknown"
 
 
 class ClickwheelError(Exception):
