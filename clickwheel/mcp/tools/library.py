@@ -17,9 +17,11 @@ from clickwheel.mcp._runtime import (
     open_session,
     render,
 )
+from clickwheel.mcp.ui import ui_tool_meta
+from clickwheel.mcp.ui_resources import LIBRARY_STATS_URI
 
 
-@mcp.tool(annotations=READ_ONLY)
+@mcp.tool(annotations=READ_ONLY, meta=ui_tool_meta(LIBRARY_STATS_URI))
 def library_stats() -> dict:
     """High-level stats for the indexed music library.
 

@@ -10,6 +10,7 @@ import {
   fixtures as ipodCapacityFixtures,
   type Fixture,
 } from '../ipod-capacity.fixtures.js';
+import { fixtures as libraryStatsFixtures } from '../library-stats.fixtures.js';
 
 export type Bundle = {
   /** Slug shown in the sidebar and used as the URL hash. */
@@ -28,5 +29,11 @@ export const bundles: Bundle[] = [
     label: 'iPod capacity',
     entryUrl: '/ipod-capacity.html',
     fixtures: ipodCapacityFixtures,
+  },
+  {
+    slug: 'library-stats',
+    label: 'Library overview',
+    entryUrl: '/library-stats.html',
+    fixtures: libraryStatsFixtures,
   },
 ];
