@@ -10,6 +10,7 @@ from mcp.server.fastmcp import Context
 from pydantic import Field
 
 from clickwheel import actions
+from clickwheel._sync_detail import detail_for_paths, detail_for_tracks
 from clickwheel.config import load_config
 from clickwheel.db import Database
 from clickwheel.mcp import _sync_state
@@ -300,6 +301,7 @@ async def sync_playlist_to_ipod(
                 kind="sync",
                 total=len(diff.to_add),
                 operation=f"playlist '{playlist}'",
+                detail=detail_for_tracks(diff.to_add),
             )
 
             def on_event(ev: actions.SyncEvent) -> None:
@@ -457,6 +459,7 @@ async def add_tracks_to_ipod(
                 kind="add",
                 total=len(paths),
                 operation=f"{len(paths)} tracks",
+                detail=detail_for_paths(db, paths),
             )
 
             def on_event(ev: actions.SyncEvent) -> None:
@@ -555,6 +558,7 @@ async def add_artist_to_ipod(
                 kind="add",
                 total=len(paths),
                 operation=f"all tracks by {artist}",
+                detail=detail_for_paths(db, paths),
             )
 
             def on_event(ev: actions.SyncEvent) -> None:
@@ -681,6 +685,7 @@ async def remove_tracks_from_ipod(
                 kind="remove",
                 total=len(paths),
                 operation=f"{len(paths)} tracks",
+                detail=detail_for_paths(db, paths),
             )
 
             def on_event(ev: actions.RemoveEvent) -> None:

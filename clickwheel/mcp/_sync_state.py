@@ -24,9 +24,11 @@ class SyncProgress:
     """Snapshot of the most recent in-flight sync/add/remove operation.
 
     `kind` is the operation flavor ("add", "sync", "remove") so the
-    bundle can render different copy. `done` flips true when the tool
-    completes — at that point the iframe should stop polling and let
-    its `ontoolresult` handler take over.
+    bundle can render different copy. `detail` is a static one-liner
+    summarising the whole operation (e.g. "145 MB · 8 albums") — set
+    once at start, never updated mid-run. `done` flips true when the
+    tool completes; at that point the iframe should stop polling and
+    let its `ontoolresult` handler take over.
     """
 
     kind: str = "idle"
@@ -34,6 +36,7 @@ class SyncProgress:
     total: int = 0
     message: str = ""
     operation: str = ""  # human-readable target ("playlist 'test-mix'", etc.)
+    detail: str = ""  # static subtitle ("145 MB · 8 albums")
     started_at: float = 0.0
     done: bool = True
 
@@ -42,7 +45,7 @@ _lock = threading.Lock()
 _state: SyncProgress = SyncProgress()
 
 
-def start(kind: str, total: int, operation: str = "") -> None:
+def start(kind: str, total: int, operation: str = "", detail: str = "") -> None:
     """Begin a new operation. Resets counters and flips done=False."""
     global _state
     with _lock:
@@ -52,6 +55,7 @@ def start(kind: str, total: int, operation: str = "") -> None:
             total=total,
             message="",
             operation=operation,
+            detail=detail,
             started_at=time.time(),
             done=False,
         )
