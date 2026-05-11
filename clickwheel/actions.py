@@ -226,6 +226,32 @@ class SyncResult:
 
 
 @dataclass
+class RemoveEvent:
+    """Emitted per track as remove_tracks_from_ipod unlinks files."""
+
+    current: int
+    total: int
+    track: dict
+    ok: bool
+
+
+@dataclass
+class RemoveResult:
+    """Outcome of a remove_*_from_ipod call.
+
+    `removed` is the iPod-side track records (artist/album/title/location)
+    that were dropped from the iTunesDB AND whose physical files were
+    unlinked. `not_matched` is the inputs that didn't correspond to any
+    iPod track. `bytes_freed` is the sum of file sizes for `removed`.
+    """
+
+    removed: list[dict] = field(default_factory=list)
+    not_matched: list[str] = field(default_factory=list)
+    bytes_freed: int = 0
+    library_updated: bool = True
+
+
+@dataclass
 class ScrobbleSubmitResult:
     plays_found: int = 0
     new_cached: int = 0
@@ -1014,6 +1040,237 @@ def add_tracks_to_ipod(
         failed=failed,
         kept_in_place_count=already_present,
         library_updated=db_ok,
+    )
+
+
+def _match_ipod_tracks_by_triples(
+    ipod_tracks: list[dict],
+    triples: list[tuple[str, str, str]],
+) -> tuple[list[dict], list[tuple[str, str, str]]]:
+    """Return (matched_ipod_tracks, unmatched_triples).
+
+    Matches by (artist, album, title) — the same identity key sync uses.
+    """
+    by_triple: dict[tuple[str, str, str], dict] = {}
+    for t in ipod_tracks:
+        key = (
+            (t.get("artist") or ""),
+            (t.get("album") or ""),
+            (t.get("title") or ""),
+        )
+        by_triple[key] = t
+    matched: list[dict] = []
+    unmatched: list[tuple[str, str, str]] = []
+    for triple in triples:
+        t = by_triple.get(triple)
+        if t is None:
+            unmatched.append(triple)
+        else:
+            matched.append(t)
+    return matched, unmatched
+
+
+def remove_tracks_from_ipod(
+    cfg: Config,
+    db: Database,
+    paths: list[str],
+    *,
+    on_event: Callable[[RemoveEvent], None] | None = None,
+) -> RemoveResult:
+    """Remove specific tracks from the iPod's library.
+
+    Resolves each `path` to its (artist, album, title) via the library
+    DB, then matches against the iPod's current track list to find the
+    iPod-side records to drop. Rewrites the iTunesDB without those
+    tracks, then unlinks the physical files from iPod_Control/Music/Fxx/
+    to actually free space.
+
+    Sync is NORMALLY additive — this is the explicit "delete" door, and
+    DOES delete the music files from the device. Caller (UI/MCP tool)
+    must gate with destructive confirmation.
+
+    Paths that aren't in the library index are reported as unmatched.
+    Paths that ARE in the library but whose triple isn't on the iPod
+    are also reported as unmatched (the user asked to remove something
+    that's already not there).
+
+    Pre-flight raises LibraryNotFoundError, IpodNotFoundError. Track
+    deletion is best-effort: if a physical file fails to unlink, the
+    iTunesDB rewrite still succeeds (the track becomes invisible on the
+    device, the file just lingers as orphan bytes — won't crash).
+    """
+    from clickwheel.ipod import get_ipod_tracks
+    from clickwheel.ipod.sync import unlink_ipod_track_files, write_ipod_db
+
+    if not cfg.music_dir.is_dir():
+        raise LibraryNotFoundError(
+            f"Music library at {cfg.music_dir} isn't mounted. "
+            "Mount the share before removing tracks."
+        )
+
+    # Resolve clickwheel paths → (artist, album, title) triples via the
+    # library DB. We don't error on unknown paths here — they're added
+    # to `not_matched` so the caller can surface them and decide.
+    triples: list[tuple[str, str, str]] = []
+    not_matched: list[str] = []
+    for path in paths:
+        row = db.conn.execute(
+            "SELECT artist, album, title FROM tracks WHERE path = ?", (path,)
+        ).fetchone()
+        if row is None:
+            not_matched.append(path)
+            continue
+        triples.append((row["artist"] or "", row["album"] or "", row["title"] or ""))
+
+    ipod_db = require_ipod(cfg)
+    ipod_tracks = get_ipod_tracks(ipod_db)
+    matched, unmatched_triples = _match_ipod_tracks_by_triples(ipod_tracks, triples)
+    # Report triples-not-on-iPod back as path-shaped strings so the
+    # caller can list them. We don't have the original path for these
+    # (we did already resolve to triples), so format the triple instead.
+    for at, al, ti in unmatched_triples:
+        not_matched.append(f"{at} — {ti} ({al})")
+
+    total = len(matched)
+    locations: list[str] = []
+    for i, t in enumerate(matched, start=1):
+        loc = t.get("location") or ""
+        if loc:
+            locations.append(loc)
+        if on_event:
+            on_event(RemoveEvent(current=i, total=total, track=t, ok=True))
+
+    bytes_freed = sum(t.get("size") or 0 for t in matched)
+
+    # Rewrite iTunesDB without the removed tracks.
+    library_updated = write_ipod_db(
+        cfg.ipod_mount,
+        copied_tracks=[],
+        remove_track_locations=set(locations),
+    )
+
+    # Unlink the physical files. Best-effort.
+    if library_updated and locations:
+        unlink_ipod_track_files(cfg.ipod_mount, locations)
+
+    return RemoveResult(
+        removed=[
+            {
+                "artist": t.get("artist"),
+                "album": t.get("album"),
+                "title": t.get("title"),
+                "size_bytes": t.get("size") or 0,
+            }
+            for t in matched
+        ],
+        not_matched=not_matched,
+        bytes_freed=bytes_freed,
+        library_updated=library_updated,
+    )
+
+
+def remove_artist_from_ipod(
+    cfg: Config,
+    artist: str,
+    *,
+    on_event: Callable[[RemoveEvent], None] | None = None,
+) -> RemoveResult:
+    """Drop every iPod track whose canonical lead artist matches.
+
+    Matches via `primary_artist` (album_artist-first), same rollup logic
+    the capacity-bar legend uses. So "Taylor Swift / HAIM" tracks would
+    be removed when you ask to remove "Taylor Swift" — that's the
+    expected behavior given those tracks ARE Taylor Swift tracks.
+
+    Doesn't require the tracks to be in the library DB. Reads the iPod
+    directly, filters by primary_artist, then drops the matches.
+
+    Errors: IpodNotFoundError.
+    """
+    from clickwheel.ipod import get_ipod_tracks
+    from clickwheel.ipod.sync import unlink_ipod_track_files, write_ipod_db
+
+    ipod_db = require_ipod(cfg)
+    ipod_tracks = get_ipod_tracks(ipod_db)
+
+    matched = [
+        t
+        for t in ipod_tracks
+        if primary_artist(t.get("artist"), t.get("album_artist")) == artist
+    ]
+    total = len(matched)
+    if total == 0:
+        return RemoveResult(
+            removed=[], not_matched=[], bytes_freed=0, library_updated=True
+        )
+
+    locations: list[str] = []
+    for i, t in enumerate(matched, start=1):
+        loc = t.get("location") or ""
+        if loc:
+            locations.append(loc)
+        if on_event:
+            on_event(RemoveEvent(current=i, total=total, track=t, ok=True))
+
+    bytes_freed = sum(t.get("size") or 0 for t in matched)
+    library_updated = write_ipod_db(
+        cfg.ipod_mount,
+        copied_tracks=[],
+        remove_track_locations=set(locations),
+    )
+    if library_updated and locations:
+        unlink_ipod_track_files(cfg.ipod_mount, locations)
+
+    return RemoveResult(
+        removed=[
+            {
+                "artist": t.get("artist"),
+                "album": t.get("album"),
+                "title": t.get("title"),
+                "size_bytes": t.get("size") or 0,
+            }
+            for t in matched
+        ],
+        not_matched=[],
+        bytes_freed=bytes_freed,
+        library_updated=library_updated,
+    )
+
+
+def remove_ipod_playlist(cfg: Config, name: str) -> RemoveResult:
+    """Drop a playlist from the iPod's iTunesDB.
+
+    The playlist's TRACKS are NOT deleted from the library — they stay
+    accessible via the Music → Artists / Albums browsing. Only the
+    playlist artifact under Music → Playlists goes away.
+
+    For "delete the playlist AND its tracks" the caller composes:
+    list iPod tracks for that playlist via the playlist's items,
+    `remove_tracks_from_ipod(paths)`, then `remove_ipod_playlist(name)`.
+
+    Errors: IpodNotFoundError, PlaylistNotFoundError.
+    """
+    from clickwheel.ipod import get_ipod_playlists
+    from clickwheel.ipod.sync import write_ipod_db
+
+    ipod_db = require_ipod(cfg)
+    existing = {p["name"] for p in get_ipod_playlists(ipod_db)}
+    if name not in existing:
+        raise PlaylistNotFoundError(
+            f"No iPod playlist named '{name}'. "
+            f"Use list_ipod_playlists to see what's there."
+        )
+
+    library_updated = write_ipod_db(
+        cfg.ipod_mount,
+        copied_tracks=[],
+        remove_playlist_names={name},
+    )
+    return RemoveResult(
+        removed=[],
+        not_matched=[],
+        bytes_freed=0,
+        library_updated=library_updated,
     )
 
 

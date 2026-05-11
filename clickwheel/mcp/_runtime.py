@@ -48,6 +48,22 @@ browse on the iPod, or just want the songs added to the library? Don't
 auto-default to creating throwaway playlists — that pollutes their
 device.
 
+REMOVING FROM THE IPOD:
+- "Take X off my iPod" / "delete this album from the device" / "free
+  up space": use `remove_tracks_from_ipod` (specific paths) or
+  `remove_artist_from_ipod` (whole artist). Both physically delete
+  the audio files from the iPod; tracks stay in the user's library
+  on their Mac and can be re-added later.
+- "Remove the workout playlist from my iPod" without deleting its
+  songs: use `remove_ipod_playlist`. The playlist artifact under
+  Music → Playlists goes away; the tracks themselves stay in the
+  library, browsable by artist/album.
+- For "remove the playlist AND its tracks", compose the two: collect
+  the playlist's tracks (via `get_playlist` if it was synced from
+  clickwheel) → `remove_tracks_from_ipod(paths)` → then
+  `remove_ipod_playlist(name)`. Tell the user that's what you're
+  doing, since it's a multi-step destructive operation.
+
 ANTI-HALLUCINATION:
 - Never invent track titles, artists, albums, durations, years, file
   paths, or playlist names. Only assert what tools return.
@@ -79,12 +95,15 @@ WORKFLOWS:
   plain language and suggest re-running.
 
 SAFETY:
-- `delete_playlist`, `add_tracks_to_ipod`, `add_artist_to_ipod`, and
-  `sync_playlist_to_ipod` are flagged destructive. Claude Code (and
-  other compliant clients) surface a native Allow/Deny prompt before
-  invoking them — that is the user's confirmation moment. Before
-  calling, summarize the impact in your reply (track count, size,
-  target iPod) so the user has the context to allow or deny.
+- `delete_playlist`, `add_tracks_to_ipod`, `add_artist_to_ipod`,
+  `sync_playlist_to_ipod`, `remove_tracks_from_ipod`,
+  `remove_artist_from_ipod`, and `remove_ipod_playlist` are flagged
+  destructive. Claude Code (and other compliant clients) surface a
+  native Allow/Deny prompt before invoking them — that is the user's
+  confirmation moment. Before calling, summarize the impact in your
+  reply (track count, size, target iPod) so the user has the context
+  to allow or deny. For remove operations especially: name the tracks
+  that will be deleted, so the user can confirm they meant those.
 - The CLI runs alongside this server with richer interactive UI; suggest
   it for complex flows (interactive picker, live sync progress).
 

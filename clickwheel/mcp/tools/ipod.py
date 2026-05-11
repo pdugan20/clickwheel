@@ -592,6 +592,243 @@ async def add_artist_to_ipod(
     return render(text, data)
 
 
+@mcp.tool(
+    annotations=DESTRUCTIVE,
+    meta=ui_tool_meta(SYNC_RESULT_URI),
+)
+async def remove_tracks_from_ipod(
+    paths: Annotated[
+        list[str],
+        Field(
+            description=(
+                "Absolute paths (from the indexed library) of tracks to "
+                "remove from the iPod. Get these via list_tracks_by_album "
+                "or search_tracks. Paths that aren't on the iPod are "
+                "reported back as unmatched — not an error."
+            ),
+        ),
+    ],
+    ctx: Context,
+) -> dict:
+    """Remove specific tracks from the iPod — drops them from the
+    iTunesDB AND deletes the underlying audio files from the device.
+
+    Use for "take Pinkerton off my iPod" / "remove these test tracks" /
+    "free up space, delete this album." Tracks come off the device
+    entirely — they remain in your library (clickwheel's index of your
+    Mac's music folder is untouched) and can be re-added later via
+    `add_tracks_to_ipod`.
+
+    Reports progress per track via MCP `notifications/progress`.
+
+    Flagged destructive — clients gate with native Allow/Deny prompts.
+    Summarize the impact in your reply BEFORE calling: how many tracks,
+    estimated space freed (look up file sizes via the library), and the
+    confirmation that this deletes from the iPod (not from the library).
+
+    For removing every track by an artist, prefer `remove_artist_from_ipod`
+    — it doesn't need path resolution and handles primary-artist
+    rollup naturally (e.g., removing "Taylor Swift" also drops
+    "Taylor Swift / HAIM" tracks).
+
+    Errors
+    ------
+    - LibraryNotFoundError: music_dir not mounted.
+    - IpodNotFoundError: no iPod mounted.
+    - Paths not in the library OR triples not on the iPod are reported
+      as `not_matched` in the result — not raised.
+
+    After success: offer to eject the iPod via `eject_ipod`. Used space
+    will reflect the freed bytes immediately.
+    """
+    cfg = load_config()
+    loop = asyncio.get_running_loop()
+
+    def worker() -> actions.RemoveResult:
+        db = Database(cfg.db_path)
+        try:
+
+            def on_event(ev: actions.RemoveEvent) -> None:
+                artist = ev.track.get("artist") or "Unknown"
+                title = ev.track.get("title") or "Unknown"
+                asyncio.run_coroutine_threadsafe(
+                    ctx.report_progress(ev.current, ev.total, f"{artist} — {title}"),
+                    loop,
+                )
+
+            return actions.remove_tracks_from_ipod(cfg, db, paths, on_event=on_event)
+        finally:
+            db.close()
+
+    result = await asyncio.to_thread(worker)
+
+    n_removed = len(result.removed)
+    n_not_matched = len(result.not_matched)
+    if n_removed == 0:
+        if n_not_matched == 0:
+            text = "No tracks specified."
+        else:
+            text = (
+                f"None of the {n_not_matched} requested tracks are on the "
+                "iPod. Nothing to remove."
+            )
+    elif result.library_updated:
+        text = (
+            f"Removed {format_count(n_removed, 'track')} "
+            f"({format_bytes(result.bytes_freed)} freed). "
+            "Offer to eject the iPod when ready."
+        )
+    else:
+        text = (
+            f"{format_count(n_removed, 'track')} removed from the iPod's "
+            "library, but the database write didn't fully complete. "
+            "Suggest the CLI for retry."
+        )
+
+    data = {
+        "removed": n_removed,
+        "not_matched": n_not_matched,
+        "bytes_freed": result.bytes_freed,
+        "library_updated": result.library_updated,
+    }
+    return render(text, data)
+
+
+@mcp.tool(
+    annotations=DESTRUCTIVE,
+    meta=ui_tool_meta(SYNC_RESULT_URI),
+)
+async def remove_artist_from_ipod(
+    artist: Annotated[
+        str,
+        Field(
+            description=(
+                "Artist name to drop from the iPod. Matched via canonical "
+                "lead-artist rollup (album_artist-first), so e.g. removing "
+                "'Taylor Swift' also drops 'Taylor Swift / HAIM' tracks."
+            ),
+        ),
+    ],
+    ctx: Context,
+) -> dict:
+    """Drop every track by an artist from the iPod, in one shot.
+
+    Mirrors `add_artist_to_ipod`. Use for "delete all Weezer from my
+    iPod" / "I'm done with this artist." The artist's tracks are
+    physically removed from the device; they stay in your library
+    (your Mac's music folder is untouched).
+
+    Matching uses `primary_artist` (album_artist preferred), so
+    collab variants like "Taylor Swift / HAIM" with
+    album_artist='Taylor Swift' are correctly grouped under their
+    canonical lead.
+
+    No library lookup required — reads the iPod's track list directly
+    and filters. So even iTunes-only artists (not in your clickwheel
+    library) can be removed.
+
+    Flagged destructive — Allow/Deny gates the call. Before invoking,
+    summarize: artist name + how many tracks will go (call
+    `list_ipod_tracks` first if you want the exact count) + that this
+    deletes from the iPod, not the library.
+
+    After: offer to eject.
+    """
+    cfg = load_config()
+    loop = asyncio.get_running_loop()
+
+    def worker() -> actions.RemoveResult:
+        def on_event(ev: actions.RemoveEvent) -> None:
+            a = ev.track.get("artist") or "Unknown"
+            t = ev.track.get("title") or "Unknown"
+            asyncio.run_coroutine_threadsafe(
+                ctx.report_progress(ev.current, ev.total, f"{a} — {t}"),
+                loop,
+            )
+
+        return actions.remove_artist_from_ipod(cfg, artist, on_event=on_event)
+
+    result = await asyncio.to_thread(worker)
+
+    n_removed = len(result.removed)
+    if n_removed == 0:
+        text = (
+            f"No tracks by '{artist}' on the iPod. Nothing to remove. "
+            "Names are matched via the canonical lead-artist rollup — "
+            "check spelling, or use `list_ipod_tracks` to see what's there."
+        )
+    elif result.library_updated:
+        text = (
+            f"Removed {format_count(n_removed, 'track')} by {artist} "
+            f"({format_bytes(result.bytes_freed)} freed). "
+            "Offer to eject when done."
+        )
+    else:
+        text = (
+            f"{format_count(n_removed, 'track')} by {artist} removed but "
+            "the iPod's library wasn't fully updated. Suggest re-running."
+        )
+
+    data = {
+        "artist": artist,
+        "removed": n_removed,
+        "bytes_freed": result.bytes_freed,
+        "library_updated": result.library_updated,
+    }
+    return render(text, data)
+
+
+@mcp.tool(
+    annotations=DESTRUCTIVE,
+    meta=ui_tool_meta(SYNC_RESULT_URI),
+)
+def remove_ipod_playlist(
+    name: Annotated[
+        str,
+        Field(description="Name of the iPod playlist to remove."),
+    ],
+) -> dict:
+    """Remove a playlist from the iPod (Music → Playlists). The
+    playlist's tracks are NOT deleted — they stay in the iPod's main
+    library, browsable by artist/album. Only the playlist artifact
+    goes away.
+
+    Use for "delete the workout playlist from my iPod" / "I don't want
+    this playlist on the device anymore but keep the songs."
+
+    For "remove the playlist AND its tracks", call this AFTER
+    `remove_tracks_from_ipod` with the playlist's track paths
+    (you can collect those via the clickwheel-side `get_playlist` if
+    the playlist was synced from clickwheel).
+
+    Errors
+    ------
+    - IpodNotFoundError: no iPod mounted.
+    - PlaylistNotFoundError: no iPod-side playlist with this name.
+      Use `list_ipod_playlists` to see what exists.
+
+    Flagged destructive. After success: offer to eject.
+    """
+    with open_session() as (cfg, _db):
+        result = actions.remove_ipod_playlist(cfg, name)
+        if result.library_updated:
+            text = (
+                f"Removed playlist '{name}' from the iPod. The tracks "
+                "themselves are still in the library. Offer to eject."
+            )
+        else:
+            text = (
+                f"Tried to remove '{name}' but the iPod's library "
+                "wasn't fully updated. Suggest re-running."
+            )
+        data = {
+            "ipod_playlist": name,
+            "removed_playlist": True,
+            "library_updated": result.library_updated,
+        }
+        return render(text, data)
+
+
 @mcp.tool(annotations=MUTATION)
 def eject_ipod() -> dict:
     """Safely unmount the iPod via `diskutil eject`. Idempotent in spirit:

@@ -79,6 +79,41 @@ def copy_tracks_to_ipod(
     return copied, failed
 
 
+def unlink_ipod_track_files(
+    ipod_mount: Path,
+    locations: list[str],
+) -> int:
+    """Delete the physical track files for the given iTunesDB locations.
+
+    iTunesDB locations are colon-prefixed paths like
+    `:iPod_Control:Music:F00/foo.mp3`. We rewrite to filesystem paths
+    relative to `ipod_mount` and unlink. Failures are logged but don't
+    raise — partial cleanup is preferable to refusing the operation
+    entirely. The iTunesDB has already been rewritten by the caller, so
+    even if a file remains on disk it's no longer reachable through the
+    iPod UI; it just wastes space.
+
+    Returns the count of files successfully removed.
+    """
+    removed = 0
+    for loc in locations:
+        if not loc:
+            continue
+        # ":iPod_Control:Music:F00/foo.mp3" → "iPod_Control/Music/F00/foo.mp3"
+        rel = loc.lstrip(":").replace(":", "/")
+        target = ipod_mount / rel
+        try:
+            target.unlink()
+            removed += 1
+        except FileNotFoundError:
+            # Already gone — count it as removed for the caller's
+            # purposes, the user wanted it not on the iPod.
+            removed += 1
+        except OSError:
+            logger.warning("Could not unlink %s", target, exc_info=True)
+    return removed
+
+
 def _existing_track_to_trackinfo(t: dict) -> TrackInfo:
     """Convert an existing iTunesDB track dict (read via
     `clickwheel.ipod.get_ipod_tracks`) back to a `TrackInfo` for re-writing.
@@ -154,6 +189,8 @@ def write_ipod_db(
     full_replace: bool = False,
     playlist_specs: "list[IpodPlaylistSpec] | None" = None,
     overwrite_playlist_names: set[str] | None = None,
+    remove_track_locations: set[str] | None = None,
+    remove_playlist_names: set[str] | None = None,
 ) -> bool:
     """Write the iTunesDB. By default MERGES with the existing iTunesDB on
     the iPod, preserving previously-synced tracks (and their play counts /
@@ -181,6 +218,17 @@ def write_ipod_db(
                         when the caller is replacing/renaming a same-
                         name playlist. Defaults to the names in
                         `playlist_specs` (replace-on-write semantics).
+        remove_track_locations: iTunesDB `location` strings (with colon
+                        prefix) for tracks to drop from the rewritten
+                        iTunesDB. Used by `remove_tracks_from_ipod`.
+                        The caller is responsible for unlinking the
+                        physical files separately — this function only
+                        rewrites the database.
+        remove_playlist_names: names of iPod-side playlists to drop
+                        from the rewritten iTunesDB. Used by
+                        `remove_ipod_playlist`. Tracks referenced by
+                        the removed playlist are NOT deleted from the
+                        library — only the playlist artifact goes away.
 
     Returns True on success. If reading the existing iTunesDB fails (corrupt
     db, share unmounted mid-call), the merge step is skipped with a logged
@@ -222,6 +270,8 @@ def write_ipod_db(
     existing_triple_to_dbid: dict[tuple[str, str, str], int] = {}
     existing_playlists: list[dict] = []
 
+    remove_locs = remove_track_locations or set()
+
     if not full_replace:
         try:
             ipod_db = read_ipod(ipod_mount)
@@ -233,6 +283,8 @@ def write_ipod_db(
                 loc = t.get("location") or ""
                 if loc in new_locations:
                     continue  # new copy wins for matching paths
+                if loc in remove_locs:
+                    continue  # caller asked us to drop this track
                 ti = _existing_track_to_trackinfo(t)
                 track_infos.append(ti)
                 triple = (
@@ -286,11 +338,14 @@ def write_ipod_db(
         if overwrite_playlist_names is not None
         else {spec.name for spec in (playlist_specs or [])}
     )
+    drop_names = remove_playlist_names or set()
     preserved_playlist_infos: list[PlaylistInfo] = []
     for raw in existing_playlists:
         name = raw.get("name") or ""
         if name in new_names:
             continue  # explicitly being replaced
+        if name in drop_names:
+            continue  # explicitly being removed
         if raw.get("is_smart"):
             # Smart playlists need their preferences/rules preserved to
             # remain functional. Punt on that for now — drop them rather

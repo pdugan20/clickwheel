@@ -41,6 +41,12 @@ type SyncResultPayload = {
   already_present?: number;
   artist?: string;
   found_in_library?: number;
+  // remove_tracks_from_ipod / remove_artist_from_ipod
+  removed?: number;
+  not_matched?: number;
+  bytes_freed?: number;
+  // remove_ipod_playlist
+  removed_playlist?: boolean;
 };
 
 function fmtCount(n: number, singular: string, plural?: string): string {
@@ -83,12 +89,28 @@ function Badge({
   );
 }
 
+function fmtBytes(n: number): string {
+  if (!n) return '0 B';
+  const gb = n / 1024 ** 3;
+  if (gb >= 1) return `${gb.toFixed(1)} GB`;
+  const mb = n / 1024 ** 2;
+  if (mb >= 1) return `${mb.toFixed(0)} MB`;
+  return `${Math.round(n / 1024)} KB`;
+}
+
 function deriveTitle(p: SyncResultPayload): string {
   if (p.conflict) return `Playlist name conflict`;
+  if (p.removed_playlist && p.ipod_playlist) {
+    return `Removed playlist "${p.ipod_playlist}"`;
+  }
+  if (typeof p.removed === 'number') {
+    if (p.artist) return `Removed ${p.artist} from the iPod`;
+    return `Removed tracks from the iPod`;
+  }
   if (p.synced === false && !p.conflict) return `Already in sync`;
   if (p.synced) {
     const target = p.ipod_playlist ?? p.playlist ?? 'playlist';
-    return `Synced playlist '${target}'`;
+    return `Synced playlist "${target}"`;
   }
   if (p.artist) {
     return `Added ${p.artist}`;
@@ -112,6 +134,32 @@ function deriveBadge(p: SyncResultPayload): {
 }
 
 function deriveCells(p: SyncResultPayload): StatCell[] {
+  // Removal payload — present its own stats.
+  if (typeof p.removed === 'number') {
+    const cells: StatCell[] = [
+      {
+        label: 'removed',
+        value: p.removed.toLocaleString(),
+        tone: p.removed > 0 ? 'ok' : 'default',
+      },
+    ];
+    if ((p.bytes_freed ?? 0) > 0) {
+      cells.push({
+        label: 'freed',
+        value: fmtBytes(p.bytes_freed ?? 0),
+      });
+    }
+    if ((p.not_matched ?? 0) > 0) {
+      cells.push({
+        label: 'not on iPod',
+        value: (p.not_matched ?? 0).toLocaleString(),
+        tone: 'warn',
+      });
+    }
+    return cells;
+  }
+
+  // Add / sync payload.
   const cells: StatCell[] = [];
   const added = p.added ?? 0;
   cells.push({
@@ -139,10 +187,7 @@ function deriveCells(p: SyncResultPayload): StatCell[] {
     });
   }
   if (p.on_conflict) {
-    cells.push({
-      label: 'conflict',
-      value: p.on_conflict,
-    });
+    cells.push({ label: 'conflict', value: p.on_conflict });
   }
   if (p.found_in_library != null && p.artist) {
     cells.push({

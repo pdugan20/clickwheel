@@ -113,4 +113,43 @@ export const fixtures: Fixture[] = [
       library_updated: false,
     },
   },
+  {
+    name: 'remove_tracks · happy path',
+    description: '5 Pinkerton tracks dropped — ~24 MB freed.',
+    structuredContent: {
+      removed: 5,
+      not_matched: 0,
+      bytes_freed: 23_900_000,
+      library_updated: true,
+    },
+  },
+  {
+    name: 'remove_tracks · partial match',
+    description: 'Some paths not on iPod — reported as not_matched.',
+    structuredContent: {
+      removed: 3,
+      not_matched: 2,
+      bytes_freed: 14_400_000,
+      library_updated: true,
+    },
+  },
+  {
+    name: 'remove_artist · clean sweep',
+    description: 'Remove all Taylor Swift — 255 tracks gone.',
+    structuredContent: {
+      artist: 'Taylor Swift',
+      removed: 255,
+      bytes_freed: 1_350_000_000,
+      library_updated: true,
+    },
+  },
+  {
+    name: 'remove_ipod_playlist · success',
+    description: 'Drop a playlist artifact; underlying tracks preserved.',
+    structuredContent: {
+      ipod_playlist: 'workout',
+      removed_playlist: true,
+      library_updated: true,
+    },
+  },
 ];
