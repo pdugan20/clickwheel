@@ -22,14 +22,25 @@ from clickwheel.mcp._runtime import (
 
 @mcp.tool(annotations=READ_ONLY)
 def list_playlists() -> list[dict]:
-    """All saved clickwheel playlists with track counts, total size in
-    bytes, and last-updated timestamps.
+    """All saved playlists (the curated, named collections — workout
+    mix, road trip, etc.) with track counts, total size in bytes, and
+    last-updated timestamps.
 
-    When to use: the user asks what playlists exist, or before
+    These are clickwheel-side drafts. A playlist that has been pushed
+    via `sync_playlist_to_ipod` ALSO appears on the iPod under Music →
+    Playlists, but this tool reports the clickwheel-side state, not the
+    iPod-side state. (To see what playlists currently exist on the
+    device itself, use `list_ipod_playlists`.)
+
+    When to use: the user asks what playlists they have, or before
     `get_playlist` / `delete_playlist` / `sync_playlist_to_ipod`.
+    Don't confuse this with "what's on the iPod" — use
+    `get_ipod_contents` or `list_ipod_tracks` for that.
 
-    After this: `get_playlist` for one playlist's contents, or
-    `sync_playlist_to_ipod` to push it.
+    After this: `get_playlist` for one playlist's contents,
+    `sync_playlist_to_ipod` to push it to the device, or
+    `add_tracks_to_ipod` / `add_artist_to_ipod` if the user actually
+    just wants music on the iPod without a curated playlist artifact.
     """
     with open_session() as (_cfg, db):
         result = actions.list_playlists(db)
@@ -129,15 +140,26 @@ def create_playlist(
         ),
     ],
 ) -> dict:
-    """Create a new playlist with the given track paths. Errors if a
-    playlist with the same name already exists — use `update_playlist`
-    to replace contents instead.
+    """Create a new named playlist (a curated collection — workout mix,
+    road trip, etc.) with the given track paths. Errors if a playlist
+    with the same name already exists — use `update_playlist` to replace
+    contents instead.
+
+    Use this for the "make me a playlist" / "build a curated mix" flow
+    where the user wants a named collection they can browse on the iPod
+    under Music → Playlists. The playlist is saved clickwheel-side; it
+    doesn't reach the device until you also call `sync_playlist_to_ipod`.
+
+    For "just add this music to my iPod" (no curated playlist artifact
+    needed), use `add_tracks_to_ipod` or `add_artist_to_ipod` instead —
+    don't create throwaway playlists.
 
     When to use: the user asks to "make" or "create" a playlist with
     specific tracks already identified.
 
-    After this: `sync_playlist_to_ipod` to push it to the device, or
-    `add_artist_to_playlist` to bulk-add an entire artist on top.
+    After this: ask the user if they want to sync the playlist to the
+    iPod now (`sync_playlist_to_ipod`), or keep iterating
+    (`add_artist_to_playlist` / `update_playlist`).
     """
     with open_session() as (_cfg, db):
         count = actions.create_playlist(db, name, track_paths)

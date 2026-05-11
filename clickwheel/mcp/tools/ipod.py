@@ -246,6 +246,223 @@ async def sync_playlist_to_ipod(
     return render(text, data)
 
 
+@mcp.tool(annotations=DESTRUCTIVE)
+async def add_tracks_to_ipod(
+    paths: Annotated[
+        list[str],
+        Field(
+            description=(
+                "Absolute paths (from the indexed library) of tracks to "
+                "add. Use list_tracks_by_album / search_tracks to get "
+                "paths — never invent them."
+            ),
+        ),
+    ],
+    ctx: Context,
+) -> dict:
+    """Push specific tracks to the iPod's library WITHOUT creating a
+    playlist on the device. Tracks land in the main library and are
+    browsable by artist/album.
+
+    Use this for the common "add these albums to my iPod" / "put more
+    Weezer on the iPod" / "load up the new Olivia Rodrigo record" flow
+    where the user doesn't need a named, curated playlist that appears
+    under Music → Playlists on the iPod itself.
+
+    For a curated playlist (e.g. "workout mix", "road trip 2026") that
+    the user wants to browse on the device, build it with
+    `create_playlist` and then call `sync_playlist_to_ipod` — that one
+    actually creates the iPod-side playlist.
+
+    Reports per-track progress via MCP `notifications/progress` so the
+    host can render a live progress bar (artist — title) beneath the
+    tool result while files copy.
+
+    Flagged destructive, so clients gate this call with a native
+    Allow/Deny prompt. Summarize the impact in your reply before
+    calling (track count, size, target iPod) so the user has context.
+
+    Errors
+    ------
+    - LibraryNotFoundError: music_dir not mounted.
+    - PathsNotFoundError: one or more paths aren't indexed. Suggest
+      `clickwheel scan` or double-check the paths.
+    - MissingTracksError: one or more paths point to files that no
+      longer exist on disk.
+    - IpodNotFoundError: no iPod mounted.
+    - InsufficientSpaceError: tracks won't fit. Surface the numbers.
+
+    After: offer to eject the iPod via `eject_ipod` when done.
+    """
+    cfg = load_config()
+    loop = asyncio.get_running_loop()
+
+    def worker() -> actions.SyncResult:
+        db = Database(cfg.db_path)
+        try:
+
+            def on_event(ev: actions.SyncEvent) -> None:
+                artist = ev.track.get("artist") or "Unknown"
+                title = ev.track.get("title") or "Unknown"
+                asyncio.run_coroutine_threadsafe(
+                    ctx.report_progress(ev.current, ev.total, f"{artist} — {title}"),
+                    loop,
+                )
+
+            return actions.add_tracks_to_ipod(cfg, db, paths, on_event=on_event)
+        finally:
+            db.close()
+
+    result = await asyncio.to_thread(worker)
+
+    if not result.copied and not result.failed:
+        if result.kept_in_place_count:
+            text = (
+                f"All {result.kept_in_place_count} requested tracks were "
+                "already on the iPod — nothing to copy."
+            )
+        else:
+            text = "No tracks to copy."
+        data = {
+            "added": 0,
+            "failed": 0,
+            "already_present": result.kept_in_place_count,
+            "library_updated": result.library_updated,
+        }
+        return render(text, data)
+
+    if result.library_updated:
+        copy_size = sum(t[0].get("file_size") or 0 for t in result.copied)
+        suffix = (
+            f" ({result.kept_in_place_count} already on the iPod)"
+            if result.kept_in_place_count
+            else ""
+        )
+        text = (
+            f"Added {format_count(len(result.copied), 'track')} "
+            f"({format_bytes(copy_size)}) to the iPod{suffix}. "
+            "Offer to eject when the user is ready to unplug."
+        )
+    else:
+        text = (
+            f"{format_count(len(result.copied), 'track')} copied to the "
+            "iPod, but the library wasn't fully updated. The new tracks "
+            "may not be visible on the device yet — suggest the CLI "
+            "(`clickwheel sync`) for retry support."
+        )
+
+    data = {
+        "added": len(result.copied),
+        "failed": len(result.failed),
+        "already_present": result.kept_in_place_count,
+        "library_updated": result.library_updated,
+    }
+    return render(text, data)
+
+
+@mcp.tool(annotations=DESTRUCTIVE)
+async def add_artist_to_ipod(
+    artist: Annotated[
+        str,
+        Field(description="Artist name (exact match, case-sensitive)."),
+    ],
+    ctx: Context,
+) -> dict:
+    """Push every track by an artist to the iPod's library, no playlist
+    artifact. Convenience wrapper over `add_tracks_to_ipod` that resolves
+    the artist's tracks via the library index.
+
+    Use for "add all the Beatles to my iPod" style requests. Same
+    semantics as `add_tracks_to_ipod`: tracks land in the main library,
+    browsable by artist/album on the device.
+
+    For a curated playlist of an artist's tracks that shows up under
+    Music → Playlists, use `add_artist_to_playlist` + `create_playlist`
+    + `sync_playlist_to_ipod`.
+
+    Errors as for `add_tracks_to_ipod`, plus: returns a "no tracks for
+    artist" message if the name doesn't match the library index. Names
+    are case-sensitive — check via `list_artists` if unsure.
+    """
+    cfg = load_config()
+    loop = asyncio.get_running_loop()
+
+    def worker() -> tuple[list[str], actions.SyncResult | None]:
+        db = Database(cfg.db_path)
+        try:
+            paths = actions.collect_tracks_for_artist(db, artist)
+            if not paths:
+                return [], None
+
+            def on_event(ev: actions.SyncEvent) -> None:
+                a = ev.track.get("artist") or "Unknown"
+                t = ev.track.get("title") or "Unknown"
+                asyncio.run_coroutine_threadsafe(
+                    ctx.report_progress(ev.current, ev.total, f"{a} — {t}"),
+                    loop,
+                )
+
+            result = actions.add_tracks_to_ipod(cfg, db, paths, on_event=on_event)
+            return paths, result
+        finally:
+            db.close()
+
+    paths, result = await asyncio.to_thread(worker)
+
+    if not paths:
+        return render(
+            f"No tracks found for '{artist}'. Names are case-sensitive — "
+            "check spelling with `list_artists`.",
+            {"artist": artist, "added": 0, "found_in_library": 0},
+        )
+
+    if result is None:  # unreachable but keep mypy happy
+        return render("Internal error: add returned no result.", {})
+
+    if not result.copied and not result.failed:
+        text = (
+            f"All {len(paths)} tracks by {artist} are already on the iPod "
+            "— nothing to copy."
+        )
+        data = {
+            "artist": artist,
+            "added": 0,
+            "already_present": result.kept_in_place_count,
+            "found_in_library": len(paths),
+        }
+        return render(text, data)
+
+    if result.library_updated:
+        copy_size = sum(t[0].get("file_size") or 0 for t in result.copied)
+        suffix = (
+            f" ({result.kept_in_place_count} already on the iPod)"
+            if result.kept_in_place_count
+            else ""
+        )
+        text = (
+            f"Added {format_count(len(result.copied), 'track')} by "
+            f"{artist} ({format_bytes(copy_size)}) to the iPod{suffix}. "
+            "Offer to eject when the user is done."
+        )
+    else:
+        text = (
+            f"{format_count(len(result.copied), 'track')} by {artist} "
+            "copied to the iPod, but the library wasn't fully updated. "
+            "The tracks may not be visible on the device yet — suggest "
+            "`clickwheel sync` for retry."
+        )
+
+    data = {
+        "artist": artist,
+        "added": len(result.copied),
+        "failed": len(result.failed),
+        "already_present": result.kept_in_place_count,
+        "found_in_library": len(paths),
+        "library_updated": result.library_updated,
+    }
+    return render(text, data)
+
+
 @mcp.tool(annotations=MUTATION)
 def eject_ipod() -> dict:
     """Safely unmount the iPod via `diskutil eject`. Idempotent in spirit:

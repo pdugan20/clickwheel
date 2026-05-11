@@ -107,6 +107,19 @@ class MissingTracksError(ClickwheelError):
         self.missing_tracks = missing_tracks
 
 
+class PathsNotFoundError(ClickwheelError):
+    """One or more requested paths aren't in the indexed library.
+
+    Caller should usually surface the offending paths and suggest a
+    `clickwheel scan`. Most commonly raised by `add_tracks_to_ipod`
+    when the LLM passes a path that doesn't exist in the SQLite index.
+    """
+
+    def __init__(self, message: str, unknown_paths: list[str]) -> None:
+        super().__init__(message)
+        self.unknown_paths = unknown_paths
+
+
 @dataclass
 class ScanResult:
     total: int = 0
@@ -725,6 +738,119 @@ def sync_playlist(
         copied=copied,
         failed=failed,
         kept_in_place_count=len(diff.to_remove),
+        library_updated=db_ok,
+    )
+
+
+def add_tracks_to_ipod(
+    cfg: Config,
+    db: Database,
+    paths: list[str],
+    *,
+    on_event: Callable[[SyncEvent], None] | None = None,
+) -> SyncResult:
+    """Push specific tracks to the iPod's library without creating a playlist.
+
+    Use this for the common "add this artist / these albums to my iPod"
+    flow where the user doesn't need a curated, named playlist on the
+    device. The tracks land in the master library and are browsable by
+    artist/album. For a curated playlist that shows up under Music →
+    Playlists on the iPod itself, use sync_playlist_to_ipod instead.
+
+    Behavior mirrors `sync_playlist`: dedupes against what's already on
+    the iPod (sync is additive — never deletes), space-checks before
+    copying, streams per-track progress via `on_event`.
+
+    Raises
+    ------
+    LibraryNotFoundError
+        cfg.music_dir isn't reachable.
+    PathsNotFoundError
+        One or more paths aren't in the indexed library.
+    MissingTracksError
+        One or more paths point to files that no longer exist on disk.
+    IpodNotFoundError
+        No iPod mounted.
+    InsufficientSpaceError
+        New tracks won't fit.
+    """
+    from clickwheel.ipod import get_ipod_tracks
+    from clickwheel.ipod.sync import copy_tracks_to_ipod, write_ipod_db
+
+    if not cfg.music_dir.is_dir():
+        raise LibraryNotFoundError(
+            f"Music library at {cfg.music_dir} isn't mounted. "
+            "Mount the share before adding tracks."
+        )
+
+    # Resolve paths → full track records via the library DB.
+    tracks: list[dict] = []
+    unknown: list[str] = []
+    missing: list[dict] = []
+    for path in paths:
+        row = db.conn.execute("SELECT * FROM tracks WHERE path = ?", (path,)).fetchone()
+        if row is None:
+            unknown.append(path)
+            continue
+        track = dict(row)
+        if track.get("missing_since") is not None:
+            missing.append(track)
+            continue
+        tracks.append(track)
+
+    if unknown:
+        raise PathsNotFoundError(
+            f"{len(unknown)} of {len(paths)} paths aren't in the library "
+            "index. Run `clickwheel scan` if you've added music since the "
+            "last scan, or check the paths for typos.",
+            unknown,
+        )
+    if missing:
+        raise MissingTracksError(
+            f"{len(missing)} of {len(paths)} tracks reference files that no "
+            "longer exist on disk. Run `clickwheel scan` to refresh the "
+            "index, then retry.",
+            missing,
+        )
+
+    # Diff against the iPod so we don't re-copy tracks that are already there.
+    ipod_db = require_ipod(cfg)
+    ipod_tracks = get_ipod_tracks(ipod_db)
+    ipod_set = {
+        (t.get("artist") or "", t.get("album") or "", t.get("title") or "")
+        for t in ipod_tracks
+    }
+    to_add = [
+        t
+        for t in tracks
+        if (t["artist"] or "", t["album"] or "", t["title"] or "") not in ipod_set
+    ]
+
+    add_size = sum(t.get("file_size") or 0 for t in to_add)
+    ipod_stat = shutil.disk_usage(str(cfg.ipod_mount))
+    if add_size > ipod_stat.free:
+        raise InsufficientSpaceError(
+            f"Not enough space on iPod. "
+            f"Need {add_size} bytes but only {ipod_stat.free} free."
+        )
+
+    total_count = len(to_add)
+
+    def _on_progress(current: int, total: int) -> None:
+        if on_event is None or current < 1 or current > total_count:
+            return
+        track = to_add[current - 1]
+        on_event(SyncEvent(current=current, total=total_count, track=track, ok=True))
+
+    copied, failed = copy_tracks_to_ipod(to_add, cfg.ipod_mount, _on_progress)
+    db_ok = write_ipod_db(cfg.ipod_mount, copied)
+
+    # kept_in_place_count: how many requested tracks were already there.
+    already_present = len(tracks) - len(to_add)
+    return SyncResult(
+        copied=copied,
+        failed=failed,
+        kept_in_place_count=already_present,
         library_updated=db_ok,
     )
 

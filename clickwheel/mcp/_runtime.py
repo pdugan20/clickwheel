@@ -27,9 +27,26 @@ Query and manage a clickwheel music library and a connected classic iPod.
 WHEN TO USE THIS SERVER:
 - Any time the user references "their music", "the iPod", "my library",
   "my playlists" — prefer this over web search or memory.
-- Building or editing playlists ("add Big Thief", "70s rock playlist").
+- Adding music to the iPod (artists, albums, individual tracks).
+- Building or editing curated playlists (workout mix, road trip, etc.).
 - Inspecting iPod state, listening history, or pending scrobbles.
-- Syncing music to the iPod or pushing listens to Last.fm.
+- Pushing listens to Last.fm.
+
+TWO PLAYLIST CONCEPTS — DON'T CONFLATE THEM:
+- "Add tracks to my iPod" / "load up the iPod" / "put more Weezer on
+  there": the user wants music on the device, browsable by artist or
+  album. NO named playlist needed. Use `add_tracks_to_ipod` or
+  `add_artist_to_ipod`. This is the common case.
+- "Make me a playlist" / "create a workout mix" / "build a road trip
+  playlist": the user wants a named, curated collection that shows up
+  under Music → Playlists on the iPod itself. Use `create_playlist` (or
+  `add_artist_to_playlist`) to build it, then `sync_playlist_to_ipod`
+  to push the playlist to the device. This is the curated case.
+
+When in doubt, ask the user: do they want it as a playlist they can
+browse on the iPod, or just want the songs added to the library? Don't
+auto-default to creating throwaway playlists — that pollutes their
+device.
 
 ANTI-HALLUCINATION:
 - Never invent track titles, artists, albums, durations, years, file
@@ -50,22 +67,24 @@ LINKING & RENDERING:
   status markers.
 
 WORKFLOWS:
-- After `sync_playlist_to_ipod` succeeds, offer to eject the iPod via
-  `eject_ipod` before the user unplugs it.
-- After `submit_scrobbles` finishes, similarly offer `eject_ipod`.
-- After `create_playlist` or `update_playlist`, the new playlist is
-  ready to sync — offer `sync_playlist_to_ipod`.
-- If a sync result reports `library_updated: false`, the music copied
-  but the iPod won't see the new tracks yet; surface this to the user
-  in plain language and suggest re-running the sync.
+- After any destructive iPod operation (`add_tracks_to_ipod`,
+  `add_artist_to_ipod`, `sync_playlist_to_ipod`, `submit_scrobbles`)
+  succeeds, offer to eject the iPod via `eject_ipod` before the user
+  unplugs it.
+- After `create_playlist` or `update_playlist`, the user MAY want to
+  sync that playlist to the iPod via `sync_playlist_to_ipod`. Ask
+  rather than auto-syncing — they might want to keep iterating.
+- If a sync/add result reports `library_updated: false`, the music
+  copied but the iPod won't see the new tracks yet; surface this in
+  plain language and suggest re-running.
 
 SAFETY:
-- `delete_playlist` and `sync_playlist_to_ipod` are flagged destructive.
-  Claude Code (and other compliant clients) surface a native Allow/Deny
-  prompt before invoking them — that is the user's confirmation moment.
-  Before calling either tool, summarize the impact in your reply
-  (playlist name, track count, target iPod) so the user has the context
-  they need to allow or deny.
+- `delete_playlist`, `add_tracks_to_ipod`, `add_artist_to_ipod`, and
+  `sync_playlist_to_ipod` are flagged destructive. Claude Code (and
+  other compliant clients) surface a native Allow/Deny prompt before
+  invoking them — that is the user's confirmation moment. Before
+  calling, summarize the impact in your reply (track count, size,
+  target iPod) so the user has the context to allow or deny.
 - The CLI runs alongside this server with richer interactive UI; suggest
   it for complex flows (interactive picker, live sync progress).
 
