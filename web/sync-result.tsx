@@ -20,7 +20,7 @@ import { StatGrid, type StatCell } from './components/StatGrid.js';
 import { rootStyle } from './lib/root-style.js';
 
 const PROGRESS_URI = 'state://clickwheel/sync-progress';
-const POLL_INTERVAL_MS = 500;
+const POLL_INTERVAL_MS = 250;
 
 type SyncProgress = {
   kind: 'idle' | 'sync' | 'add' | 'remove';
@@ -243,8 +243,21 @@ function verbForKind(kind: SyncProgress['kind']): string {
   return 'Working on it';
 }
 
+const PULSE_KEYFRAMES = `
+@keyframes clickwheel-pulse {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+`;
+
 function Pending({ app }: { app: App | null }) {
   const [progress, setProgress] = useState<SyncProgress | null>(null);
+  // Once we've observed an in-flight state we lock into "show progress"
+  // mode. When done flips true, we keep the final bar visible until the
+  // parent's ontoolresult swaps in the summary — without this, the
+  // bundle flashes back to the generic placeholder copy for one frame
+  // before the result lands.
+  const [hasStarted, setHasStarted] = useState(false);
 
   useEffect(() => {
     if (!app) return;
@@ -261,12 +274,15 @@ function Pending({ app }: { app: App | null }) {
             : null;
         if (text) {
           const parsed = JSON.parse(text) as SyncProgress;
-          if (!cancelled) setProgress(parsed);
+          if (!cancelled) {
+            setProgress(parsed);
+            if (parsed.kind !== 'idle' && parsed.total > 0) {
+              setHasStarted(true);
+            }
+          }
         }
       } catch {
-        // Polling is best-effort; the iframe still renders the
-        // generic "Working on it..." copy if the resource is
-        // unreadable for some reason.
+        // Polling is best-effort.
       }
     }
 
@@ -278,11 +294,8 @@ function Pending({ app }: { app: App | null }) {
     };
   }, [app]);
 
-  const hasProgress =
-    progress &&
-    progress.kind !== 'idle' &&
-    !progress.done &&
-    progress.total > 0;
+  const showProgress = hasStarted && progress && progress.total > 0;
+  const isFinishing = !!progress?.done;
 
   return (
     <div
@@ -293,6 +306,7 @@ function Pending({ app }: { app: App | null }) {
         gap: 10,
       }}
     >
+      <style>{PULSE_KEYFRAMES}</style>
       <div
         style={{
           display: 'flex',
@@ -306,13 +320,13 @@ function Pending({ app }: { app: App | null }) {
             ? `${verbForKind(progress.kind)} ${progress.operation || ''}`.trim()
             : 'Working on it…'}
         </div>
-        {hasProgress && (
+        {showProgress && (
           <div style={{ fontSize: 12, opacity: 0.7 }}>
             {progress!.current} / {progress!.total}
           </div>
         )}
       </div>
-      {hasProgress && (
+      {showProgress && (
         <>
           <ProgressBar current={progress!.current} total={progress!.total} />
           <div
@@ -321,13 +335,18 @@ function Pending({ app }: { app: App | null }) {
               opacity: 0.85,
               fontFamily:
                 'var(--font-mono, ui-monospace, "SF Mono", Menlo, monospace)',
+              // Subtle pulse so the message line feels alive between
+              // per-track updates. Stops once the operation finishes.
+              animation: isFinishing
+                ? undefined
+                : 'clickwheel-pulse 1.4s ease-in-out infinite',
             }}
           >
             {progress!.message || ' '}
           </div>
         </>
       )}
-      {!hasProgress && (
+      {!showProgress && (
         <div style={{ fontSize: 12, opacity: 0.7 }}>
           The summary will appear here when the operation completes.
         </div>
