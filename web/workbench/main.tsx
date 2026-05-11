@@ -57,6 +57,12 @@ type MockProgress = {
   current: number;
   total: number;
   message: string;
+  /**
+   * Static subtitle the bundle renders below the header — describes
+   * the operation as a whole (size estimate, album breadth, etc.).
+   * Set once at the start of the sequence, never changed mid-run.
+   */
+  detail: string;
   operation: string;
   done: boolean;
 };
@@ -67,6 +73,7 @@ function idleProgress(): MockProgress {
     current: 0,
     total: 0,
     message: '',
+    detail: '',
     operation: '',
     done: true,
   };
@@ -227,6 +234,7 @@ function Workbench() {
       current: 0,
       total: fx.progress.trackLabels.length,
       message: '',
+      detail: fx.progress.detail ?? '',
       operation: fx.progress.operation,
       done: false,
     };

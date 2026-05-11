@@ -22,7 +22,14 @@
 import { build } from 'vite';
 import react from '@vitejs/plugin-react';
 import { viteSingleFile } from 'vite-plugin-singlefile';
-import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
+import {
+  readFileSync,
+  writeFileSync,
+  readdirSync,
+  statSync,
+  unlinkSync,
+  existsSync,
+} from 'node:fs';
 import { dirname, join, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -44,6 +51,18 @@ const entries = readdirSync(webDir).filter((name) => {
 if (!entries.length) {
   console.error(`No .html entries found in ${webDir}`);
   process.exit(1);
+}
+
+// Drop orphan .html in dist/ (from bundles that have since been deleted)
+// so they don't ride along into _ui_bundles.py. We only clear html files;
+// chunks (js/css assets) get overwritten cleanly by Vite.
+if (existsSync(distDir)) {
+  const want = new Set(entries);
+  for (const f of readdirSync(distDir)) {
+    if (f.endsWith('.html') && !want.has(f)) {
+      unlinkSync(join(distDir, f));
+    }
+  }
 }
 
 const t0 = Date.now();

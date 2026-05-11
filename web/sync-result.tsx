@@ -1,22 +1,24 @@
 /**
- * Sync-result summary card. Bound to the three destructive iPod-write
- * tools — sync_playlist_to_ipod, add_tracks_to_ipod, add_artist_to_ipod
- * — and renders whichever flavor of result lands.
+ * Sync-result summary card. Bound to the destructive iPod-write tools
+ * (sync_playlist_to_ipod, add_tracks_to_ipod, add_artist_to_ipod,
+ * remove_*) and renders whichever flavor of result lands.
  *
- * Renders three states:
- *   - "no payload yet" → empty placeholder. This is the state we
- *     deliberately keep visible if Claude Desktop mounts the iframe
- *     mid-call (the preload experiment). If the user sees this state
- *     during a long-running sync, we know preload works and can layer
- *     polling-based live progress on top later.
- *   - "running" / "no data" → a spinner-ish "preparing summary" hint.
- *   - "done" → the actual stats card.
+ * Two render paths share one h2 14/600 header pattern (matching
+ * library-stats / ipod-capacity):
+ *   - "running" → live progress via TrackTicker (current + next-up
+ *     queue label) above a thin progress bar.
+ *   - "done" → inline stats summary on the right of the title plus a
+ *     tone-coloured Badge ("ready to eject" / "X failed" / "no-op").
+ *
+ * The Pending component polls `state://clickwheel/sync-progress` to
+ * advance the ticker mid-call. If Claude Desktop mounts the iframe
+ * after the tool result is already in, the bundle skips Pending and
+ * goes straight to the done state.
  */
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useApp, useHostStyles } from '@modelcontextprotocol/ext-apps/react';
 import type { App } from '@modelcontextprotocol/ext-apps';
-import { StatGrid, type StatCell } from './components/StatGrid.js';
 import { BRAND_BLUE, rootStyle } from './lib/root-style.js';
 
 const PROGRESS_URI = 'state://clickwheel/sync-progress';
@@ -27,6 +29,13 @@ type SyncProgress = {
   current: number;
   total: number;
   message: string;
+  /**
+   * Static, human-readable subtitle describing the operation as a
+   * whole — set once when the sync starts, never updated per track.
+   * Examples: "About 145 MB · across 8 albums", "Single album · Pinkerton",
+   * "12 tracks from 3 albums". Optional; falls back to no subtitle.
+   */
+  detail?: string;
   operation: string;
   done: boolean;
 };
@@ -66,35 +75,31 @@ function fmtCount(n: number, singular: string, plural?: string): string {
   return `${n.toLocaleString()} ${n === 1 ? singular : (plural ?? singular + 's')}`;
 }
 
-function Badge({
+/**
+ * Right-slot status text — matches the inline-summary style used by
+ * library-stats / ipod-capacity headers (12/0.7 plain text). Picks up
+ * a tone color for warn/error so the signal still pops without the
+ * heavy chip chrome that used to live here.
+ */
+function StatusLine({
   tone,
   children,
 }: {
   tone: 'ok' | 'warn' | 'error';
   children: string;
 }) {
-  const bg = {
-    ok: 'var(--color-background-success, light-dark(#dcfce7, #14532d))',
-    warn: 'var(--color-background-warning, light-dark(#fef3c7, #3a2e0a))',
-    error: 'var(--color-background-danger, light-dark(#fee2e2, #4a0e0e))',
-  }[tone];
-  const fg = {
-    ok: 'var(--color-text-success, #15803d)',
-    warn: 'var(--color-text-warning, #92400e)',
-    error: 'var(--color-text-danger, #b91c1c)',
-  }[tone];
+  const color =
+    tone === 'warn'
+      ? 'var(--color-text-warning, #ca8a04)'
+      : tone === 'error'
+        ? 'var(--color-text-danger, #dc2626)'
+        : undefined;
   return (
     <span
       style={{
-        display: 'inline-block',
-        padding: '2px 8px',
-        borderRadius: 999,
-        background: bg,
-        color: fg,
-        fontSize: 11,
-        fontWeight: 600,
-        textTransform: 'uppercase',
-        letterSpacing: 0.4,
+        fontSize: 12,
+        opacity: tone === 'ok' ? 0.7 : 1,
+        color,
       }}
     >
       {children}
@@ -135,80 +140,53 @@ function deriveBadge(p: SyncResultPayload): {
   tone: 'ok' | 'warn' | 'error';
   text: string;
 } {
-  if (p.conflict) return { tone: 'warn', text: 'choose how to proceed' };
+  if (p.conflict) return { tone: 'warn', text: 'Choose how to proceed' };
   if (p.library_updated === false) {
-    return { tone: 'warn', text: 'library not fully updated' };
+    return { tone: 'warn', text: 'Library not fully updated' };
   }
   if (p.failed && p.failed > 0) {
     return { tone: 'warn', text: `${p.failed} failed` };
   }
-  if (p.synced === false) return { tone: 'ok', text: 'no-op' };
-  return { tone: 'ok', text: 'ready to eject' };
+  if (p.synced === false) return { tone: 'ok', text: 'No-op' };
+  return { tone: 'ok', text: 'Ready to eject' };
 }
 
-function deriveCells(p: SyncResultPayload): StatCell[] {
-  // Removal payload — present its own stats.
+function deriveInlineStats(p: SyncResultPayload): string {
+  // No-op sync (already in sync) — title says it; no breakdown needed.
+  if (p.synced === false && !p.conflict) return '';
+  // Removed-playlist artifact — no per-track stats.
+  if (p.removed_playlist) return '';
+
+  const parts: string[] = [];
+
+  // Removal flavor.
   if (typeof p.removed === 'number') {
-    const cells: StatCell[] = [
-      {
-        label: 'removed',
-        value: p.removed.toLocaleString(),
-        tone: p.removed > 0 ? 'ok' : 'default',
-      },
-    ];
+    parts.push(`${p.removed.toLocaleString()} removed`);
     if ((p.bytes_freed ?? 0) > 0) {
-      cells.push({
-        label: 'freed',
-        value: fmtBytes(p.bytes_freed ?? 0),
-      });
+      parts.push(`${fmtBytes(p.bytes_freed ?? 0)} freed`);
     }
     if ((p.not_matched ?? 0) > 0) {
-      cells.push({
-        label: 'not on iPod',
-        value: (p.not_matched ?? 0).toLocaleString(),
-        tone: 'warn',
-      });
+      parts.push(`${(p.not_matched ?? 0).toLocaleString()} not on iPod`);
     }
-    return cells;
+    return parts.join(' · ');
   }
 
-  // Add / sync payload.
-  const cells: StatCell[] = [];
-  const added = p.added ?? 0;
-  cells.push({
-    label: 'added',
-    value: added.toLocaleString(),
-    tone: added > 0 ? 'ok' : 'default',
-  });
+  // Add / sync flavor.
+  parts.push(`${(p.added ?? 0).toLocaleString()} added`);
   if ((p.already_present ?? 0) > 0) {
-    cells.push({
-      label: 'already on iPod',
-      value: (p.already_present ?? 0).toLocaleString(),
-    });
+    parts.push(`${(p.already_present ?? 0).toLocaleString()} already on iPod`);
   }
   if ((p.also_on_ipod ?? 0) > 0) {
-    cells.push({
-      label: 'kept in place',
-      value: (p.also_on_ipod ?? 0).toLocaleString(),
-    });
+    parts.push(`${(p.also_on_ipod ?? 0).toLocaleString()} kept in place`);
   }
   if ((p.failed ?? 0) > 0) {
-    cells.push({
-      label: 'failed',
-      value: (p.failed ?? 0).toLocaleString(),
-      tone: 'error',
-    });
+    parts.push(`${(p.failed ?? 0).toLocaleString()} failed`);
   }
-  if (p.on_conflict) {
-    cells.push({ label: 'conflict', value: p.on_conflict });
-  }
+  if (p.on_conflict) parts.push(`conflict: ${p.on_conflict}`);
   if (p.found_in_library != null && p.artist) {
-    cells.push({
-      label: 'in library',
-      value: p.found_in_library.toLocaleString(),
-    });
+    parts.push(`${p.found_in_library.toLocaleString()} in library`);
   }
-  return cells;
+  return parts.join(' · ');
 }
 
 function ProgressBar({ current, total }: { current: number; total: number }) {
@@ -241,13 +219,6 @@ function verbForKind(kind: SyncProgress['kind']): string {
   if (kind === 'remove') return 'Removing';
   return 'Working on it';
 }
-
-const PULSE_KEYFRAMES = `
-@keyframes clickwheel-pulse {
-  0%, 100% { opacity: 0.55; }
-  50%      { opacity: 1; }
-}
-`;
 
 function Pending({ app }: { app: App | null }) {
   const [progress, setProgress] = useState<SyncProgress | null>(null);
@@ -294,7 +265,6 @@ function Pending({ app }: { app: App | null }) {
   }, [app]);
 
   const showProgress = hasStarted && progress && progress.total > 0;
-  const isFinishing = !!progress?.done;
 
   return (
     <div
@@ -302,53 +272,40 @@ function Pending({ app }: { app: App | null }) {
         ...rootStyle,
         display: 'flex',
         flexDirection: 'column',
-        gap: 10,
+        gap: 12,
       }}
     >
-      <style>{PULSE_KEYFRAMES}</style>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'baseline',
-          gap: 12,
-        }}
-      >
-        <div style={{ fontSize: 14, fontWeight: 600 }}>
-          {progress
-            ? `${verbForKind(progress.kind)} ${progress.operation || ''}`.trim()
-            : 'Working on it…'}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'baseline',
+            gap: 12,
+          }}
+        >
+          <h2 style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>
+            {progress
+              ? `${verbForKind(progress.kind)} ${progress.operation || ''}`.trim()
+              : 'Working on it…'}
+          </h2>
+          {showProgress && (
+            <div style={{ fontSize: 12, opacity: 0.7 }}>
+              {progress!.current} of {progress!.total}
+            </div>
+          )}
         </div>
-        {showProgress && (
+        {showProgress && progress!.detail && (
+          <div style={{ fontSize: 12, opacity: 0.7 }}>{progress!.detail}</div>
+        )}
+        {!showProgress && (
           <div style={{ fontSize: 12, opacity: 0.7 }}>
-            {progress!.current} / {progress!.total}
+            The summary will appear here when the operation completes.
           </div>
         )}
       </div>
       {showProgress && (
-        <>
-          <ProgressBar current={progress!.current} total={progress!.total} />
-          <div
-            style={{
-              fontSize: 12,
-              opacity: 0.85,
-              fontFamily:
-                'var(--font-mono, ui-monospace, "SF Mono", Menlo, monospace)',
-              // Subtle pulse so the message line feels alive between
-              // per-track updates. Stops once the operation finishes.
-              animation: isFinishing
-                ? undefined
-                : 'clickwheel-pulse 1.4s ease-in-out infinite',
-            }}
-          >
-            {progress!.message || ' '}
-          </div>
-        </>
-      )}
-      {!showProgress && (
-        <div style={{ fontSize: 12, opacity: 0.7 }}>
-          The summary will appear here when the operation completes.
-        </div>
+        <ProgressBar current={progress!.current} total={progress!.total} />
       )}
     </div>
   );
@@ -377,23 +334,34 @@ function SyncResultApp() {
 
   const title = deriveTitle(payload);
   const badge = deriveBadge(payload);
-  const cells = deriveCells(payload);
+  const inlineStats = deriveInlineStats(payload);
 
   return (
-    <div style={rootStyle}>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'baseline',
-          marginBottom: 12,
-          gap: 12,
-        }}
-      >
-        <h2 style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>{title}</h2>
-        <Badge tone={badge.tone}>{badge.text}</Badge>
+    <div
+      style={{
+        ...rootStyle,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+      }}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'baseline',
+            gap: 12,
+          }}
+        >
+          <h2 style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>{title}</h2>
+          <StatusLine tone={badge.tone}>{badge.text}</StatusLine>
+        </div>
+        {inlineStats && (
+          <div style={{ fontSize: 12, opacity: 0.7 }}>{inlineStats}</div>
+        )}
       </div>
-      {payload.conflict ? (
+      {payload.conflict && (
         <div
           style={{
             padding: '10px 12px',
@@ -407,9 +375,7 @@ function SyncResultApp() {
         >
           {`A playlist named "${payload.conflict.existing_name}" already exists on the iPod with ${fmtCount(payload.conflict.existing_track_count, 'track')}. Pick merge, replace, or rename to continue.`}
         </div>
-      ) : cells.length > 0 ? (
-        <StatGrid cells={cells} />
-      ) : null}
+      )}
     </div>
   );
 }

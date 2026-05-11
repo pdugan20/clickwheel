@@ -13,8 +13,9 @@ export const fixtures: Fixture[] = [
     structuredContent: {} as Record<string, never>,
     progress: {
       kind: 'add',
-      operation: '33 tracks',
-      tickMs: 700,
+      operation: 'all tracks by The Black Keys',
+      detail: '145 MB · 8 albums',
+      tickMs: 350,
       trackLabels: [
         'The Black Keys — Thickfreakness',
         'The Black Keys — Hard Row',

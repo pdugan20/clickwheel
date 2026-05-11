@@ -13,6 +13,12 @@
 export type FixtureProgressSim = {
   kind: 'sync' | 'add' | 'remove';
   operation: string;
+  /**
+   * Static subtitle the workbench injects into mock progress — the
+   * bundle renders it as a single 12/0.7 line under the header.
+   * Examples: "About 145 MB · 8 albums", "All of Wilco".
+   */
+  detail?: string;
   /** Track labels rotated through as the bar advances. */
   trackLabels: string[];
   /** Milliseconds between mock ticks. ~700ms feels iPod-realistic. */

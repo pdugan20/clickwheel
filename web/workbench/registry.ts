@@ -11,9 +11,7 @@ import {
   type Fixture,
 } from '../ipod-capacity.fixtures.js';
 import { fixtures as libraryStatsFixtures } from '../library-stats.fixtures.js';
-import { fixtures as libraryHealthFixtures } from '../library-health.fixtures.js';
 import { fixtures as syncResultFixtures } from '../sync-result.fixtures.js';
-import { fixtures as statsShowcaseFixtures } from '../stats-showcase.fixtures.js';
 
 export type Bundle = {
   /** Slug shown in the sidebar and used as the URL hash. */
@@ -40,21 +38,9 @@ export const bundles: Bundle[] = [
     fixtures: libraryStatsFixtures,
   },
   {
-    slug: 'library-health',
-    label: 'Library health',
-    entryUrl: '/library-health.html',
-    fixtures: libraryHealthFixtures,
-  },
-  {
     slug: 'sync-result',
     label: 'Sync result',
     entryUrl: '/sync-result.html',
     fixtures: syncResultFixtures,
-  },
-  {
-    slug: 'stats-showcase',
-    label: 'Stats treatments (showcase)',
-    entryUrl: '/stats-showcase.html',
-    fixtures: statsShowcaseFixtures,
   },
 ];
