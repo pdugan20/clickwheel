@@ -86,7 +86,9 @@ def test_sync_reports_per_track_progress(tmp_path, monkeypatch):
     def fake_compute_diff(_cfg, _db, _name):
         return fake_diff
 
-    def fake_sync_playlist(_cfg, _db, _name, *, diff, on_event=None):
+    def fake_sync_playlist(
+        _cfg, _db, _name, *, diff, on_event=None, on_conflict=None, target_name=None
+    ):
         # Mimic copy_tracks_to_ipod: fire on_event once per track in order.
         for i, track in enumerate(diff.to_add, start=1):
             on_event(
@@ -130,6 +132,9 @@ def test_sync_reports_per_track_progress(tmp_path, monkeypatch):
 
 
 def test_sync_noop_when_diff_empty_skips_progress(tmp_path, monkeypatch):
+    """Empty diff: sync_playlist still runs (to write/update the iPod
+    playlist artifact), but no per-track copy happens so no progress
+    notifications fire."""
     from clickwheel.mcp.tools.ipod import sync_playlist_to_ipod
 
     _setup(tmp_path, monkeypatch)
@@ -137,16 +142,23 @@ def test_sync_noop_when_diff_empty_skips_progress(tmp_path, monkeypatch):
     fake_diff = actions.Diff(playlist="test", to_add=[], to_remove=[])
     monkeypatch.setattr(actions, "compute_diff", lambda *a, **k: fake_diff)
 
-    # If sync_playlist gets called we'd notice — make it explode.
-    def boom(*_a, **_k):
-        raise AssertionError("sync_playlist should not run on a no-op diff")
+    def fake_sync(_cfg, _db, _name, *, diff, on_event=None, **_k):
+        # No tracks to copy → no on_event calls.
+        return actions.SyncResult(
+            copied=[],
+            failed=[],
+            kept_in_place_count=0,
+            library_updated=True,
+        )
 
-    monkeypatch.setattr(actions, "sync_playlist", boom)
+    monkeypatch.setattr(actions, "sync_playlist", fake_sync)
 
     ctx = _FakeContext()
     result = asyncio.run(sync_playlist_to_ipod(playlist="test", ctx=ctx))
 
+    # No per-track progress because no tracks were copied.
     assert ctx.calls == []
     sc = result.structuredContent or {}
-    assert sc.get("synced") is False
-    assert "already matches" in (sc.get("reason") or "")
+    assert sc.get("synced") is True
+    assert sc.get("added") == 0
+    assert sc.get("library_updated") is True

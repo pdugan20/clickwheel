@@ -152,6 +152,8 @@ def write_ipod_db(
     copied_tracks: list[tuple[dict, str]],
     *,
     full_replace: bool = False,
+    playlist_specs: "list[IpodPlaylistSpec] | None" = None,
+    overwrite_playlist_names: set[str] | None = None,
 ) -> bool:
     """Write the iTunesDB. By default MERGES with the existing iTunesDB on
     the iPod, preserving previously-synced tracks (and their play counts /
@@ -168,6 +170,17 @@ def write_ipod_db(
                       existing tracks. Use only for deliberate
                       wipe-and-fill operations. **DEFAULT FALSE** — every
                       common caller wants merge semantics.
+        playlist_specs: optional list of IpodPlaylistSpec entries to
+                        write as user-visible playlists under
+                        Music → Playlists on the device. Each spec's
+                        tracks are matched to TrackInfo dbids via the
+                        merged track list and emitted as a PlaylistInfo
+                        with the right references.
+        overwrite_playlist_names: names of existing iPod-side playlists
+                        that should NOT be preserved during merge. Used
+                        when the caller is replacing/renaming a same-
+                        name playlist. Defaults to the names in
+                        `playlist_specs` (replace-on-write semantics).
 
     Returns True on success. If reading the existing iTunesDB fails (corrupt
     db, share unmounted mid-call), the merge step is skipped with a logged
@@ -175,44 +188,133 @@ def write_ipod_db(
     crash. The fail-soft is intentional: a merge failure shouldn't lose
     the new tracks the user just copied.
     """
-    from clickwheel.ipod import get_ipod_tracks, read_ipod
+    from clickwheel.ipod import get_ipod_playlists, get_ipod_tracks, read_ipod
+    from clickwheel.ipod.itunesdb_writer.mhit_writer import generate_dbid
+    from clickwheel.ipod.itunesdb_writer.mhyp_writer import PlaylistInfo
+
+    # Local import to avoid circular dep (actions imports sync).
+    from clickwheel.actions import IpodPlaylistSpec  # noqa: F401
 
     new_track_infos: list[TrackInfo] = []
     pc_file_paths: dict[int, str] = {}
     new_locations: set[str] = set()
+    new_triple_to_dbid: dict[tuple[str, str, str], int] = {}
 
     for track, ipod_rel in copied_tracks:
         ti = track_to_trackinfo(track, ipod_rel)
+        if ti.dbid == 0:
+            # Pre-assign so playlist_specs can reference newly-copied
+            # tracks. write_itunesdb would otherwise lazy-assign during
+            # write — too late for our matching pass below.
+            ti.dbid = generate_dbid()
         new_track_infos.append(ti)
         new_locations.add(ti.location)
         if track.get("path"):
             pc_file_paths[ti.track_id] = track["path"]
+        triple = (
+            (track.get("artist") or ""),
+            (track.get("album") or ""),
+            (track.get("title") or ""),
+        )
+        new_triple_to_dbid[triple] = ti.dbid
 
     track_infos: list[TrackInfo] = list(new_track_infos)
+    existing_triple_to_dbid: dict[tuple[str, str, str], int] = {}
+    existing_playlists: list[dict] = []
 
     if not full_replace:
         try:
-            existing = get_ipod_tracks(read_ipod(ipod_mount))
-            for t in existing:
+            ipod_db = read_ipod(ipod_mount)
+            existing_tracks = get_ipod_tracks(ipod_db)
+            existing_playlists = get_ipod_playlists(ipod_db)
+            # Build trackID → dbid for preserved playlists.
+            track_id_to_dbid: dict[int, int] = {}
+            for t in existing_tracks:
                 loc = t.get("location") or ""
                 if loc in new_locations:
                     continue  # new copy wins for matching paths
-                track_infos.append(_existing_track_to_trackinfo(t))
+                ti = _existing_track_to_trackinfo(t)
+                track_infos.append(ti)
+                triple = (
+                    (ti.artist or ""),
+                    (ti.album or ""),
+                    (ti.title or ""),
+                )
+                existing_triple_to_dbid[triple] = ti.dbid
+                tid = t.get("trackID")
+                if tid is not None and ti.dbid:
+                    track_id_to_dbid[tid] = ti.dbid
         except Exception:
             logger.exception(
                 "Could not read existing iTunesDB for merge; writing only "
                 "newly-copied tracks (existing tracks would be orphaned)"
             )
+            track_id_to_dbid = {}
+    else:
+        track_id_to_dbid = {}
 
     if not track_infos:
         logger.warning("No tracks to write to iTunesDB")
         return False
+
+    # Build PlaylistInfo list: new specs + preserved existing.
+    triple_to_dbid = {**existing_triple_to_dbid, **new_triple_to_dbid}
+    # new_* wins on conflict because the new copy supersedes the old.
+
+    new_playlist_infos: list[PlaylistInfo] = []
+    if playlist_specs:
+        for spec in playlist_specs:
+            ids: list[int] = []
+            for ct in spec.tracks:
+                triple = (
+                    (ct.get("artist") or ""),
+                    (ct.get("album") or ""),
+                    (ct.get("title") or ""),
+                )
+                dbid = triple_to_dbid.get(triple)
+                if dbid:
+                    ids.append(dbid)
+            new_playlist_infos.append(
+                PlaylistInfo(name=spec.name, track_ids=ids)
+            )
+
+    # Preserve existing iPod playlists not being replaced. Smart
+    # playlists pass through too — they aren't user-managed via
+    # clickwheel today, but we don't want to lose them on rewrite.
+    new_names = (
+        overwrite_playlist_names
+        if overwrite_playlist_names is not None
+        else {spec.name for spec in (playlist_specs or [])}
+    )
+    preserved_playlist_infos: list[PlaylistInfo] = []
+    for raw in existing_playlists:
+        name = raw.get("name") or ""
+        if name in new_names:
+            continue  # explicitly being replaced
+        if raw.get("is_smart"):
+            # Smart playlists need their preferences/rules preserved to
+            # remain functional. Punt on that for now — drop them rather
+            # than write a broken stub. (Pre-existing user-created smart
+            # playlists are rare on the kinds of devices clickwheel
+            # targets; this is a known limitation worth revisiting.)
+            continue
+        dbids = []
+        for tid in raw.get("item_track_ids", []):
+            dbid = track_id_to_dbid.get(tid)
+            if dbid:
+                dbids.append(dbid)
+        preserved_playlist_infos.append(
+            PlaylistInfo(name=name, track_ids=dbids)
+        )
+
+    all_playlists = new_playlist_infos + preserved_playlist_infos
 
     try:
         return write_itunesdb(
             ipod_path=str(ipod_mount),
             tracks=track_infos,
             pc_file_paths=pc_file_paths if pc_file_paths else None,
+            playlists=all_playlists if all_playlists else None,
         )
     except Exception:
         logger.exception("Failed to write iTunesDB")

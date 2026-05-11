@@ -288,9 +288,20 @@ def test_action_sync_playlist_passes_existing_through(tmp_path, monkeypatch):
     monkeypatch.setattr(
         actions, "compute_diff", lambda *a, **kw: Diff(playlist="p", to_add=[])
     )
+    # sync_playlist now reads existing iPod playlists for conflict
+    # detection — fake those out too.
+    monkeypatch.setattr(actions, "require_ipod", lambda _cfg: {"fake": "db"})
+    monkeypatch.setattr("clickwheel.ipod.get_ipod_playlists", lambda _db: [])
     full_replace_flags: list[bool] = []
 
-    def fake_write_ipod_db(mount, copied, *, full_replace=False):
+    def fake_write_ipod_db(
+        mount,
+        copied,
+        *,
+        full_replace=False,
+        playlist_specs=None,
+        overwrite_playlist_names=None,
+    ):
         full_replace_flags.append(full_replace)
         return True
 

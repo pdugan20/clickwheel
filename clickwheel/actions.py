@@ -120,6 +120,41 @@ class PathsNotFoundError(ClickwheelError):
         self.unknown_paths = unknown_paths
 
 
+class PlaylistConflictError(ClickwheelError):
+    """A playlist with the same name already exists on the iPod.
+
+    Raised by `sync_playlist` when called without an `on_conflict`
+    decision and a same-name iPod-side playlist exists. The MCP tool
+    surface catches this and turns it into a structured "please pick
+    an option" response so the LLM can ask the user how to proceed.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        existing_name: str,
+        existing_track_count: int,
+    ) -> None:
+        super().__init__(message)
+        self.existing_name = existing_name
+        self.existing_track_count = existing_track_count
+
+
+@dataclass
+class IpodPlaylistSpec:
+    """Internal: a playlist destined for the iPod's iTunesDB.
+
+    Used to ferry "write this playlist" intent through `write_ipod_db`.
+    `tracks` is a list of clickwheel-side track dicts (from the library
+    DB or from compute_diff) — `write_ipod_db` matches them to
+    TrackInfo dbids via (artist, album, title) so the resulting
+    iPod-side playlist references the right tracks.
+    """
+
+    name: str
+    tracks: list[dict] = field(default_factory=list)
+
+
 @dataclass
 class ScanResult:
     total: int = 0
@@ -563,6 +598,41 @@ def read_ipod_track_list(ipod_db: dict) -> list[dict]:
     return get_ipod_tracks(ipod_db)
 
 
+def list_ipod_playlists(cfg: Config) -> list[dict]:
+    """Read user-visible playlists currently on the iPod.
+
+    Returns one dict per playlist (excluding the auto-generated master
+    playlist) with: name, track_count, total_bytes, is_smart.
+    `total_bytes` is best-effort, computed by summing the matching
+    tracks' size fields; if the playlist references a track ID that
+    isn't in the current track list, that track contributes 0.
+
+    Raises IpodNotFoundError if no iPod is mounted.
+    """
+    from clickwheel.ipod import get_ipod_playlists, get_ipod_tracks
+
+    ipod_db = require_ipod(cfg)
+    raw_playlists = get_ipod_playlists(ipod_db)
+    tracks_by_id = {t.get("trackID"): t for t in get_ipod_tracks(ipod_db)}
+
+    result: list[dict] = []
+    for p in raw_playlists:
+        total = 0
+        for tid in p.get("item_track_ids", []):
+            t = tracks_by_id.get(tid)
+            if t:
+                total += t.get("size") or 0
+        result.append(
+            {
+                "name": p["name"],
+                "track_count": p["track_count"],
+                "total_bytes": total,
+                "is_smart": p["is_smart"],
+            }
+        )
+    return result
+
+
 def read_ipod_contents(cfg: Config) -> dict:
     """Return iPod track list plus capacity/usage. Raises IpodNotFoundError."""
     ipod_db = require_ipod(cfg)
@@ -668,23 +738,42 @@ def sync_playlist(
     *,
     diff: Diff | None = None,
     on_event: Callable[[SyncEvent], None] | None = None,
+    on_conflict: str | None = None,
+    target_name: str | None = None,
 ) -> SyncResult:
-    """Copy tracks from a playlist to the iPod and update the iPod's library.
+    """Copy a playlist to the iPod and create/update the matching
+    iPod-side playlist under Music → Playlists on the device.
 
-    Confirmation is the caller's job. This function actually performs the sync.
-    Pass a pre-computed `diff` (e.g. from a preview) to avoid re-reading the
-    iPod.
+    Confirmation is the caller's job. This function actually performs
+    the sync. Pass a pre-computed `diff` (e.g. from a preview) to avoid
+    re-reading the iPod.
 
-    Pre-flight checks:
-    - LibraryNotFoundError if cfg.music_dir isn't reachable (catches
-      unmounted-share cases before we hang on per-file timeouts).
+    Same-name iPod playlist handling
+    --------------------------------
+    If a playlist with `target_name or playlist_name` already exists on
+    the iPod, behavior depends on `on_conflict`:
+      - None         → raise PlaylistConflictError so callers can ask
+                        the user what to do.
+      - "merge"      → union the existing iPod playlist's tracks with
+                        the new track list (dedup by dbid). Existing
+                        track order is preserved; new tracks append.
+      - "replace"    → drop the iPod playlist's previous contents and
+                        write the new track list as-is.
+      - "rename"     → write the new playlist under `target_name`
+                        (required). The original iPod playlist with the
+                        clashing name is left untouched.
+
+    Pre-flight checks
+    -----------------
+    - LibraryNotFoundError if cfg.music_dir isn't reachable.
     - MissingTracksError if any playlist tracks are flagged missing on
-      disk (catches stale-playlist cases — files were moved/deleted since
-      the playlist was built). The error carries the missing tracks so
-      callers can suggest `heal_playlist`.
+      disk. Carries the offending tracks so callers can suggest
+      `heal_playlist`.
 
-    Raises PlaylistNotFoundError, IpodNotFoundError, InsufficientSpaceError.
+    Raises PlaylistNotFoundError, IpodNotFoundError,
+    InsufficientSpaceError, PlaylistConflictError.
     """
+    from clickwheel.ipod import get_ipod_playlists
     from clickwheel.ipod.sync import copy_tracks_to_ipod, write_ipod_db
 
     if not cfg.music_dir.is_dir():
@@ -698,9 +787,6 @@ def sync_playlist(
 
     missing = db.get_missing_tracks_in_playlist(playlist_name)
     if missing:
-        # Only block on missing tracks that are actually in the to-add set —
-        # tracks already on the iPod are safe even if their source files are
-        # gone (we're not re-copying them).
         to_add_paths = {t["path"] for t in diff.to_add}
         blocking = [t for t in missing if t["path"] in to_add_paths]
         if blocking:
@@ -712,6 +798,38 @@ def sync_playlist(
                 "--add` or `add_artist_to_playlist`.",
                 blocking,
             )
+
+    # Determine the target iPod playlist name and check for conflict
+    # before touching anything destructive.
+    ipod_db = require_ipod(cfg)
+    existing_ipod_playlists = get_ipod_playlists(ipod_db)
+    existing_by_name = {p["name"]: p for p in existing_ipod_playlists}
+
+    if on_conflict == "rename":
+        if not target_name:
+            raise ClickwheelError("on_conflict='rename' requires a target_name.")
+        ipod_playlist_name = target_name
+        # Rename also can't itself collide — check.
+        if target_name in existing_by_name:
+            raise PlaylistConflictError(
+                f"An iPod playlist named '{target_name}' already exists. "
+                "Pick a different name.",
+                existing_name=target_name,
+                existing_track_count=existing_by_name[target_name]["track_count"],
+            )
+    else:
+        ipod_playlist_name = playlist_name
+
+    conflicting = existing_by_name.get(ipod_playlist_name)
+    if conflicting and on_conflict not in {"merge", "replace", "rename"}:
+        raise PlaylistConflictError(
+            f"An iPod playlist named '{ipod_playlist_name}' already "
+            f"exists with {conflicting['track_count']} track(s). Re-call "
+            "with on_conflict='merge' (combine), 'replace' (overwrite), "
+            "or 'rename' (use target_name=...).",
+            existing_name=ipod_playlist_name,
+            existing_track_count=conflicting["track_count"],
+        )
 
     to_add = diff.to_add
     add_size = diff.add_size_bytes
@@ -732,7 +850,51 @@ def sync_playlist(
         on_event(SyncEvent(current=current, total=total_count, track=track, ok=True))
 
     copied, failed = copy_tracks_to_ipod(to_add, cfg.ipod_mount, _on_progress)
-    db_ok = write_ipod_db(cfg.ipod_mount, copied)
+
+    # Build the playlist spec for write_ipod_db. The full playlist (not
+    # just to_add) is what we want as the iPod-side playlist contents.
+    playlist_tracks = db.get_playlist(playlist_name)
+    spec = IpodPlaylistSpec(name=ipod_playlist_name, tracks=playlist_tracks)
+
+    # For merge: union with existing iPod tracks (preserve order, append
+    # new ones not already there). Match by (artist, album, title).
+    overwrite_names = {ipod_playlist_name}
+    if on_conflict == "merge" and conflicting is not None:
+        existing_tracks = read_ipod_track_list(ipod_db)
+        # Map existing iPod trackIDs in the conflicting playlist back to
+        # track records so we can build a (artist, album, title) list.
+        track_id_to_record = {t.get("trackID"): t for t in existing_tracks}
+        seen: set[tuple[str, str, str]] = set()
+        merged: list[dict] = []
+        for tid in conflicting["item_track_ids"]:
+            t = track_id_to_record.get(tid)
+            if not t:
+                continue
+            triple = (t.get("artist") or "", t.get("album") or "", t.get("title") or "")
+            if triple in seen:
+                continue
+            seen.add(triple)
+            merged.append(
+                {
+                    "artist": t.get("artist"),
+                    "album": t.get("album"),
+                    "title": t.get("title"),
+                }
+            )
+        for t in playlist_tracks:
+            triple = (t.get("artist") or "", t.get("album") or "", t.get("title") or "")
+            if triple in seen:
+                continue
+            seen.add(triple)
+            merged.append(t)
+        spec = IpodPlaylistSpec(name=ipod_playlist_name, tracks=merged)
+
+    db_ok = write_ipod_db(
+        cfg.ipod_mount,
+        copied,
+        playlist_specs=[spec],
+        overwrite_playlist_names=overwrite_names,
+    )
 
     return SyncResult(
         copied=copied,

@@ -112,9 +112,43 @@ def get_ipod_tracks(db: dict) -> list[dict]:
     return tracks
 
 
+def get_ipod_playlists(db: dict) -> list[dict]:
+    """Extract user-visible playlists from a parsed iTunesDB.
+
+    Returns playlists from both the regular `mhlp` list AND the smart-
+    playlist list (`mhlp_smart`), with the auto-generated master
+    playlist filtered out (it represents the whole library, not a
+    user-visible playlist under Music → Playlists on the device).
+
+    Each dict carries: name, track_count, is_smart, item_track_ids
+    (list of 32-bit MHIP trackIDs — caller can map to dbids via the
+    track list if they need stable cross-write IDs).
+    """
+    result: list[dict] = []
+    for key, is_smart in (("mhlp", False), ("mhlp_smart", True)):
+        for raw in db.get(key, []) or []:
+            if raw.get("isMaster"):
+                continue
+            items = raw.get("items") or []
+            result.append(
+                {
+                    "name": raw.get("Title") or "",
+                    "track_count": raw.get("trackCount") or len(items),
+                    "is_smart": is_smart,
+                    "item_track_ids": [
+                        item.get("trackID")
+                        for item in items
+                        if item.get("trackID") is not None
+                    ],
+                }
+            )
+    return result
+
+
 __all__ = [
     "PlayCountEntry",
     "find_ipod",
+    "get_ipod_playlists",
     "get_ipod_tracks",
     "merge_playcounts",
     "read_ipod",

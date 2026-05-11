@@ -89,6 +89,41 @@ def get_ipod_contents() -> dict:
 
 
 @mcp.tool(annotations=READ_ONLY)
+def list_ipod_playlists() -> list[dict]:
+    """List the playlists currently on the iPod (the ones visible under
+    Music → Playlists on the device).
+
+    Returns the user-visible playlists only — the auto-generated master
+    "iPod" library playlist is filtered out since that's not a thing the
+    user thinks of as a playlist. Each entry carries: name, track_count,
+    total_bytes, is_smart (smart playlists are iTunes-created auto-filter
+    playlists like the "Music" or "Recently Added" defaults).
+
+    Use this to:
+      - Answer "what playlists are on my iPod?"
+      - Check for a name conflict before `sync_playlist_to_ipod` (though
+        the sync tool will also detect conflicts and ask you to resolve).
+      - Help the user decide if a sync should merge, replace, or rename.
+
+    Note: this lists IPOD-side playlists. For draft playlists you've
+    built in clickwheel but haven't synced yet, use `list_playlists`.
+
+    Requires the iPod to be mounted.
+    """
+    with open_session() as (cfg, _db):
+        result = actions.list_ipod_playlists(cfg)
+        if not result:
+            return render(
+                "No user playlists on the iPod (the main library is "
+                "always there, but no curated collections).",
+                result,
+            )
+        names = ", ".join(f"'{p['name']}' ({p['track_count']})" for p in result)
+        text = f"{format_count(len(result), 'playlist')} on the iPod: {names}."
+        return render(text, result)
+
+
+@mcp.tool(annotations=READ_ONLY)
 def list_ipod_tracks(
     artist: Annotated[
         str | None,
@@ -142,100 +177,185 @@ def list_ipod_tracks(
 async def sync_playlist_to_ipod(
     playlist: Annotated[str, Field(description="Saved playlist name to sync.")],
     ctx: Context,
+    on_conflict: Annotated[
+        str | None,
+        Field(
+            description=(
+                "How to resolve a same-name playlist already on the iPod. "
+                "Omit on the first call; if a conflict exists, this tool "
+                "returns a structured error so you can ask the user to "
+                "pick one of: 'merge' (combine tracks), 'replace' "
+                "(overwrite contents), 'rename' (use target_name for a "
+                "new playlist name)."
+            ),
+        ),
+    ] = None,
+    target_name: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Required when on_conflict='rename'. The new iPod-side "
+                "playlist name to use instead of the clickwheel name."
+            ),
+        ),
+    ] = None,
 ) -> dict:
-    """Push a saved playlist to the iPod. Copies new tracks and updates the
-    iPod's library so it sees them. Tracks already on the iPod that aren't
-    in the playlist stay where they are — sync is additive, never deletes.
+    """Push a saved playlist (the clickwheel-side draft) to the iPod
+    AND create/update the corresponding playlist on the device under
+    Music → Playlists. Copies any missing tracks first.
 
-    Reports progress per track via MCP `notifications/progress` so the host
-    can render a live progress bar (Claude Desktop shows the per-track
-    artist/title beneath the tool result while files copy).
+    Two effects on the iPod:
+      1. The playlist's tracks land in the iPod's main library (additive
+         — sync never deletes tracks from the device).
+      2. A playlist with the same name appears under Music → Playlists,
+         containing those tracks. This is the curated-collection thing
+         the user can browse on the device.
 
-    Flagged destructive, so MCP clients gate this call with a native
-    Allow/Deny prompt. Before invoking, summarize the diff for the user
-    (use `get_playlist` and `get_ipod_contents` for context): how many
-    tracks will be added, how much space they'll use. The user clicks
-    Allow knowing what's about to happen.
+    For "just put music on the iPod without a playlist artifact" use
+    `add_tracks_to_ipod` or `add_artist_to_ipod` — DO NOT create
+    throwaway playlists just to push tracks.
 
-    Requires the iPod to be mounted. Errors if the new tracks won't fit.
+    Reports progress per track via MCP `notifications/progress` so the
+    host can render a live progress bar while files copy.
 
-    Talk to the user in plain language. Don't mention internal terms like
-    "iTunesDB" or field names like `library_updated`. Say things like
-    "the iPod's library was updated" or "your iPod is ready to unplug."
+    Same-name handling
+    ------------------
+    If a playlist with the same name already exists on the iPod (e.g.
+    leftover from a previous sync or iTunes), the first call returns
+    a structured error describing the conflict. Present the options to
+    the user in plain language:
 
-    When to use: the user says "sync my playlist", "push to the iPod",
-    "load up the iPod".
+      • merge   — combine the existing iPod playlist's tracks with the
+                  new tracks (dedup; existing track order is preserved).
+      • replace — overwrite the existing playlist's contents with the
+                  new tracks. Doesn't delete tracks from the library.
+      • rename  — keep the existing playlist as-is, write the new one
+                  under a different name (set target_name).
 
-    After a successful sync: offer to eject the iPod (call `eject_ipod`).
-    If the result reports `library_updated: false`, the music copied but
-    the iPod won't see it yet — tell the user that and suggest re-running
-    the sync or using the CLI for retry.
+    Then re-call with the chosen `on_conflict` (+ `target_name` for
+    rename).
+
+    Flagged destructive — clients gate with native Allow/Deny prompts.
+    Summarize the impact before calling so the user has context.
+
+    Errors
+    ------
+    - LibraryNotFoundError: music_dir not mounted.
+    - PlaylistNotFoundError: clickwheel-side playlist doesn't exist.
+    - MissingTracksError: tracks in the playlist reference files no
+      longer on disk. Surface the count, suggest `heal_playlist`.
+    - IpodNotFoundError: no iPod mounted.
+    - InsufficientSpaceError: new tracks won't fit.
+    - PlaylistConflictError: same-name iPod playlist exists; ask the
+      user which on_conflict mode to use.
+
+    After success: offer to eject the iPod (`eject_ipod`).
     """
-    # actions.sync_playlist is synchronous and blocking (file copies,
-    # iPod database write). Running it directly in the async tool would
-    # pin the event loop and prevent progress notifications from flushing
-    # to the client until the sync finishes. So we hand the work to a
-    # worker thread and bridge per-track on_event callbacks back to the
-    # main loop via run_coroutine_threadsafe.
-    #
-    # Each worker reopens its own SQLite connection because the default
-    # check_same_thread=True forbids cross-thread reuse.
     cfg = load_config()
     loop = asyncio.get_running_loop()
 
-    def worker() -> tuple[actions.Diff, actions.SyncResult | None]:
+    def worker() -> tuple[actions.Diff | None, actions.SyncResult | None, dict | None]:
         db = Database(cfg.db_path)
         try:
             diff = actions.compute_diff(cfg, db, playlist)
-            if not diff.to_add and not diff.to_remove:
-                return diff, None
+            if not diff.to_add and not diff.to_remove and not on_conflict:
+                # No tracks to copy AND no explicit conflict resolution
+                # requested — if the iPod playlist already exists with
+                # the right contents, this is a no-op. But if the
+                # iPod-side playlist is missing entirely (sync was done
+                # by an older version that only copied tracks), we
+                # still want to write it. Let sync_playlist sort it out
+                # below; it'll just no-op the copy step.
+                pass
 
             def on_event(ev: actions.SyncEvent) -> None:
                 artist = ev.track.get("artist") or "Unknown"
                 title = ev.track.get("title") or "Unknown"
-                # Fire-and-forget — progress notifications are best-effort.
-                # If the host didn't supply a progressToken, FastMCP's
-                # report_progress is a no-op; the future just resolves.
                 asyncio.run_coroutine_threadsafe(
                     ctx.report_progress(ev.current, ev.total, f"{artist} — {title}"),
                     loop,
                 )
 
-            result = actions.sync_playlist(
-                cfg, db, playlist, diff=diff, on_event=on_event
-            )
-            return diff, result
+            try:
+                result = actions.sync_playlist(
+                    cfg,
+                    db,
+                    playlist,
+                    diff=diff,
+                    on_event=on_event,
+                    on_conflict=on_conflict,
+                    target_name=target_name,
+                )
+            except actions.PlaylistConflictError as exc:
+                return (
+                    diff,
+                    None,
+                    {
+                        "kind": "conflict",
+                        "existing_name": exc.existing_name,
+                        "existing_track_count": exc.existing_track_count,
+                        "message": str(exc),
+                    },
+                )
+            return diff, result, None
         finally:
             db.close()
 
-    diff, result = await asyncio.to_thread(worker)
+    diff, result, conflict = await asyncio.to_thread(worker)
 
-    if result is None:
+    if conflict is not None:
+        text = (
+            f"The iPod already has a playlist called "
+            f"'{conflict['existing_name']}' with "
+            f"{format_count(conflict['existing_track_count'], 'track')}. "
+            "Ask the user how to proceed: merge (combine tracks), "
+            "replace (overwrite the iPod's version with your '"
+            f"{playlist}'), or rename (write to a different name). "
+            "Re-call this tool with the chosen on_conflict (and "
+            "target_name for rename)."
+        )
         data = {
             "synced": False,
-            "reason": "iPod already matches this playlist.",
+            "conflict": conflict,
             "playlist": playlist,
         }
-        return render(f"iPod already matches '{playlist}' — nothing to do.", data)
+        return render(text, data)
 
-    if result.library_updated:
-        text = (
-            f"Synced '{playlist}': added "
-            f"{format_count(len(result.copied), 'track')} "
-            f"({format_bytes(diff.add_size_bytes)}). "
-            "Offer to eject the iPod when the user is ready to unplug."
+    if result is None:
+        # Defensive: shouldn't happen on a non-conflict path.
+        return render(
+            f"iPod already matches '{playlist}' — nothing to do.",
+            {"synced": False, "playlist": playlist},
         )
+
+    final_name = target_name if on_conflict == "rename" else playlist
+    if result.library_updated:
+        if result.copied:
+            text = (
+                f"Synced '{playlist}' to the iPod as '{final_name}': "
+                f"added {format_count(len(result.copied), 'track')} "
+                f"({format_bytes(diff.add_size_bytes) if diff else '?'}). "
+                "Offer to eject the iPod when ready."
+            )
+        else:
+            text = (
+                f"Updated the iPod's '{final_name}' playlist — all "
+                "tracks were already on the device. Offer to eject when "
+                "ready."
+            )
     else:
         text = (
-            f"Synced '{playlist}', but the iPod's library wasn't "
-            f"fully updated. {format_count(len(result.copied), 'track')} "
-            "copied to the device, but the iPod may not see them yet. "
-            "Suggest the CLI (`clickwheel sync`) for retry support."
+            f"Synced '{playlist}', but the iPod's library wasn't fully "
+            "updated. The music copied but may not be visible yet — "
+            "suggest re-running the sync or using `clickwheel sync` "
+            "for retry support."
         )
 
     data = {
         "synced": True,
         "playlist": playlist,
+        "ipod_playlist": final_name,
+        "on_conflict": on_conflict,
         "added": len(result.copied),
         "failed": len(result.failed),
         # Tracks already on the iPod that aren't in this playlist —
