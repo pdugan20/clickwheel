@@ -95,6 +95,11 @@ def _setup(tmp_path, monkeypatch, *, populate=True):
     db.close()
 
     monkeypatch.setattr("clickwheel.mcp._runtime.load_config", lambda: cfg)
+    # sync_playlist_to_ipod imports load_config directly (it can't use
+    # open_session because it reopens the DB in a worker thread). Patch
+    # that binding too so tests stay independent of whether the dev
+    # machine has an iPod mounted at the real cfg.ipod_mount path.
+    monkeypatch.setattr("clickwheel.mcp.tools.ipod.load_config", lambda: cfg)
     return cfg
 
 

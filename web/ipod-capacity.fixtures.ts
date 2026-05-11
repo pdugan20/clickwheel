@@ -11,10 +11,12 @@ export type Fixture = {
   structuredContent: Record<string, unknown>;
 };
 
-// Fixtures mirror what get_ipod_contents returns — which means the
-// `top_artists` rollups are already through actions.primary_artist().
-// Collab strings like "Taylor Swift, Ed Sheeran" never reach the bundle
-// in real usage; they fold into the lead artist's count server-side.
+// Fixtures mirror what get_ipod_contents returns. The server rolls up
+// `top_artists` via actions.primary_artist(), which prefers the
+// per-track `album_artist` tag over `artist` — so collab variants like
+// "Taylor Swift / HAIM" or "Taylor Swift, Ed Sheeran" never reach the
+// bundle. They fold into the lead artist's count (whose album_artist
+// is just "Taylor Swift") server-side.
 export const fixtures: Fixture[] = [
   {
     name: 'classic — pop trio',

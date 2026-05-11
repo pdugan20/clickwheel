@@ -56,10 +56,15 @@ def get_ipod_contents() -> dict:
     with open_session() as (cfg, _db):
         contents = actions.read_ipod_contents(cfg)
         tracks = contents["tracks"]
-        # Fold collabs under their primary artist so "Taylor Swift" and
-        # "Taylor Swift, Ed Sheeran" aggregate into one segment instead
-        # of fragmenting across the legend.
-        artist_counts = Counter(actions.primary_artist(t.get("artist")) for t in tracks)
+        # Fold collabs under their canonical lead artist. primary_artist
+        # prefers the album_artist field (which iTunes/Music keeps clean
+        # — collabs like "Taylor Swift / HAIM" tag album_artist as
+        # "Taylor Swift") and falls back to the per-track artist tag
+        # only when album_artist is missing.
+        artist_counts = Counter(
+            actions.primary_artist(t.get("artist"), t.get("album_artist"))
+            for t in tracks
+        )
         album_count = len({t.get("album") or "" for t in tracks})
         top_artists = [
             {"artist": a, "track_count": c} for a, c in artist_counts.most_common(25)

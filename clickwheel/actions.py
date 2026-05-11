@@ -21,33 +21,49 @@ from clickwheel.config import Config
 from clickwheel.db import Database
 from clickwheel.library import AUDIO_EXTENSIONS, scan_file
 
-# Strips trailing "feat./featuring/with X" annotations from an artist
-# tag. Anchored to a word boundary on the keyword so band names that
-# happen to contain "feat" (none we know of, but be defensive) survive.
-# Optional opening paren handles "(feat. X)" formatting too.
+# Strips trailing "feat./featuring/with X" annotations. Anchored to a
+# word boundary on the keyword so band names that happen to contain
+# "feat" survive. Optional opening paren handles "(feat. X)" too.
 _FEAT_SUFFIX_RE = re.compile(
     r"\s+\(?(?:feat\.?|featuring|with)\s+.*$",
     re.IGNORECASE,
 )
 
 
-def primary_artist(name: str | None) -> str:
-    """Reduce a multi-artist tag to the primary artist.
+def primary_artist(
+    artist: str | None,
+    album_artist: str | None = None,
+) -> str:
+    """Pick a canonical lead-artist label for rollup/grouping purposes.
 
-    iTunes-style exports concatenate collaborators with commas
-    ("Taylor Swift, Ed Sheeran"). For top-N rollups we want the lead
-    artist so collabs aggregate under their primary. Splits on the
-    first comma and strips trailing "feat. X" / "featuring X" / "with X"
-    clauses.
+    Strategy mirrors iTunes/Music itself: trust `album_artist` as the
+    authoritative field, fall back to `artist` only when album_artist
+    is empty or a compilation marker. We do NOT try to parse multi-
+    artist strings — every plausible separator (",", "/", "&", "and")
+    appears in legitimate band names ("Crosby, Stills and Nash",
+    "AC/DC", "Belle & Sebastian", "Sly and the Family Stone"), so any
+    regex-based split will misclassify real artists as collabs.
 
-    `&` is intentionally NOT a split delimiter — it appears in legitimate
-    band names ("Simon & Garfunkel", "Earth, Wind & Fire").
+    The single piece of normalization we apply is stripping trailing
+    "feat. X" / "featuring X" / "with X" annotations, which are
+    unambiguous. Useful as a safety net for tags that leak those
+    annotations into the album_artist field.
+
+    For users whose tags don't disambiguate well, the right fix is
+    re-tagging with beets or Picard (which link to MusicBrainz IDs and
+    write a clean album_artist), not smarter parsing here.
     """
-    if not name:
+    chosen: str | None = None
+    if album_artist:
+        aa = album_artist.strip()
+        if aa and aa.casefold() != "various artists":
+            chosen = aa
+    if not chosen and artist:
+        chosen = artist.strip()
+    if not chosen:
         return "Unknown"
-    cleaned = _FEAT_SUFFIX_RE.sub("", name).strip()
-    head = cleaned.split(",", 1)[0].strip()
-    return head or "Unknown"
+    cleaned = _FEAT_SUFFIX_RE.sub("", chosen).strip()
+    return cleaned or "Unknown"
 
 
 class ClickwheelError(Exception):
