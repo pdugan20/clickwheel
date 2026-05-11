@@ -1,13 +1,22 @@
 /**
  * Shared inline style for the outermost <div> of every bundle. Mirrors
- * rewind's root-style.ts: lets host theme tokens flow through and keeps
- * each bundle visually consistent without a CSS framework.
+ * rewind's card chrome (see rewind/mcp-server/web/lib/colors.mjs +
+ * card-tokens.ts): a literal cream/off-white card with a visible gray
+ * border, not the opacity-faded border Claude Desktop's
+ * --color-border-* variables collapse to.
  *
- * The card treatment (subtle border + slightly contrasting background +
- * generous padding) makes the bundle read as its own surface inside the
- * chat rather than blending into the message body.
+ * We hard-code the hex values rather than chaining through host-injected
+ * CSS variables because Claude Desktop's injected --color-border-* are
+ * barely-there alpha values, and we want the visible card edge that
+ * Rewind's iPad / Desktop layout uses.
  */
 import type { CSSProperties } from 'react';
+
+// Card chrome — matches rewind/mcp-server/web/lib/colors.mjs verbatim.
+const CARD_BG_LIGHT = '#fcfcfa';
+const CARD_BG_DARK = '#272726';
+const CARD_BORDER_LIGHT = '#d9d9d9';
+const CARD_BORDER_DARK = '#383836';
 
 // Anthropic brand blue. Used for the live-progress bar and any other
 // "accent" callout. Kept here so all bundles pull from one source.
@@ -19,10 +28,9 @@ export const rootStyle: CSSProperties = {
   fontSize: 13,
   lineHeight: 1.4,
   color: 'var(--color-text-primary, light-dark(#1a1a1a, #f0f0f0))',
-  background: 'var(--color-background-secondary, light-dark(#fbfaf7, #232323))',
+  background: `light-dark(${CARD_BG_LIGHT}, ${CARD_BG_DARK})`,
   padding: 20,
-  borderRadius: 'var(--border-radius-lg, 12px)',
-  border:
-    '1px solid var(--color-border-secondary, light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.08)))',
+  borderRadius: 12,
+  border: `1px solid light-dark(${CARD_BORDER_LIGHT}, ${CARD_BORDER_DARK})`,
   boxSizing: 'border-box',
 };

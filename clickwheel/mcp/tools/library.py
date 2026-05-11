@@ -97,8 +97,11 @@ def list_albums_by_artist(
     """Albums for a single artist, ordered by year then album title. Each
     entry includes track count, total size in bytes, and the year (if known).
 
-    When to use: drilling into an artist's discography after `list_artists`,
-    or before calling `list_tracks_by_album` for a specific album.
+    When to use: the canonical way to BROWSE an artist's whole catalog —
+    "show me everything by Bob Dylan", "what Wilco albums do I have?",
+    or any "build me a playlist of X best tracks" flow. Returns the
+    complete discography in one call, no result cap, no alphabet
+    truncation (unlike `search_tracks` which silently chops at 50–500).
 
     After this: `list_tracks_by_album` to get individual track paths
     (needed by `create_playlist` / `update_playlist`).
@@ -171,9 +174,16 @@ def search_tracks(
 ) -> list[dict]:
     """Case-insensitive substring search across artist, album, and title.
 
-    When to use: the user mentions a track or theme without remembering the
-    exact artist/album. Always start here when the query is fuzzy — never
-    guess at what tracks exist.
+    When to use: the user mentions a specific track or theme without
+    remembering the exact artist/album. Always start here when the query
+    is fuzzy — never guess at what tracks exist.
+
+    DO NOT use this to browse an artist's full catalog. Results are
+    alphabetised and capped (default 50, max 500), so a prolific artist
+    like Bob Dylan or The Beatles will overflow and you'll silently miss
+    everything past the cap. For an artist deep-dive use
+    `list_albums_by_artist` (groups the whole discography) then
+    `list_tracks_by_album` for the albums you want.
 
     After this: collect `path` values for `create_playlist` /
     `update_playlist`, or call `list_tracks_by_album` for the full album.
@@ -188,10 +198,16 @@ def search_tracks(
                 "broaden by artist/album."
             )
             return render(text, result)
-        truncated = " (capped at limit)" if len(result) == limit else ""
-        text = (
-            f"Found {format_count(len(result), 'track')} matching '{query}'{truncated}."
-        )
+        if len(result) == limit:
+            text = (
+                f"Hit the {limit}-result cap on '{query}'. Results are "
+                "alphabetical, so anything past the cap is missing. For an "
+                "artist deep-dive call `list_albums_by_artist` instead — "
+                "it returns the full discography. Or re-call with a higher "
+                "`limit` (max 500)."
+            )
+        else:
+            text = f"Found {format_count(len(result), 'track')} matching '{query}'."
         return render(text, result)
 
 
