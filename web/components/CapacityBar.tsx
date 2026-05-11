@@ -42,6 +42,11 @@ function colorFor(i: number, total: number): string {
   return `hsl(${hue} 60% 55%)`;
 }
 
+// Legend caps separately from the bar so the bar can keep more detail
+// (8 distinct artists before "Other" rolls up) while the legend
+// stays compact and easy to scan (top 4 + everything else).
+const MAX_LEGEND_NAMED = 4;
+
 export function CapacityBar({
   capacity_bytes,
   used_bytes,
@@ -85,13 +90,42 @@ export function CapacityBar({
   });
   if (otherTracks > 0) {
     segments.push({
-      name: 'other artists',
+      name: 'Other',
       tracks: otherTracks,
       share: (otherTracks / allTracks) * usedFraction,
       color: 'light-dark(#9ca3af, #6b7280)',
     });
   }
   const freeFraction = free_bytes / capacity_bytes;
+
+  // Legend collapses everything past the top MAX_LEGEND_NAMED real
+  // artists into a single "Other" pill — even rows the bar
+  // shows by name. Keeps the legend scannable while the bar can stay
+  // detailed. The first 4 entries share their bar colors exactly
+  // (same index into `segments`).
+  const legendSegments: typeof segments = [];
+  let legendOtherTracks = 0;
+  let realArtistCount = 0;
+  for (const s of segments) {
+    if (s.name === 'Other') {
+      legendOtherTracks += s.tracks;
+      continue;
+    }
+    if (realArtistCount < MAX_LEGEND_NAMED) {
+      legendSegments.push(s);
+      realArtistCount += 1;
+    } else {
+      legendOtherTracks += s.tracks;
+    }
+  }
+  if (legendOtherTracks > 0) {
+    legendSegments.push({
+      name: 'Other',
+      tracks: legendOtherTracks,
+      share: 0,
+      color: 'light-dark(#9ca3af, #6b7280)',
+    });
+  }
 
   return (
     <div>
@@ -117,7 +151,7 @@ export function CapacityBar({
             height: 22,
             borderRadius: 4,
             overflow: 'hidden',
-            background: 'light-dark(#e5e5e5, #2c2c2c)',
+            background: 'light-dark(#e5e5e5, #3a3a3a)',
             display: 'flex',
           }}
           onMouseLeave={() => setHovered(null)}
@@ -188,10 +222,10 @@ export function CapacityBar({
           opacity: 0.85,
         }}
       >
-        {segments.map((s, i) => {
-          // The "other artists" rollup isn't a real artist, so it can't
+        {legendSegments.map((s, i) => {
+          // The "Other" rollup isn't a real artist, so it can't
           // turn into a follow-up prompt — render it inert.
-          const clickable = !!onArtistClick && s.name !== 'other artists';
+          const clickable = !!onArtistClick && s.name !== 'Other';
           const Pill = clickable ? 'button' : 'span';
           return (
             <Pill

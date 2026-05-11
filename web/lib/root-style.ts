@@ -29,7 +29,11 @@ export const rootStyle: CSSProperties = {
   lineHeight: 1.4,
   color: 'var(--color-text-primary, light-dark(#1a1a1a, #f0f0f0))',
   background: `light-dark(${CARD_BG_LIGHT}, ${CARD_BG_DARK})`,
-  padding: 20,
+  // Asymmetric on purpose. The h2 title's line-box has ~3-4px of
+  // leading above its glyph cap-height, so a symmetric 20px on top
+  // and bottom *reads* as ~23px top / 20px bottom. Trim the top to
+  // compensate so the visual gap matches.
+  padding: '16px 20px 20px 20px',
   borderRadius: 12,
   border: `1px solid light-dark(${CARD_BORDER_LIGHT}, ${CARD_BORDER_DARK})`,
   boxSizing: 'border-box',

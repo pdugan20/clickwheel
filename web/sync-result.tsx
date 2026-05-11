@@ -191,14 +191,18 @@ function deriveInlineStats(p: SyncResultPayload): string {
 
 function ProgressBar({ current, total }: { current: number; total: number }) {
   const pct = total > 0 ? Math.min(100, (current / total) * 100) : 0;
+  // Hard-code the track color rather than chaining through
+  // var(--color-background-tertiary). Claude Desktop injects that
+  // variable as a value very close to the card bg, making the track
+  // disappear. Literal hex matches the visible gray we get in the
+  // workbench (where the variable is unset and the fallback kicks in).
   return (
     <div
       style={{
         height: 8,
         borderRadius: 4,
         overflow: 'hidden',
-        background:
-          'var(--color-background-tertiary, light-dark(#e5e5e5, #2c2c2c))',
+        background: 'light-dark(#e5e5e5, #3a3a3a)',
       }}
     >
       <div
@@ -272,38 +276,35 @@ function Pending({ app }: { app: App | null }) {
         ...rootStyle,
         display: 'flex',
         flexDirection: 'column',
-        gap: 12,
+        gap: 10,
       }}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'baseline',
-            gap: 12,
-          }}
-        >
-          <h2 style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>
-            {progress
-              ? `${verbForKind(progress.kind)} ${progress.operation || ''}`.trim()
-              : 'Working on it…'}
-          </h2>
-          {showProgress && (
-            <div style={{ fontSize: 12, opacity: 0.7 }}>
-              {progress!.current} of {progress!.total}
-            </div>
-          )}
-        </div>
-        {showProgress && progress!.detail && (
-          <div style={{ fontSize: 12, opacity: 0.7 }}>{progress!.detail}</div>
-        )}
-        {!showProgress && (
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          gap: 12,
+          flexWrap: 'wrap',
+        }}
+      >
+        <h2 style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>
+          {progress
+            ? `${verbForKind(progress.kind)} ${progress.operation || ''}`.trim()
+            : 'Working on it…'}
+        </h2>
+        {showProgress && (
           <div style={{ fontSize: 12, opacity: 0.7 }}>
-            The summary will appear here when the operation completes.
+            {progress!.current} of {progress!.total}
+            {progress!.detail ? ` · ${progress!.detail}` : ''}
           </div>
         )}
       </div>
+      {!showProgress && (
+        <div style={{ fontSize: 12, opacity: 0.7 }}>
+          The summary will appear here when the operation completes.
+        </div>
+      )}
       {showProgress && (
         <ProgressBar current={progress!.current} total={progress!.total} />
       )}
@@ -335,6 +336,15 @@ function SyncResultApp() {
   const title = deriveTitle(payload);
   const badge = deriveBadge(payload);
   const inlineStats = deriveInlineStats(payload);
+  const rightText = inlineStats ? `${badge.text} · ${inlineStats}` : badge.text;
+  // Mirror the Pending state's structure (header row + thin bar below)
+  // so the iframe height stays stable across the live→done transition.
+  // Only show the bar when actual track work happened — for no-op /
+  // already-in-sync / conflict, the bar would be either misleading or
+  // dominated by the conflict panel.
+  const showCompletionBar =
+    !payload.conflict &&
+    ((payload.added ?? 0) > 0 || (payload.removed ?? 0) > 0);
 
   return (
     <div
@@ -342,25 +352,22 @@ function SyncResultApp() {
         ...rootStyle,
         display: 'flex',
         flexDirection: 'column',
-        gap: 12,
+        gap: 10,
       }}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'baseline',
-            gap: 12,
-          }}
-        >
-          <h2 style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>{title}</h2>
-          <StatusLine tone={badge.tone}>{badge.text}</StatusLine>
-        </div>
-        {inlineStats && (
-          <div style={{ fontSize: 12, opacity: 0.7 }}>{inlineStats}</div>
-        )}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          gap: 12,
+          flexWrap: 'wrap',
+        }}
+      >
+        <h2 style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>{title}</h2>
+        <StatusLine tone={badge.tone}>{rightText}</StatusLine>
       </div>
+      {showCompletionBar && <ProgressBar current={1} total={1} />}
       {payload.conflict && (
         <div
           style={{
