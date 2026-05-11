@@ -26,22 +26,22 @@ import type { Fixture } from '../ipod-capacity.fixtures.js';
 
 const PROTOCOL_VERSION = '2026-01-26';
 
-const HOST_RESPONSE = {
-  protocolVersion: PROTOCOL_VERSION,
-  hostInfo: { name: 'clickwheel-workbench', version: '0.1.0' },
-  hostCapabilities: {
-    openLinks: {},
-    logging: {},
-    sandbox: {},
-  },
-  hostContext: {
-    theme: matchMedia('(prefers-color-scheme: dark)').matches
-      ? 'dark'
-      : 'light',
-    platform: 'desktop',
-    locale: navigator.language,
-  },
-};
+function buildHostResponse(theme: 'light' | 'dark') {
+  return {
+    protocolVersion: PROTOCOL_VERSION,
+    hostInfo: { name: 'clickwheel-workbench', version: '0.1.0' },
+    hostCapabilities: {
+      openLinks: {},
+      logging: {},
+      sandbox: {},
+    },
+    hostContext: {
+      theme,
+      platform: 'desktop',
+      locale: navigator.language,
+    },
+  };
+}
 
 type Status =
   | 'mounting'
@@ -72,13 +72,116 @@ function idleProgress(): MockProgress {
   };
 }
 
+type Viewport = 'mobile' | 'tablet' | 'desktop';
+type Theme = 'light' | 'dark';
+
+const VIEWPORT_WIDTHS: Record<Viewport, number> = {
+  mobile: 380,
+  tablet: 600,
+  desktop: 720,
+};
+
+function ToggleGroup({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span
+        style={{
+          fontSize: 11,
+          textTransform: 'uppercase',
+          letterSpacing: 0.4,
+          opacity: 0.6,
+        }}
+      >
+        {label}
+      </span>
+      <div
+        style={{
+          display: 'inline-flex',
+          background: 'light-dark(rgba(0,0,0,0.04), rgba(255,255,255,0.06))',
+          borderRadius: 6,
+          padding: 2,
+        }}
+      >
+        {options.map((o) => {
+          const active = o.value === value;
+          return (
+            <button
+              key={o.value}
+              onClick={() => onChange(o.value)}
+              type="button"
+              aria-pressed={active}
+              style={{
+                padding: '4px 10px',
+                fontSize: 12,
+                fontWeight: 500,
+                border: 'none',
+                borderRadius: 4,
+                cursor: 'pointer',
+                background: active
+                  ? 'light-dark(#fff, rgba(255,255,255,0.12))'
+                  : 'transparent',
+                color: 'inherit',
+                boxShadow: active ? '0 1px 2px rgba(0,0,0,0.08)' : undefined,
+              }}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function Workbench() {
   const [bundle, setBundle] = useState<Bundle>(bundles[0]);
   const [fixture, setFixture] = useState<Fixture>(bundles[0].fixtures[0]);
   const [reloadKey, setReloadKey] = useState(0);
   const [status, setStatus] = useState<Status>('mounting');
+  const [viewport, setViewport] = useState<Viewport>('desktop');
+  const [theme, setTheme] = useState<Theme>(
+    matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  );
 
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+
+  // Apply theme to the workbench chrome (host doc). The iframe gets a
+  // separate hostcontextchanged notification — handled below.
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.style.colorScheme = theme;
+  }, [theme]);
+
+  // Keep latest theme in a ref so the message handler (registered once
+  // with [] deps for stability) can read it on every ui/initialize
+  // round-trip without re-binding.
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
+
+  // Broadcast theme changes to the iframe via hostcontextchanged so
+  // the bundle's useHostStyles can re-apply colors live.
+  useEffect(() => {
+    const target = iframeRef.current?.contentWindow;
+    if (!target || !initializedRef.current) return;
+    target.postMessage(
+      {
+        jsonrpc: '2.0',
+        method: 'ui/notifications/host-context-changed',
+        params: { theme },
+      },
+      '*'
+    );
+  }, [theme]);
 
   // Keep the *latest* fixture in a ref synced on every render. The
   // listener and the post-init send both read from here so they can
@@ -185,7 +288,11 @@ function Workbench() {
       if (msg.method === 'ui/initialize' && msg.id != null) {
         console.debug('[workbench] ← ui/initialize', msg.params);
         target.postMessage(
-          { jsonrpc: '2.0', id: msg.id, result: HOST_RESPONSE },
+          {
+            jsonrpc: '2.0',
+            id: msg.id,
+            result: buildHostResponse(themeRef.current),
+          },
           '*'
         );
         setStatus('awaiting-initialize');
@@ -388,14 +495,49 @@ function Workbench() {
           status: {status}
         </div>
       </aside>
-      <main style={{ padding: 24, overflow: 'auto' }}>
+      <main
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+      >
+        <header
+          style={{
+            display: 'flex',
+            gap: 16,
+            alignItems: 'center',
+            padding: '12px 24px',
+            borderBottom:
+              '1px solid light-dark(rgba(0,0,0,0.08), rgba(255,255,255,0.08))',
+            fontSize: 12,
+          }}
+        >
+          <ToggleGroup
+            label="Viewport"
+            options={[
+              { value: 'mobile', label: 'Mobile' },
+              { value: 'tablet', label: 'Tablet' },
+              { value: 'desktop', label: 'Desktop' },
+            ]}
+            value={viewport}
+            onChange={(v) => setViewport(v as Viewport)}
+          />
+          <ToggleGroup
+            label="Theme"
+            options={[
+              { value: 'light', label: 'Light' },
+              { value: 'dark', label: 'Dark' },
+            ]}
+            value={theme}
+            onChange={(v) => setTheme(v as Theme)}
+          />
+        </header>
         <div
           style={{
-            border: '1px solid light-dark(#e0e0e0, #2e2e2e)',
-            borderRadius: 8,
-            background: 'light-dark(#fafafa, #1a1a1a)',
-            padding: 16,
-            maxWidth: 720,
+            padding: 24,
+            overflow: 'auto',
+            flex: 1,
           }}
         >
           <iframe
@@ -404,19 +546,29 @@ function Workbench() {
             src={bundle.entryUrl}
             title={bundle.label}
             style={{
+              display: 'block',
               width: '100%',
+              maxWidth: VIEWPORT_WIDTHS[viewport],
               minHeight: 280,
               border: 'none',
               background: 'transparent',
+              transition: 'max-width 200ms ease',
             }}
           />
+          <details
+            style={{
+              marginTop: 16,
+              fontSize: 12,
+              opacity: 0.7,
+              maxWidth: VIEWPORT_WIDTHS[viewport],
+            }}
+          >
+            <summary>fixture payload</summary>
+            <pre style={{ fontSize: 11, lineHeight: 1.4 }}>
+              {JSON.stringify(fixture.structuredContent, null, 2)}
+            </pre>
+          </details>
         </div>
-        <details style={{ marginTop: 16, fontSize: 12, opacity: 0.7 }}>
-          <summary>fixture payload</summary>
-          <pre style={{ fontSize: 11, lineHeight: 1.4 }}>
-            {JSON.stringify(fixture.structuredContent, null, 2)}
-          </pre>
-        </details>
       </main>
     </div>
   );

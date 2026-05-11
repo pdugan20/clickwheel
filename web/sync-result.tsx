@@ -17,7 +17,7 @@ import { createRoot } from 'react-dom/client';
 import { useApp, useHostStyles } from '@modelcontextprotocol/ext-apps/react';
 import type { App } from '@modelcontextprotocol/ext-apps';
 import { StatGrid, type StatCell } from './components/StatGrid.js';
-import { rootStyle } from './lib/root-style.js';
+import { BRAND_BLUE, rootStyle } from './lib/root-style.js';
 
 const PROGRESS_URI = 'state://clickwheel/sync-progress';
 const POLL_INTERVAL_MS = 250;
@@ -227,8 +227,7 @@ function ProgressBar({ current, total }: { current: number; total: number }) {
         style={{
           width: `${pct.toFixed(1)}%`,
           height: '100%',
-          background:
-            'var(--color-background-success, light-dark(#22c55e, #15803d))',
+          background: BRAND_BLUE,
           transition: 'width 200ms linear',
         }}
       />
