@@ -174,16 +174,22 @@ def search_tracks(
 ) -> list[dict]:
     """Case-insensitive substring search across artist, album, and title.
 
-    When to use: the user mentions a specific track or theme without
-    remembering the exact artist/album. Always start here when the query
-    is fuzzy — never guess at what tracks exist.
+    When to use: FUZZY DISCOVERY only. The user describes a track they
+    can't fully name ("that one about a river", "the track with 'lonely'
+    in it") or doesn't know the artist. Start here when the query is
+    truly fuzzy — never guess at what tracks exist.
 
-    DO NOT use this to browse an artist's full catalog. Results are
+    DO NOT use this to browse an artist's catalog. Results are
     alphabetised and capped (default 50, max 500), so a prolific artist
-    like Bob Dylan or The Beatles will overflow and you'll silently miss
-    everything past the cap. For an artist deep-dive use
-    `list_albums_by_artist` (groups the whole discography) then
-    `list_tracks_by_album` for the albums you want.
+    will overflow and you'll silently miss everything past the cap. Use
+    `list_albums_by_artist` for the discography.
+
+    DO NOT call this N times to look up N tracks you've already chosen
+    by name. If you have a list like "Like a Rolling Stone, Tangled Up
+    in Blue, Hurricane" and you know the artist, call
+    `list_albums_by_artist` once, then `list_tracks_by_album` per album
+    — that's one call per album (3-5 typically) instead of one full-
+    library scan per track (8-9).
 
     After this: collect `path` values for `create_playlist` /
     `update_playlist`, or call `list_tracks_by_album` for the full album.
