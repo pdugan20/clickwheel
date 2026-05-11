@@ -2,7 +2,12 @@
  * Stacked capacity bar segmented by top artists with free space on the
  * right. Designed for the iPod capacity view but reusable for any
  * "stuff on a fixed-size disk" payload.
+ *
+ * Segment hover surfaces a Floating UI tooltip (matching the library
+ * format bar): artist + tracks · share-of-iPod.
  */
+import { useEffect, useRef, useState } from 'react';
+import { autoUpdate, offset, shift, useFloating } from '@floating-ui/react';
 
 export type CapacityArtist = {
   artist: string;
@@ -45,6 +50,19 @@ export function CapacityBar({
   maxSegments = 8,
   onArtistClick,
 }: CapacityBarProps) {
+  const [hovered, setHovered] = useState<number | null>(null);
+  const segmentRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const { refs, floatingStyles } = useFloating({
+    placement: 'top',
+    middleware: [offset(8), shift({ padding: 12 })],
+    whileElementsMounted: autoUpdate,
+  });
+  useEffect(() => {
+    refs.setReference(
+      hovered === null ? null : (segmentRefs.current[hovered] ?? null)
+    );
+  }, [hovered, refs]);
+
   if (!capacity_bytes) {
     return <div style={{ opacity: 0.6 }}>No capacity data.</div>;
   }
@@ -58,11 +76,17 @@ export function CapacityBar({
   const segments = named.map((a, i) => {
     const share =
       allTracks > 0 ? (a.track_count / allTracks) * usedFraction : 0;
-    return { name: a.artist, share, color: colorFor(i, named.length) };
+    return {
+      name: a.artist,
+      tracks: a.track_count,
+      share,
+      color: colorFor(i, named.length),
+    };
   });
   if (otherTracks > 0) {
     segments.push({
       name: 'other artists',
+      tracks: otherTracks,
       share: (otherTracks / allTracks) * usedFraction,
       color: 'light-dark(#9ca3af, #6b7280)',
     });
@@ -76,7 +100,7 @@ export function CapacityBar({
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'baseline',
-          marginBottom: 8,
+          marginBottom: 10,
         }}
       >
         <h2 style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>
@@ -87,40 +111,80 @@ export function CapacityBar({
           {fmtBytes(capacity_bytes)} total
         </div>
       </div>
-      <div
-        style={{
-          position: 'relative',
-          height: 22,
-          borderRadius: 4,
-          overflow: 'hidden',
-          background: 'light-dark(#e5e5e5, #2c2c2c)',
-          display: 'flex',
-        }}
-      >
-        {segments.map((s, i) => (
-          <div
-            key={`${s.name}-${i}`}
-            style={{
-              width: `${(s.share * 100).toFixed(2)}%`,
-              height: '100%',
-              background: s.color,
-            }}
-            title={`${s.name} — ${(s.share * 100).toFixed(1)}%`}
-          />
-        ))}
+      <div style={{ position: 'relative' }}>
         <div
           style={{
-            width: `${(freeFraction * 100).toFixed(2)}%`,
-            height: '100%',
-            background: 'transparent',
+            height: 22,
+            borderRadius: 4,
+            overflow: 'hidden',
+            background: 'light-dark(#e5e5e5, #2c2c2c)',
+            display: 'flex',
           }}
-        />
+          onMouseLeave={() => setHovered(null)}
+        >
+          {segments.map((s, i) => (
+            <div
+              key={`${s.name}-${i}`}
+              ref={(el) => {
+                segmentRefs.current[i] = el;
+              }}
+              onMouseEnter={() => setHovered(i)}
+              style={{
+                width: `${(s.share * 100).toFixed(2)}%`,
+                height: '100%',
+                background: s.color,
+                transition: 'filter 120ms',
+                filter:
+                  hovered !== null && hovered !== i
+                    ? 'brightness(0.9)'
+                    : 'none',
+                cursor: 'default',
+              }}
+            />
+          ))}
+          <div
+            style={{
+              width: `${(freeFraction * 100).toFixed(2)}%`,
+              height: '100%',
+              background: 'transparent',
+            }}
+          />
+        </div>
+        {hovered !== null && segments[hovered] && (
+          <div
+            ref={refs.setFloating}
+            style={{
+              ...floatingStyles,
+              pointerEvents: 'none',
+              background:
+                'var(--color-background-inverse, light-dark(#1f1e1d, #f0f0eb))',
+              color: 'var(--color-text-inverse, light-dark(#fcfcfc, #1f1e1d))',
+              padding: '6px 10px',
+              borderRadius: 6,
+              fontSize: 11,
+              fontWeight: 500,
+              lineHeight: 1.3,
+              whiteSpace: 'nowrap',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.18)',
+              zIndex: 10,
+            }}
+          >
+            <span style={{ fontWeight: 600 }}>{segments[hovered].name}</span>
+            <span style={{ fontWeight: 400, opacity: 0.75 }}>
+              {' · '}
+              {segments[hovered].tracks.toLocaleString()} tracks ·{' '}
+              {(segments[hovered].share * 100).toFixed(1)}%
+            </span>
+          </div>
+        )}
       </div>
       <div
         style={{
           marginTop: 10,
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '6px 16px',
           fontSize: 12,
-          lineHeight: 1.5,
           opacity: 0.85,
         }}
       >
@@ -128,14 +192,14 @@ export function CapacityBar({
           // The "other artists" rollup isn't a real artist, so it can't
           // turn into a follow-up prompt — render it inert.
           const clickable = !!onArtistClick && s.name !== 'other artists';
-          const Row = clickable ? 'button' : 'div';
+          const Pill = clickable ? 'button' : 'span';
           return (
-            <Row
+            <Pill
               key={`${s.name}-${i}`}
               type={clickable ? 'button' : undefined}
               onClick={clickable ? () => onArtistClick!(s.name) : undefined}
               style={{
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
                 gap: 6,
                 background: 'transparent',
@@ -150,24 +214,17 @@ export function CapacityBar({
             >
               <span
                 style={{
-                  width: 10,
-                  height: 10,
+                  width: 8,
+                  height: 8,
                   borderRadius: 2,
                   background: s.color,
                   flexShrink: 0,
                 }}
               />
-              <span
-                style={{
-                  textDecoration: clickable ? 'underline' : 'none',
-                  textDecorationColor: 'currentcolor',
-                  textDecorationStyle: 'dotted',
-                  textUnderlineOffset: 3,
-                }}
-              >
-                {s.name}
+              <span>
+                {s.name} · {s.tracks.toLocaleString()}
               </span>
-            </Row>
+            </Pill>
           );
         })}
       </div>

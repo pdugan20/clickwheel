@@ -1,11 +1,11 @@
 /**
- * Library overview bundle. Finder-inspired layout — title + inline
- * subtitle of all the stats, then a stacked format-breakdown bar with
- * interior segment labels (only the wide ones show), then a dotted
- * legend. Consumes the library_stats tool's structured payload.
+ * Library overview bundle. Header row mirrors iPod capacity: title on
+ * the left (14/600), stats inline on the right (12/0.7). Below that,
+ * the stacked format-breakdown bar (with hover tooltip via Floating
+ * UI) and a dotted legend. Consumes the library_stats tool's
+ * structured payload.
  *
- * Palette: monochromatic Focus blue (see lib/palette.ts). White
- * interior labels.
+ * Palette: monochromatic Focus blue (see lib/palette.ts).
  */
 import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -43,8 +43,8 @@ function fmtBytes(n: number): string {
 
 function fmtHours(seconds: number): string {
   const h = seconds / 3600;
-  if (h >= 1) return `${h.toFixed(0)} h`;
-  return `${Math.round(seconds / 60)} m`;
+  if (h >= 1) return `${h.toFixed(0)} hours`;
+  return `${Math.round(seconds / 60)} minutes`;
 }
 
 function LibraryStatsApp() {
@@ -77,7 +77,6 @@ function LibraryStatsApp() {
     );
   }
 
-  const artworkPct = (stats.with_art / stats.total_tracks) * 100;
   const segments: BarSegment[] = formats.map((f) => ({
     label: f.format.toUpperCase(),
     value: f.count,
@@ -90,18 +89,26 @@ function LibraryStatsApp() {
         ...rootStyle,
         display: 'flex',
         flexDirection: 'column',
-        gap: 14,
+        gap: 10,
       }}
     >
-      <div>
-        <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 4 }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          gap: 12,
+          flexWrap: 'wrap',
+        }}
+      >
+        <h2 style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>
           Music Library
-        </div>
-        <div style={{ fontSize: 12, opacity: 0.7, lineHeight: 1.5 }}>
+        </h2>
+        <div style={{ fontSize: 12, opacity: 0.7 }}>
           {stats.total_tracks.toLocaleString()} tracks ·{' '}
           {stats.artists.toLocaleString()} artists ·{' '}
           {stats.albums.toLocaleString()} albums · {fmtBytes(stats.total_bytes)}{' '}
-          · {fmtHours(stats.total_seconds)} · {artworkPct.toFixed(0)}% artwork
+          · {fmtHours(stats.total_seconds)}
         </div>
       </div>
       {segments.length > 0 && (

@@ -7,21 +7,19 @@
  *
  * Positioning is delegated to Floating UI (`@floating-ui/react`):
  *   - offset(8)             keeps an 8px gap between bar and tooltip
- *   - flip()                flips below if there's no room above
  *   - shift({ padding: 12 }) slides the tooltip horizontally so it
  *                            never overflows the iframe viewport
+ *
+ * Placement is fixed to `top` (no `flip`) so the tooltip is
+ * consistent across bundles. The tooltip is a single line, so it fits
+ * comfortably above the bar even when the bar is near the top of the
+ * iframe.
  *
  * We use `refs.setReference` to retarget Floating UI at the currently-
  * hovered segment, so one tooltip element follows multiple anchors.
  */
 import { useEffect, useRef, useState } from 'react';
-import {
-  autoUpdate,
-  flip,
-  offset,
-  shift,
-  useFloating,
-} from '@floating-ui/react';
+import { autoUpdate, offset, shift, useFloating } from '@floating-ui/react';
 import { MONO_BLUE } from '../lib/palette.js';
 
 export type BarSegment = {
@@ -47,7 +45,7 @@ export function HeroFormatBar({
 
   const { refs, floatingStyles } = useFloating({
     placement: 'top',
-    middleware: [offset(8), flip(), shift({ padding: 12 })],
+    middleware: [offset(8), shift({ padding: 12 })],
     whileElementsMounted: autoUpdate,
   });
 
@@ -118,11 +116,12 @@ export function HeroFormatBar({
             zIndex: 10,
           }}
         >
-          <div style={{ fontWeight: 600 }}>{active.label}</div>
-          <div style={{ opacity: 0.75 }}>
+          <span style={{ fontWeight: 600 }}>{active.label}</span>
+          <span style={{ fontWeight: 400, opacity: 0.75 }}>
+            {' · '}
             {active.hint ??
               `${active.value.toLocaleString()} · ${active.pct.toFixed(1)}%`}
-          </div>
+          </span>
         </div>
       )}
     </div>
