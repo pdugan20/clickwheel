@@ -23,7 +23,7 @@ from clickwheel.mcp._runtime import (
     render,
 )
 from clickwheel.mcp.ui import ui_tool_meta
-from clickwheel.mcp.ui_resources import IPOD_CAPACITY_URI
+from clickwheel.mcp.ui_resources import IPOD_CAPACITY_URI, SYNC_RESULT_URI
 
 
 def _summarize_track(t: dict) -> dict:
@@ -173,7 +173,10 @@ def list_ipod_tracks(
         return render(text, slim)
 
 
-@mcp.tool(annotations=DESTRUCTIVE)
+@mcp.tool(
+    annotations=DESTRUCTIVE,
+    meta=ui_tool_meta(SYNC_RESULT_URI),
+)
 async def sync_playlist_to_ipod(
     playlist: Annotated[str, Field(description="Saved playlist name to sync.")],
     ctx: Context,
@@ -366,7 +369,10 @@ async def sync_playlist_to_ipod(
     return render(text, data)
 
 
-@mcp.tool(annotations=DESTRUCTIVE)
+@mcp.tool(
+    annotations=DESTRUCTIVE,
+    meta=ui_tool_meta(SYNC_RESULT_URI),
+)
 async def add_tracks_to_ipod(
     paths: Annotated[
         list[str],
@@ -480,7 +486,10 @@ async def add_tracks_to_ipod(
     return render(text, data)
 
 
-@mcp.tool(annotations=DESTRUCTIVE)
+@mcp.tool(
+    annotations=DESTRUCTIVE,
+    meta=ui_tool_meta(SYNC_RESULT_URI),
+)
 async def add_artist_to_ipod(
     artist: Annotated[
         str,
