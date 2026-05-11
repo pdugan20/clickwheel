@@ -47,7 +47,30 @@ type Status =
   | 'mounting'
   | 'awaiting-initialize'
   | 'initialized'
+  | 'running-progress'
   | 'pushed-result';
+
+const PROGRESS_URI = 'state://clickwheel/sync-progress';
+
+type MockProgress = {
+  kind: string;
+  current: number;
+  total: number;
+  message: string;
+  operation: string;
+  done: boolean;
+};
+
+function idleProgress(): MockProgress {
+  return {
+    kind: 'idle',
+    current: 0,
+    total: 0,
+    message: '',
+    operation: '',
+    done: true,
+  };
+}
 
 function Workbench() {
   const [bundle, setBundle] = useState<Bundle>(bundles[0]);
@@ -68,6 +91,14 @@ function Workbench() {
   // re-triggers a tool-result.
   const initializedRef = useRef(false);
 
+  // Mock state for the workbench's stand-in `state://clickwheel/sync-
+  // progress` MCP resource. Lives in a ref so the message handler
+  // (registered once) always reads the latest.
+  const mockProgressRef = useRef<MockProgress>(idleProgress());
+  // Timer that ticks the mock progress forward for fixtures with a
+  // `.progress` simulation. Cleaned up on fixture change.
+  const progressTimerRef = useRef<number | null>(null);
+
   const sendToolResult = useCallback((target: Window, fx: Fixture) => {
     const message = {
       jsonrpc: '2.0',
@@ -80,6 +111,66 @@ function Workbench() {
     console.debug('[workbench] → tool-result', fx.name, message.params);
     target.postMessage(message, '*');
     setStatus('pushed-result');
+  }, []);
+
+  const startMockProgress = useCallback((fx: Fixture) => {
+    if (!fx.progress) return;
+    const target = iframeRef.current?.contentWindow;
+    if (!target) return;
+
+    // Reset state to "starting".
+    mockProgressRef.current = {
+      kind: fx.progress.kind,
+      current: 0,
+      total: fx.progress.trackLabels.length,
+      message: '',
+      operation: fx.progress.operation,
+      done: false,
+    };
+    setStatus('running-progress');
+
+    const tickMs = fx.progress.tickMs ?? 700;
+    const labels = fx.progress.trackLabels;
+    const total = labels.length;
+    const finalPayload = fx.progress.finalPayload;
+
+    if (progressTimerRef.current) {
+      window.clearInterval(progressTimerRef.current);
+    }
+
+    progressTimerRef.current = window.setInterval(() => {
+      const next = mockProgressRef.current.current + 1;
+      if (next > total) {
+        // Bar full: mark done, fire the final tool-result, stop ticking.
+        mockProgressRef.current = {
+          ...mockProgressRef.current,
+          current: total,
+          done: true,
+        };
+        if (progressTimerRef.current) {
+          window.clearInterval(progressTimerRef.current);
+          progressTimerRef.current = null;
+        }
+        target.postMessage(
+          {
+            jsonrpc: '2.0',
+            method: 'ui/notifications/tool-result',
+            params: {
+              content: [{ type: 'text', text: 'mock progress complete' }],
+              structuredContent: finalPayload,
+            },
+          },
+          '*'
+        );
+        setStatus('pushed-result');
+        return;
+      }
+      mockProgressRef.current = {
+        ...mockProgressRef.current,
+        current: next,
+        message: labels[next - 1] ?? '',
+      };
+    }, tickMs);
   }, []);
 
   useEffect(() => {
@@ -104,7 +195,49 @@ function Workbench() {
         console.debug('[workbench] ← ui/notifications/initialized');
         initializedRef.current = true;
         setStatus('initialized');
-        sendToolResult(target, fixtureRef.current);
+        if (fixtureRef.current.progress) {
+          // Live-progress fixture: run the mock sequence and fire
+          // tool-result only when it finishes.
+          startMockProgress(fixtureRef.current);
+        } else {
+          sendToolResult(target, fixtureRef.current);
+        }
+        return;
+      }
+      // Stand-in for the MCP server's `resources/read` handler. The
+      // sync-result bundle's live-progress component polls this; we
+      // respond with the mock state so the bar can advance in dev.
+      if (msg.method === 'resources/read' && msg.id != null) {
+        const uri = (msg.params as { uri?: string } | undefined)?.uri ?? '';
+        if (uri === PROGRESS_URI) {
+          target.postMessage(
+            {
+              jsonrpc: '2.0',
+              id: msg.id,
+              result: {
+                contents: [
+                  {
+                    uri,
+                    mimeType: 'application/json',
+                    text: JSON.stringify(mockProgressRef.current),
+                  },
+                ],
+              },
+            },
+            '*'
+          );
+          return;
+        }
+        // Unknown resource: respond with an empty contents array so
+        // the SDK doesn't time out the request.
+        target.postMessage(
+          {
+            jsonrpc: '2.0',
+            id: msg.id,
+            result: { contents: [] },
+          },
+          '*'
+        );
         return;
       }
       if (msg.method?.startsWith('ui/')) {
@@ -113,7 +246,7 @@ function Workbench() {
     }
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [sendToolResult]);
+  }, [sendToolResult, startMockProgress]);
 
   // Iframe (re)mount: clear initialized state so the next ui/initialize
   // round-trip pushes a fresh tool-result. Triggered on bundle change
@@ -121,16 +254,44 @@ function Workbench() {
   useEffect(() => {
     initializedRef.current = false;
     setStatus('mounting');
+    // Cancel any in-flight progress simulation; the new iframe will
+    // start fresh when it re-handshakes.
+    if (progressTimerRef.current) {
+      window.clearInterval(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
+    mockProgressRef.current = idleProgress();
   }, [bundle, reloadKey]);
 
   // Fixture change without iframe remount: if the iframe is already
-  // initialized, push the new fixture right away. Otherwise let the
-  // post-init handler pick up fixtureRef.current.
+  // initialized, either push the new tool-result OR kick off a new
+  // mock-progress sequence (and reset the iframe's payload first by
+  // bumping reloadKey, so the bundle's Pending component re-mounts).
   useEffect(() => {
     if (!initializedRef.current) return;
+    if (progressTimerRef.current) {
+      window.clearInterval(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
+    if (fixture.progress) {
+      // To re-show the Pending state for a new progress sim, we need
+      // the bundle to forget its previous payload. Cleanest way: bump
+      // the iframe's key so it remounts and re-handshakes.
+      setReloadKey((k) => k + 1);
+      return;
+    }
     const target = iframeRef.current?.contentWindow;
     if (target) sendToolResult(target, fixture);
   }, [fixture, sendToolResult]);
+
+  // Clean up the timer on unmount so we don't leak intervals.
+  useEffect(() => {
+    return () => {
+      if (progressTimerRef.current) {
+        window.clearInterval(progressTimerRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div

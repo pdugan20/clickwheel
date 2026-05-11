@@ -4,11 +4,30 @@
  * the bundle renders against realistic data without a live iPod.
  */
 
+/**
+ * Optional progress simulation: when set, the workbench plays back a
+ * mock sync-progress sequence (responds to `resources/read` for
+ * `state://clickwheel/sync-progress`) before firing the tool-result.
+ * Lets the sync-result bundle's live progress bar render in dev.
+ */
+export type FixtureProgressSim = {
+  kind: 'sync' | 'add' | 'remove';
+  operation: string;
+  /** Track labels rotated through as the bar advances. */
+  trackLabels: string[];
+  /** Milliseconds between mock ticks. ~700ms feels iPod-realistic. */
+  tickMs?: number;
+  /** Final payload to fire as the tool-result after the bar fills. */
+  finalPayload: Record<string, unknown>;
+};
+
 export type Fixture = {
   name: string;
   description?: string;
-  /** Mirrors what get_ipod_contents returns from the MCP server. */
+  /** Mirrors what the matching tool returns from the MCP server. */
   structuredContent: Record<string, unknown>;
+  /** Optional live-progress simulation for sync-result preview. */
+  progress?: FixtureProgressSim;
 };
 
 // Fixtures mirror what get_ipod_contents returns. The server rolls up
