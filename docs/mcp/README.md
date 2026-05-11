@@ -60,7 +60,7 @@ The server includes a built-in `build_playlist` prompt that walks the model thro
 
 ## Tool reference
 
-21 tools, grouped by domain.
+25 tools + 1 prompt, grouped by domain.
 
 ### Library (read)
 
@@ -89,12 +89,18 @@ The server includes a built-in `build_playlist` prompt that walks the model thro
 
 ### iPod (read + mutation)
 
-| Tool                    | What it does                                              |
-| ----------------------- | --------------------------------------------------------- |
-| `get_ipod_contents`     | iPod summary — capacity, used/free space, top artists     |
-| `list_ipod_tracks`      | Paginated track list, optionally filtered by artist       |
-| `sync_playlist_to_ipod` | Push a saved playlist to the iPod (destructive, additive) |
-| `eject_ipod`            | Safely unmount via `diskutil eject`                       |
+| Tool                      | What it does                                                                            |
+| ------------------------- | --------------------------------------------------------------------------------------- |
+| `get_ipod_contents`       | iPod summary — capacity, used/free space, top artists                                   |
+| `list_ipod_tracks`        | Paginated track list, optionally filtered by artist                                     |
+| `list_ipod_playlists`     | iPod-side playlists (the ones visible under Music → Playlists on the device)            |
+| `sync_playlist_to_ipod`   | Push a saved playlist to the iPod (destructive, additive). Handles same-name conflicts. |
+| `add_tracks_to_ipod`      | Push specific tracks to the iPod library without creating a playlist (destructive)      |
+| `add_artist_to_ipod`      | Push every track by an artist to the iPod library (destructive)                         |
+| `remove_tracks_from_ipod` | Drop specific tracks from the iPod (destructive; tracks stay in the library)            |
+| `remove_artist_from_ipod` | Drop every track by an artist from the iPod (destructive; tracks stay in the library)   |
+| `remove_ipod_playlist`    | Delete a playlist artifact from the iPod without touching its tracks (destructive)      |
+| `eject_ipod`              | Safely unmount via `diskutil eject`                                                     |
 
 ### Last.fm scrobbling
 
@@ -105,13 +111,13 @@ The server includes a built-in `build_playlist` prompt that walks the model thro
 
 ## Destructive-tool gating
 
-`delete_playlist` and `sync_playlist_to_ipod` carry the MCP `destructiveHint=true` annotation. Different clients honor that differently:
+Seven tools carry the MCP `destructiveHint=true` annotation: `delete_playlist`, `sync_playlist_to_ipod`, `add_tracks_to_ipod`, `add_artist_to_ipod`, `remove_tracks_from_ipod`, `remove_artist_from_ipod`, `remove_ipod_playlist`. Different clients honor the flag differently:
 
 - **Claude Code** shows a per-call Allow/Deny prompt before each invocation.
 - **Claude Desktop** asks once when the tool is first used in a conversation, then runs freely thereafter.
-- The server-side `instructions` block tells the model to summarize the impact in chat before invoking either tool, so users get a chance to back out regardless of the client's gating model.
+- The server-side `instructions` block tells the model to summarize the impact in chat before invoking any destructive tool, so users get a chance to back out regardless of the client's gating model.
 
-`sync_playlist_to_ipod` is also additive — tracks already on the iPod that aren't in the playlist stay where they are. Sync never deletes from the iPod.
+`sync_playlist_to_ipod` and the `add_*` tools are additive — tracks already on the iPod that aren't in the playlist/request stay where they are. They never silently delete from the iPod. The explicit `remove_*` tools are the only way to drop tracks.
 
 ## Behavior notes
 
@@ -123,12 +129,13 @@ The server includes a built-in `build_playlist` prompt that walks the model thro
 
 Clickwheel ships an MCP Apps extension that lets compatible hosts (Claude Desktop, Claude.ai, VS Code Copilot, Goose) render an interactive iframe inline beneath certain tool results.
 
-| Tool                    | Bundle              | What it shows                                                                 |
-| ----------------------- | ------------------- | ----------------------------------------------------------------------------- |
-| `get_ipod_contents`     | iPod capacity bar   | Used/free + segments per top artist; click a row to ask a follow-up           |
-| `library_stats`         | Library overview    | Track/artist/album counts, size, hours, artwork %, format breakdown           |
-| `library_health`        | Library health card | Music-folder reachability, last-scan age, missing-file count, auto-scan flag  |
-| `sync_playlist_to_ipod` | _no iframe_         | Streams per-track `notifications/progress` so the host renders a progress bar |
+| Tool                                                                                                                                              | Bundle           | What it shows                                                                                                                                                                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_ipod_contents`                                                                                                                               | iPod capacity    | Used/free bar segmented by top artists (8 named + "Other"), inline pill legend capped at 4 + "Other"; click a pill to ask a follow-up                                                                                      |
+| `library_stats`                                                                                                                                   | Library overview | Track / artist / album counts + hours inline next to the title, mono-blue stacked format bar with single-line hover tooltips                                                                                               |
+| `sync_playlist_to_ipod`, `add_tracks_to_ipod`, `add_artist_to_ipod`, `remove_tracks_from_ipod`, `remove_artist_from_ipod`, `remove_ipod_playlist` | Sync result      | Live progress while the tool runs (polls `state://clickwheel/sync-progress` for the static "X MB · N albums" subtitle + counter), switches to a completion card with `Ready to eject` / `Library not fully updated` / etc. |
+
+`library_health` is text-only now — no bundle, returns a structured payload + summary that hosts render however they like.
 
 Hosts without MCP Apps support fall back to the same text + structured-content payload the Python tools have always returned — nothing breaks, the iframe just doesn't appear.
 

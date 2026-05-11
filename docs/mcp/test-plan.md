@@ -2,10 +2,10 @@
 
 Round-by-round guide for verifying the clickwheel MCP server end-to-end. Tick items as you go; record anything surprising under [Findings](#findings) at the bottom.
 
-**Surface under test:** 18 tools + 1 prompt.
+**Surface under test:** 25 tools + 1 prompt.
 
-- Read (10): `library_stats`, `library_health`, `list_artists`, `list_albums_by_artist`, `list_tracks_by_album`, `search_tracks`, `list_playlists`, `get_playlist`, `get_ipod_contents`, `get_pending_scrobbles`
-- Mutation (8): `create_playlist`, `update_playlist`, `delete_playlist`, `add_artist_to_playlist`, `remove_artist_from_playlist`, `submit_scrobbles`, `sync_playlist_to_ipod`, `eject_ipod`
+- Read (12): `library_stats`, `library_health`, `list_artists`, `list_albums_by_artist`, `list_tracks_by_album`, `search_tracks`, `list_playlists`, `get_playlist`, `list_playlist_tracks`, `get_ipod_contents`, `list_ipod_tracks`, `list_ipod_playlists`, `get_pending_scrobbles`
+- Mutation / destructive (13): `create_playlist`, `update_playlist`, `delete_playlist`, `add_artist_to_playlist`, `remove_artist_from_playlist`, `heal_playlist`, `add_tracks_to_ipod`, `add_artist_to_ipod`, `remove_tracks_from_ipod`, `remove_artist_from_ipod`, `remove_ipod_playlist`, `sync_playlist_to_ipod`, `submit_scrobbles`, `eject_ipod`
 - Prompt (1): `build_playlist`
 
 How to use this doc: each round is run from a **fresh Claude Code session** (or Claude Desktop in Round 6). Paste the literal prompts and check the expectation. Items marked **(needs iPod)** require the device plugged in; **(needs music share)** requires `/Volumes/Public/Multimedia/Music` mounted.
