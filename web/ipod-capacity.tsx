@@ -2,8 +2,16 @@
  * Entry for the iPod-capacity bundle. Mirrors rewind's per-view entry
  * pattern: useApp() to handshake with the host, ontoolresult to receive
  * the structuredContent, render the relevant component below.
+ *
+ * IMPORTANT: ontoolresult is registered via useApp's `onAppCreated`
+ * callback rather than a post-mount useEffect. useApp only exposes `app`
+ * to the component *after* `connect()` resolves — by which point the
+ * host may already have sent a tool-result notification that the SDK
+ * drops because no handler is registered. onAppCreated fires
+ * synchronously between `new App(...)` and `app.connect(...)`, which is
+ * the SDK-recommended window for binding one-shot handlers.
  */
-import { StrictMode, useCallback, useEffect, useState } from 'react';
+import { StrictMode, useCallback, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useApp, useHostStyles } from '@modelcontextprotocol/ext-apps/react';
 import { CapacityBar, type CapacityArtist } from './components/CapacityBar.js';
@@ -20,9 +28,17 @@ type IpodContents = {
 };
 
 function IpodCapacityApp() {
+  const [payload, setPayload] = useState<IpodContents | null>(null);
+
   const { app, isConnected, error } = useApp({
     appInfo: { name: 'clickwheel-ipod-capacity', version: '0.1.0' },
     capabilities: {},
+    onAppCreated: (created) => {
+      created.ontoolresult = (result) => {
+        const sc = result?.structuredContent as IpodContents | undefined;
+        if (sc?.capacity_bytes != null) setPayload(sc);
+      };
+    },
   });
 
   // Pull the host's theme tokens (background, text, font, etc.) onto
@@ -30,16 +46,6 @@ function IpodCapacityApp() {
   // `var(--color-text-primary, fallback)` so this is the only place we
   // need to opt in.
   useHostStyles(app);
-
-  const [payload, setPayload] = useState<IpodContents | null>(null);
-
-  useEffect(() => {
-    if (!app) return;
-    app.ontoolresult = (result) => {
-      const sc = result?.structuredContent as IpodContents | undefined;
-      if (sc?.capacity_bytes != null) setPayload(sc);
-    };
-  }, [app]);
 
   // Surface a follow-up prompt to the host as if the user typed it.
   // Claude responds in the conversation thread; the iframe stays put.

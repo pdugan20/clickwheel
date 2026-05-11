@@ -3,7 +3,7 @@
  * format-breakdown bar. Consumes the library_stats tool's structured
  * payload.
  */
-import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useApp, useHostStyles } from '@modelcontextprotocol/ext-apps/react';
 import { StatGrid } from './components/StatGrid.js';
@@ -41,21 +41,21 @@ function fmtHours(seconds: number): string {
 }
 
 function LibraryStatsApp() {
+  // ontoolresult is registered via onAppCreated rather than a post-mount
+  // useEffect — see ipod-capacity.tsx for the rationale.
+  const [payload, setPayload] = useState<LibraryStats | null>(null);
+
   const { app, isConnected, error } = useApp({
     appInfo: { name: 'clickwheel-library-stats', version: '0.1.0' },
     capabilities: {},
+    onAppCreated: (created) => {
+      created.ontoolresult = (result) => {
+        const sc = result?.structuredContent as LibraryStats | undefined;
+        if (sc?.stats?.total_tracks != null) setPayload(sc);
+      };
+    },
   });
   useHostStyles(app);
-
-  const [payload, setPayload] = useState<LibraryStats | null>(null);
-
-  useEffect(() => {
-    if (!app) return;
-    app.ontoolresult = (result) => {
-      const sc = result?.structuredContent as LibraryStats | undefined;
-      if (sc?.stats?.total_tracks != null) setPayload(sc);
-    };
-  }, [app]);
 
   if (error) return <div style={rootStyle}>Error: {error.message}</div>;
   if (!isConnected) return null;

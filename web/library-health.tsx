@@ -3,7 +3,7 @@
  * music-folder reachability, and missing-track count. Consumes the
  * library_health tool's structured payload.
  */
-import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useApp, useHostStyles } from '@modelcontextprotocol/ext-apps/react';
 import { StatGrid, type StatCell } from './components/StatGrid.js';
@@ -37,21 +37,21 @@ function ageTone(timestampSec: number | null): StatCell['tone'] {
 }
 
 function LibraryHealthApp() {
+  // ontoolresult is registered via onAppCreated rather than a post-mount
+  // useEffect — see ipod-capacity.tsx for the rationale.
+  const [payload, setPayload] = useState<LibraryHealth | null>(null);
+
   const { app, isConnected, error } = useApp({
     appInfo: { name: 'clickwheel-library-health', version: '0.1.0' },
     capabilities: {},
+    onAppCreated: (created) => {
+      created.ontoolresult = (result) => {
+        const sc = result?.structuredContent as LibraryHealth | undefined;
+        if (sc?.library_dir != null) setPayload(sc);
+      };
+    },
   });
   useHostStyles(app);
-
-  const [payload, setPayload] = useState<LibraryHealth | null>(null);
-
-  useEffect(() => {
-    if (!app) return;
-    app.ontoolresult = (result) => {
-      const sc = result?.structuredContent as LibraryHealth | undefined;
-      if (sc?.library_dir != null) setPayload(sc);
-    };
-  }, [app]);
 
   if (error) return <div style={rootStyle}>Error: {error.message}</div>;
   if (!isConnected) return null;
