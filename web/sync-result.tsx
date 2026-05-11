@@ -12,11 +12,24 @@
  *   - "running" / "no data" → a spinner-ish "preparing summary" hint.
  *   - "done" → the actual stats card.
  */
-import { StrictMode, useState } from 'react';
+import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useApp, useHostStyles } from '@modelcontextprotocol/ext-apps/react';
+import type { App } from '@modelcontextprotocol/ext-apps';
 import { StatGrid, type StatCell } from './components/StatGrid.js';
 import { rootStyle } from './lib/root-style.js';
+
+const PROGRESS_URI = 'state://clickwheel/sync-progress';
+const POLL_INTERVAL_MS = 500;
+
+type SyncProgress = {
+  kind: 'idle' | 'sync' | 'add' | 'remove';
+  current: number;
+  total: number;
+  message: string;
+  operation: string;
+  done: boolean;
+};
 
 // All three tools share these fields, with sync_playlist also reporting
 // the playlist names. We accept the superset; missing keys are rendered
@@ -198,21 +211,127 @@ function deriveCells(p: SyncResultPayload): StatCell[] {
   return cells;
 }
 
-function Pending() {
+function ProgressBar({ current, total }: { current: number; total: number }) {
+  const pct = total > 0 ? Math.min(100, (current / total) * 100) : 0;
+  return (
+    <div
+      style={{
+        height: 8,
+        borderRadius: 4,
+        overflow: 'hidden',
+        background:
+          'var(--color-background-tertiary, light-dark(#e5e5e5, #2c2c2c))',
+      }}
+    >
+      <div
+        style={{
+          width: `${pct.toFixed(1)}%`,
+          height: '100%',
+          background:
+            'var(--color-background-success, light-dark(#22c55e, #15803d))',
+          transition: 'width 200ms linear',
+        }}
+      />
+    </div>
+  );
+}
+
+function verbForKind(kind: SyncProgress['kind']): string {
+  if (kind === 'sync') return 'Syncing';
+  if (kind === 'add') return 'Adding';
+  if (kind === 'remove') return 'Removing';
+  return 'Working on it';
+}
+
+function Pending({ app }: { app: App | null }) {
+  const [progress, setProgress] = useState<SyncProgress | null>(null);
+
+  useEffect(() => {
+    if (!app) return;
+    let cancelled = false;
+
+    async function tick() {
+      if (!app || cancelled) return;
+      try {
+        const res = await app.readServerResource({ uri: PROGRESS_URI });
+        const body = res?.contents?.[0];
+        const text =
+          body && 'text' in body && typeof body.text === 'string'
+            ? body.text
+            : null;
+        if (text) {
+          const parsed = JSON.parse(text) as SyncProgress;
+          if (!cancelled) setProgress(parsed);
+        }
+      } catch {
+        // Polling is best-effort; the iframe still renders the
+        // generic "Working on it..." copy if the resource is
+        // unreadable for some reason.
+      }
+    }
+
+    tick();
+    const id = window.setInterval(tick, POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [app]);
+
+  const hasProgress =
+    progress &&
+    progress.kind !== 'idle' &&
+    !progress.done &&
+    progress.total > 0;
+
   return (
     <div
       style={{
         ...rootStyle,
         display: 'flex',
         flexDirection: 'column',
-        gap: 8,
+        gap: 10,
       }}
     >
-      <div style={{ fontSize: 14, fontWeight: 600 }}>Working on it…</div>
-      <div style={{ fontSize: 12, opacity: 0.7 }}>
-        Copying tracks to the iPod. The summary will appear here when the sync
-        completes.
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          gap: 12,
+        }}
+      >
+        <div style={{ fontSize: 14, fontWeight: 600 }}>
+          {progress
+            ? `${verbForKind(progress.kind)} ${progress.operation || ''}`.trim()
+            : 'Working on it…'}
+        </div>
+        {hasProgress && (
+          <div style={{ fontSize: 12, opacity: 0.7 }}>
+            {progress!.current} / {progress!.total}
+          </div>
+        )}
       </div>
+      {hasProgress && (
+        <>
+          <ProgressBar current={progress!.current} total={progress!.total} />
+          <div
+            style={{
+              fontSize: 12,
+              opacity: 0.85,
+              fontFamily:
+                'var(--font-mono, ui-monospace, "SF Mono", Menlo, monospace)',
+            }}
+          >
+            {progress!.message || ' '}
+          </div>
+        </>
+      )}
+      {!hasProgress && (
+        <div style={{ fontSize: 12, opacity: 0.7 }}>
+          The summary will appear here when the operation completes.
+        </div>
+      )}
     </div>
   );
 }
@@ -236,7 +355,7 @@ function SyncResultApp() {
     return <div style={rootStyle}>Error: {error.message}</div>;
   }
   if (!isConnected) return null;
-  if (payload === null) return <Pending />;
+  if (payload === null) return <Pending app={app} />;
 
   const title = deriveTitle(payload);
   const badge = deriveBadge(payload);

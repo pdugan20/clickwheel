@@ -7,6 +7,12 @@ import type { Fixture } from './ipod-capacity.fixtures.js';
 
 export const fixtures: Fixture[] = [
   {
+    name: 'pending (no tool result yet)',
+    description:
+      'Initial render before tool-result arrives. In real usage the bundle polls state://clickwheel/sync-progress to show live progress here. Workbench has no MCP server to poll, so it stays at the generic placeholder.',
+    structuredContent: {} as Record<string, never>,
+  },
+  {
     name: 'sync_playlist · happy path',
     description: '5 tracks copied, iPod-side playlist created.',
     structuredContent: {

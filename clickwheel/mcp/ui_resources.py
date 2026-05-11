@@ -67,12 +67,39 @@ register_ui_resource(
     html=SYNC_RESULT_HTML,
     name="clickwheel — sync result",
     description=(
-        "Post-completion summary for an iPod write: tracks added, "
-        "failed, already-present counts, conflict resolution mode. "
-        "Bound to sync_playlist_to_ipod, add_tracks_to_ipod, and "
-        "add_artist_to_ipod. The 'Working on it…' placeholder is the "
-        "preload-experiment surface — if visible during a long-running "
-        "sync, Claude Desktop mounted the iframe mid-call and we can "
-        "layer live progress on top in a later change."
+        "Live progress + post-completion summary for any iPod write "
+        "(sync_playlist_to_ipod, add_tracks_to_ipod, add_artist_to_ipod, "
+        "remove_tracks_from_ipod, remove_artist_from_ipod, "
+        "remove_ipod_playlist). While the tool runs, polls "
+        "state://clickwheel/sync-progress and renders a per-track "
+        "progress bar. When the tool result lands, switches to a "
+        "summary card."
     ),
 )
+
+
+# Live-progress state resource. The sync-result bundle polls this while
+# a long-running write tool is in flight (Claude Desktop mounts the
+# iframe mid-call thanks to _meta.ui.resourceUri preload). The tools
+# update the underlying state dict via clickwheel.mcp._sync_state from
+# their per-track callbacks.
+SYNC_PROGRESS_URI = "state://clickwheel/sync-progress"
+
+
+@mcp.resource(
+    SYNC_PROGRESS_URI,
+    name="clickwheel — sync progress (live)",
+    description=(
+        "Snapshot of the in-flight sync/add/remove operation. Kind, "
+        "current, total, last-track message, done flag. Polled by the "
+        "sync-result bundle every ~500ms while waiting for a tool "
+        "result. Not user-facing; consumed by the iframe."
+    ),
+    mime_type="application/json",
+)
+def _read_sync_progress() -> str:
+    import json
+
+    from clickwheel.mcp import _sync_state
+
+    return json.dumps(_sync_state.snapshot())

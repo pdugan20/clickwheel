@@ -12,6 +12,7 @@ from pydantic import Field
 from clickwheel import actions
 from clickwheel.config import load_config
 from clickwheel.db import Database
+from clickwheel.mcp import _sync_state
 from clickwheel.mcp._runtime import (
     DESTRUCTIVE,
     MUTATION,
@@ -24,6 +25,30 @@ from clickwheel.mcp._runtime import (
 )
 from clickwheel.mcp.ui import ui_tool_meta
 from clickwheel.mcp.ui_resources import IPOD_CAPACITY_URI, SYNC_RESULT_URI
+
+
+def _push_progress(
+    loop: asyncio.AbstractEventLoop,
+    ctx: Context,
+    ev: actions.SyncEvent | actions.RemoveEvent,
+) -> None:
+    """Common progress sink: updates the global sync-state resource AND
+    fires Context.report_progress for hosts that surface it natively.
+
+    The state update is what powers the live sync-result iframe (it
+    polls state://clickwheel/sync-progress). The report_progress call
+    is a belt-and-suspenders fallback for clients that DO render
+    notifications/progress visibly (Claude Desktop currently doesn't,
+    but the spec says they should).
+    """
+    artist = ev.track.get("artist") or "Unknown"
+    title = ev.track.get("title") or "Unknown"
+    message = f"{artist} — {title}"
+    _sync_state.update(ev.current, ev.total, message)
+    asyncio.run_coroutine_threadsafe(
+        ctx.report_progress(ev.current, ev.total, message),
+        loop,
+    )
 
 
 def _summarize_track(t: dict) -> dict:
@@ -271,13 +296,14 @@ async def sync_playlist_to_ipod(
                 # below; it'll just no-op the copy step.
                 pass
 
+            _sync_state.start(
+                kind="sync",
+                total=len(diff.to_add),
+                operation=f"playlist '{playlist}'",
+            )
+
             def on_event(ev: actions.SyncEvent) -> None:
-                artist = ev.track.get("artist") or "Unknown"
-                title = ev.track.get("title") or "Unknown"
-                asyncio.run_coroutine_threadsafe(
-                    ctx.report_progress(ev.current, ev.total, f"{artist} — {title}"),
-                    loop,
-                )
+                _push_progress(loop, ctx, ev)
 
             try:
                 result = actions.sync_playlist(
@@ -303,6 +329,7 @@ async def sync_playlist_to_ipod(
             return diff, result, None
         finally:
             db.close()
+            _sync_state.finish()
 
     diff, result, conflict = await asyncio.to_thread(worker)
 
@@ -426,18 +453,19 @@ async def add_tracks_to_ipod(
     def worker() -> actions.SyncResult:
         db = Database(cfg.db_path)
         try:
+            _sync_state.start(
+                kind="add",
+                total=len(paths),
+                operation=f"{len(paths)} tracks",
+            )
 
             def on_event(ev: actions.SyncEvent) -> None:
-                artist = ev.track.get("artist") or "Unknown"
-                title = ev.track.get("title") or "Unknown"
-                asyncio.run_coroutine_threadsafe(
-                    ctx.report_progress(ev.current, ev.total, f"{artist} — {title}"),
-                    loop,
-                )
+                _push_progress(loop, ctx, ev)
 
             return actions.add_tracks_to_ipod(cfg, db, paths, on_event=on_event)
         finally:
             db.close()
+            _sync_state.finish()
 
     result = await asyncio.to_thread(worker)
 
@@ -523,18 +551,20 @@ async def add_artist_to_ipod(
             if not paths:
                 return [], None
 
+            _sync_state.start(
+                kind="add",
+                total=len(paths),
+                operation=f"all tracks by {artist}",
+            )
+
             def on_event(ev: actions.SyncEvent) -> None:
-                a = ev.track.get("artist") or "Unknown"
-                t = ev.track.get("title") or "Unknown"
-                asyncio.run_coroutine_threadsafe(
-                    ctx.report_progress(ev.current, ev.total, f"{a} — {t}"),
-                    loop,
-                )
+                _push_progress(loop, ctx, ev)
 
             result = actions.add_tracks_to_ipod(cfg, db, paths, on_event=on_event)
             return paths, result
         finally:
             db.close()
+            _sync_state.finish()
 
     paths, result = await asyncio.to_thread(worker)
 
@@ -647,18 +677,19 @@ async def remove_tracks_from_ipod(
     def worker() -> actions.RemoveResult:
         db = Database(cfg.db_path)
         try:
+            _sync_state.start(
+                kind="remove",
+                total=len(paths),
+                operation=f"{len(paths)} tracks",
+            )
 
             def on_event(ev: actions.RemoveEvent) -> None:
-                artist = ev.track.get("artist") or "Unknown"
-                title = ev.track.get("title") or "Unknown"
-                asyncio.run_coroutine_threadsafe(
-                    ctx.report_progress(ev.current, ev.total, f"{artist} — {title}"),
-                    loop,
-                )
+                _push_progress(loop, ctx, ev)
 
             return actions.remove_tracks_from_ipod(cfg, db, paths, on_event=on_event)
         finally:
             db.close()
+            _sync_state.finish()
 
     result = await asyncio.to_thread(worker)
 
@@ -738,15 +769,22 @@ async def remove_artist_from_ipod(
     loop = asyncio.get_running_loop()
 
     def worker() -> actions.RemoveResult:
-        def on_event(ev: actions.RemoveEvent) -> None:
-            a = ev.track.get("artist") or "Unknown"
-            t = ev.track.get("title") or "Unknown"
-            asyncio.run_coroutine_threadsafe(
-                ctx.report_progress(ev.current, ev.total, f"{a} — {t}"),
-                loop,
-            )
+        # We don't know the count until we read the iPod, so start with
+        # an estimated total of 0; update() will reset to the real total
+        # on the first tick.
+        _sync_state.start(
+            kind="remove",
+            total=0,
+            operation=f"all tracks by {artist}",
+        )
 
-        return actions.remove_artist_from_ipod(cfg, artist, on_event=on_event)
+        def on_event(ev: actions.RemoveEvent) -> None:
+            _push_progress(loop, ctx, ev)
+
+        try:
+            return actions.remove_artist_from_ipod(cfg, artist, on_event=on_event)
+        finally:
+            _sync_state.finish()
 
     result = await asyncio.to_thread(worker)
 
