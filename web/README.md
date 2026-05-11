@@ -66,6 +66,17 @@ path Claude Desktop will run, just with mock data.
    connect time, so a hot reload won't pick up the new bundle bytes), then
    trigger the tool from a chat.
 
+## Fixtures
+
+Fixtures in `<name>.fixtures.ts` must mirror **what the tool returns**, not
+the raw upstream data. The Python tool may normalize, aggregate, or
+reshape before returning — e.g. `get_ipod_contents` runs
+`actions.primary_artist()` over raw track tags to fold collabs under the
+lead artist. The bundle only ever sees the post-normalization shape, so
+fixtures should too. Whenever you add or change server-side
+post-processing for a tool, update its fixtures so the workbench keeps
+matching production output.
+
 ## Node version
 
 Pinned via [`.nvmrc`](../.nvmrc) at the repo root. CI honors it via
