@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/) and
 [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [0.6.1](https://github.com/pdugan20/clickwheel/compare/v0.6.0...v0.6.1) (2026-05-12)
+
+
+### Documentation
+
+* **mcp:** drop test plans, split bundles deep-dive into bundles.md ([51a1174](https://github.com/pdugan20/clickwheel/commit/51a117488fd631818872b6d629559beef42fa633))
+
 ## [0.6.0](https://github.com/pdugan20/clickwheel/compare/v0.5.0...v0.6.0) (2026-05-12)
 
 
