@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/) and
 [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [0.6.0](https://github.com/pdugan20/clickwheel/compare/v0.5.0...v0.6.0) (2026-05-12)
+
+
+### Features
+
+* **mcp:** add_tracks_to_ipod / add_artist_to_ipod (no playlist required) ([13c37c6](https://github.com/pdugan20/clickwheel/commit/13c37c685277c8568a7a938d2c05c6dd473e1410))
+* **mcp:** compute sync-result detail subtitle server-side ([0413361](https://github.com/pdugan20/clickwheel/commit/0413361749ffc6efaa2a4e7887bcf10c716fc3d1))
+* **mcp:** library_health bundle (status grid) ([d2b24d5](https://github.com/pdugan20/clickwheel/commit/d2b24d50005b784e73600928821d173b358b573a))
+* **mcp:** library_stats bundle (overview dashboard) ([5bb5548](https://github.com/pdugan20/clickwheel/commit/5bb5548fcd56f9a1f22da3f73b8fe2224a6e662e))
+* **mcp:** live progress notifications for sync_playlist_to_ipod ([a9c3b53](https://github.com/pdugan20/clickwheel/commit/a9c3b531826cc0512dc4a4e713c27e56e9caa602))
+* **mcp:** live progress polling in the sync-result iframe ([bd0638f](https://github.com/pdugan20/clickwheel/commit/bd0638f669b0bd927a55fb75d8ef342a12031df0))
+* **mcp:** mcp apps ui bundles with react + vite workbench ([afb3506](https://github.com/pdugan20/clickwheel/commit/afb350695519e4fe6f46975fcee7252bec80b4fe))
+* **mcp:** primary-artist rollup, host theme tokens, click-to-message ([770a08c](https://github.com/pdugan20/clickwheel/commit/770a08cb6cef84fb066c13b767d041cd2d7e95b3))
+* **mcp:** remove_tracks / remove_artist / remove_ipod_playlist (phase 4) ([2a37a4c](https://github.com/pdugan20/clickwheel/commit/2a37a4cd1f8605ca8331d75c65b74670cdf6120e))
+* **mcp:** sync creates the ipod playlist + new list_ipod_playlists tool ([a3575c7](https://github.com/pdugan20/clickwheel/commit/a3575c7c8fb4a8685e96ecb9e5c5058e30138ca7))
+* **mcp:** sync-result summary card iframe + preload experiment ([85e3e10](https://github.com/pdugan20/clickwheel/commit/85e3e10d76a6d19477bf10e057be887a6d115a32))
+* **web,mcp:** rewind card chrome + route artist-browse away from search_tracks ([abe69f2](https://github.com/pdugan20/clickwheel/commit/abe69f254e0405216f96a503ce288163acc88e6b))
+* **web:** align ipod-capacity to library-stats header + tooltip pattern ([43bf893](https://github.com/pdugan20/clickwheel/commit/43bf8937b8e4b2a761f8c3e171722d7416f3d982))
+* **web:** balanced-5 categorical palette + workbench showcase ([a4a5c55](https://github.com/pdugan20/clickwheel/commit/a4a5c558364a6f81bdff1bd79b64ab0e01596e24))
+* **web:** finder-style library-stats + floating-ui tooltips ([21e02a7](https://github.com/pdugan20/clickwheel/commit/21e02a797af3496914ec05dfda8f4deaab974169))
+* **web:** static detail subtitle, inline status text, drop library-health + stats-showcase ([f8df644](https://github.com/pdugan20/clickwheel/commit/f8df644f39066afd1be896c1baeb24f7ad6e4846))
+* **web:** unified header + done-state progress bar + capacity legend cap ([6d42233](https://github.com/pdugan20/clickwheel/commit/6d42233878d43eaeee4d38a2ab7a62176b1c58a0))
+* **workbench:** live-progress simulation for sync-result preview ([faba9b3](https://github.com/pdugan20/clickwheel/commit/faba9b303804f126b381ff9068b49383bb427148))
+* **workbench:** viewport + theme toggles, transparent iframe bg, claude chat bg ([1de4536](https://github.com/pdugan20/clickwheel/commit/1de45366400ab4097e30b5ecb8c4d964f025d807))
+
+
+### Bug Fixes
+
+* **ci:** exclude auto-generated _ui_bundles.py from ruff format check ([ab6b831](https://github.com/pdugan20/clickwheel/commit/ab6b8319bd7b93eb0ec4842ead541c53ea187926))
+* **mcp:** handle classic-ipod auto-disconnect gracefully ([b5effce](https://github.com/pdugan20/clickwheel/commit/b5effceb9890afdf9395068e62e82b50cc86ad65))
+* **mcp:** instruct the agent to check ipod state before curating a playlist for sync ([8efaafa](https://github.com/pdugan20/clickwheel/commit/8efaafa6fc22dc1933aa9bdbd2ee19d411eadd06))
+* **mcp:** primary_artist now trusts album_artist instead of parsing strings ([cae3b23](https://github.com/pdugan20/clickwheel/commit/cae3b230c34c3d8eecca24b908e06daf17af2cfe))
+* **mcp:** teach the model to stop fuzzy-searching n times for known tracks ([88cccd3](https://github.com/pdugan20/clickwheel/commit/88cccd3591641cde5df171623e31c548f92fe181))
+* **web:** register ontoolresult before app.connect() so initial fixture renders ([852130b](https://github.com/pdugan20/clickwheel/commit/852130b234cacc6c1f567dadcaa7f8a6e0d46416))
+* **web:** smooth out sync-result live progress + no end-of-sync flash ([d84c02c](https://github.com/pdugan20/clickwheel/commit/d84c02c283a64ca0cbf89ea5b1d6a1ae6bea39a9))
+* **web:** workbench drops first fixture on initial mount ([d44bd82](https://github.com/pdugan20/clickwheel/commit/d44bd82d096b41df777e064014c5d4644aff479d))
+
+
+### Documentation
+
+* **mcp:** document inline ui bundles + web workspace workflow ([6b658e7](https://github.com/pdugan20/clickwheel/commit/6b658e7c7bbe39d5326466413e7e71e3ebfbdb9a))
+* **mcp:** manual test script for the playlist redesign ([4cb48a5](https://github.com/pdugan20/clickwheel/commit/4cb48a52ef570f1efc0311a60f239bea62ff3c8c))
+* **mcp:** refresh bundles + tool tables after recent feature work ([aea99b3](https://github.com/pdugan20/clickwheel/commit/aea99b33c7eea2a2d1e34a0fcabff4e952a282ef))
+* **web:** note that fixtures must match post-tool output, not raw tags ([4e3fefa](https://github.com/pdugan20/clickwheel/commit/4e3fefa89a52916b1a6524037908e1e605219db4))
+
 ## [0.5.0](https://github.com/pdugan20/clickwheel/compare/v0.4.1...v0.5.0) (2026-05-07)
 
 
