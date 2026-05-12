@@ -129,49 +129,14 @@ Seven tools carry the MCP `destructiveHint=true` annotation: `delete_playlist`, 
 
 Clickwheel ships an MCP Apps extension that lets compatible hosts (Claude Desktop, Claude.ai, VS Code Copilot, Goose) render an interactive iframe inline beneath certain tool results.
 
-| Tool                                                                                                                                              | Bundle           | What it shows                                                                                                                                                                                                              |
-| ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `get_ipod_contents`                                                                                                                               | iPod capacity    | Used/free bar segmented by top artists (8 named + "Other"), inline pill legend capped at 4 + "Other"; click a pill to ask a follow-up                                                                                      |
-| `library_stats`                                                                                                                                   | Library overview | Track / artist / album counts + hours inline next to the title, mono-blue stacked format bar with single-line hover tooltips                                                                                               |
-| `sync_playlist_to_ipod`, `add_tracks_to_ipod`, `add_artist_to_ipod`, `remove_tracks_from_ipod`, `remove_artist_from_ipod`, `remove_ipod_playlist` | Sync result      | Live progress while the tool runs (polls `state://clickwheel/sync-progress` for the static "X MB · N albums" subtitle + counter), switches to a completion card with `Ready to eject` / `Library not fully updated` / etc. |
+| Tool                                                                                                                                              | Bundle           | What it shows                                                                                                                          |
+| ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_ipod_contents`                                                                                                                               | iPod capacity    | Used/free bar segmented by top artists, inline pill legend (top 4 + "Other"); click a pill to ask a follow-up                          |
+| `library_stats`                                                                                                                                   | Library overview | Track / artist / album counts + hours next to the title, mono-blue stacked format bar with hover tooltips                              |
+| `sync_playlist_to_ipod`, `add_tracks_to_ipod`, `add_artist_to_ipod`, `remove_tracks_from_ipod`, `remove_artist_from_ipod`, `remove_ipod_playlist` | Sync result      | Live progress while the tool runs (header + thin progress bar), switches to a completion card with `Ready to eject` / `X failed` / etc |
 
-`library_health` is text-only now — no bundle, returns a structured payload + summary that hosts render however they like.
+`library_health` is text-only — no bundle. Hosts without MCP Apps support fall back to the same text + structured-content payload, so nothing breaks; the iframe just doesn't appear.
 
-Hosts without MCP Apps support fall back to the same text + structured-content payload the Python tools have always returned — nothing breaks, the iframe just doesn't appear.
-
-The bundles live under [`web/`](../../web/) (React 19 + Vite). They're built into a single inlined HTML each via `vite-plugin-singlefile`, then concatenated into [`clickwheel/mcp/_ui_bundles.py`](../../clickwheel/mcp/_ui_bundles.py) by `web/scripts/inline_bundles.mjs`. That generated module is checked in so `pip install clickwheel[mcp]` works without a Node toolchain.
-
-### Editing a bundle
-
-```bash
-make dev-web        # http://localhost:5174/workbench/ — live preview with fixtures
-# edit web/<bundle>.tsx, components/, lib/...
-make build-web      # rebuild bundles + regenerate the Python module
-make lint-web       # eslint + tsc
-```
-
-CI rebuilds the bundles and fails if the checked-in `_ui_bundles.py` drifts from `web/` — so don't forget `make build-web` before committing.
-
-### Adding a new bundle
-
-1. Drop `web/<name>.html`, `web/<name>.tsx`, `web/<name>.fixtures.ts`. Use an existing bundle as a template.
-2. Register it in `web/workbench/registry.ts` so the workbench sidebar lists it.
-3. Run `make build-web`.
-4. In `clickwheel/mcp/ui_resources.py`, add a `register_ui_resource(...)` call pointing at the new bundle's `*_HTML` constant.
-5. In the matching tool, add `meta=ui_tool_meta(URI)` to the `@mcp.tool` decorator.
-6. Test with `npm run dev` (workbench) and a real Claude Desktop call.
-
-## Dev install (clone-based)
-
-If you're hacking on clickwheel from a clone in `~/Documents/`, Claude Desktop's sandbox will refuse to read the in-tree venv's `pyvenv.cfg` (macOS applies a `com.apple.provenance` xattr to files in `Documents`). Either:
-
-- Install with `pipx install --editable .` so the venv lives in `~/.local/pipx/`, or
-- Grant Claude Desktop access to your Documents folder under System Settings → Privacy & Security → Files & Folders.
-
-Claude Code is unaffected.
-
-## Internal docs
-
-- [`test-plan.md`](test-plan.md) — manual iPod test runbook plus the findings log from Phase 5 (sync merge bug, autoscan rework, dual-emit fix, Round 6 Desktop quirks). Reusable for future regression testing.
+For build/edit/add-new-bundle internals + the macOS-`Documents`-sandbox dev-install caveat, see [`bundles.md`](bundles.md).
 
 For high-level architecture, see [`docs/architecture.md`](../architecture.md).
