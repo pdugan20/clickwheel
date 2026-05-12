@@ -45,7 +45,12 @@ const entries = readdirSync(webDir).filter((name) => {
   // Skip directories (workbench/) and any aux entries we don't want
   // shipped to the MCP server.
   const full = join(webDir, name);
-  return statSync(full).isFile();
+  if (!statSync(full).isFile()) return false;
+  // Skip workbench-only design comparison bundles. They live alongside
+  // the real bundles for vite HMR + the workbench sidebar, but they
+  // shouldn't bloat the inlined Python module that ships to users.
+  if (name.endsWith('-showcase.html')) return false;
+  return true;
 });
 
 if (!entries.length) {

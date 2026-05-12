@@ -15,6 +15,7 @@ import { StrictMode, useCallback, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useApp, useHostStyles } from '@modelcontextprotocol/ext-apps/react';
 import { CapacityBar, type CapacityArtist } from './components/CapacityBar.js';
+import { CAPACITY_PALETTE } from './lib/palette.js';
 import { rootStyle } from './lib/root-style.js';
 
 type IpodContents = {
@@ -80,6 +81,7 @@ function IpodCapacityApp() {
         used_bytes={payload.used_bytes}
         free_bytes={payload.free_bytes}
         top_artists={payload.top_artists}
+        palette={CAPACITY_PALETTE}
         onArtistClick={onArtistClick}
       />
     </div>

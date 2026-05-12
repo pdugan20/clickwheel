@@ -22,6 +22,13 @@ export type CapacityBarProps = {
   /** Cap segments shown by name; remainder rolls into a single "other" stripe. */
   maxSegments?: number;
   /**
+   * Optional categorical palette for the named-artist segments. When
+   * provided, each segment picks `palette[i % length]`; otherwise we
+   * fall back to evenly-spaced HSL hues. Workbench palette-showcase
+   * overrides this to compare candidates side-by-side.
+   */
+  palette?: readonly string[];
+  /**
    * Called when the user clicks an artist in the legend. Wired by the
    * entry to `app.sendMessage` so the host treats it as a follow-up
    * prompt ("Show me Taylor Swift songs on my iPod").
@@ -37,7 +44,12 @@ function fmtBytes(n: number): string {
   return `${mb.toFixed(0)} MB`;
 }
 
-function colorFor(i: number, total: number): string {
+function colorFor(
+  i: number,
+  total: number,
+  palette?: readonly string[]
+): string {
+  if (palette && palette.length > 0) return palette[i % palette.length];
   const hue = (i * 360) / Math.max(total, 1);
   return `hsl(${hue} 60% 55%)`;
 }
@@ -53,6 +65,7 @@ export function CapacityBar({
   free_bytes,
   top_artists,
   maxSegments = 8,
+  palette,
   onArtistClick,
 }: CapacityBarProps) {
   const [hovered, setHovered] = useState<number | null>(null);
@@ -72,7 +85,15 @@ export function CapacityBar({
     return <div style={{ opacity: 0.6 }}>No capacity data.</div>;
   }
 
-  const named = top_artists.slice(0, maxSegments);
+  // When a fixed-size palette is supplied, cap named segments at its
+  // length so colors never wrap and duplicate. Excess artists roll
+  // into the "Other" stripe (which uses its own gray, not a palette
+  // index, so this stays safe).
+  const effectiveMax =
+    palette && palette.length > 0
+      ? Math.min(maxSegments, palette.length)
+      : maxSegments;
+  const named = top_artists.slice(0, effectiveMax);
   const namedTracks = named.reduce((s, a) => s + (a.track_count || 0), 0);
   const allTracks = top_artists.reduce((s, a) => s + (a.track_count || 0), 0);
   const otherTracks = Math.max(allTracks - namedTracks, 0);
@@ -85,7 +106,7 @@ export function CapacityBar({
       name: a.artist,
       tracks: a.track_count,
       share,
-      color: colorFor(i, named.length),
+      color: colorFor(i, named.length, palette),
     };
   });
   if (otherTracks > 0) {

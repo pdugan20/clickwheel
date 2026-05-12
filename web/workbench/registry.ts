@@ -12,6 +12,7 @@ import {
 } from '../ipod-capacity.fixtures.js';
 import { fixtures as libraryStatsFixtures } from '../library-stats.fixtures.js';
 import { fixtures as syncResultFixtures } from '../sync-result.fixtures.js';
+import { fixtures as paletteShowcaseFixtures } from '../palette-showcase.fixtures.js';
 
 export type Bundle = {
   /** Slug shown in the sidebar and used as the URL hash. */
@@ -42,5 +43,11 @@ export const bundles: Bundle[] = [
     label: 'Sync result',
     entryUrl: '/sync-result.html',
     fixtures: syncResultFixtures,
+  },
+  {
+    slug: 'palette-showcase',
+    label: 'Palette showcase (workbench-only)',
+    entryUrl: '/palette-showcase.html',
+    fixtures: paletteShowcaseFixtures,
   },
 ];

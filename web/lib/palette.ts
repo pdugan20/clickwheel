@@ -19,3 +19,16 @@ export const MONO_BLUE: readonly string[] = [
   '#E5F0FC',
   '#F1F7FE',
 ];
+
+// Categorical 5-stop used by the iPod capacity bar. Selected from the
+// workbench palette-showcase for max perceptual distance with just five
+// hues (Coolors "balanced 5"): bubblegum pink, golden pollen, emerald,
+// ocean blue, dark teal. The CapacityBar caps named-artist segments at
+// this palette's length so colors never wrap and duplicate.
+export const CAPACITY_PALETTE: readonly string[] = [
+  '#EF476F',
+  '#FFD166',
+  '#06D6A0',
+  '#118AB2',
+  '#073B4C',
+];
