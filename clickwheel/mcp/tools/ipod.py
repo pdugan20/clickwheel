@@ -874,20 +874,35 @@ def remove_ipod_playlist(
 
 @mcp.tool(annotations=MUTATION)
 def eject_ipod() -> dict:
-    """Safely unmount the iPod via `diskutil eject`. Idempotent in spirit:
-    re-running after a successful eject just errors with IpodNotFoundError
-    (no iPod mounted), which is fine.
+    """Safely unmount the iPod via `diskutil eject`. Idempotent: if no
+    iPod is currently mounted, returns `{"ejected": False,
+    "already_unmounted": True}` rather than raising. This handles the
+    classic iPod's normal post-sync auto-disconnect — after the device
+    finishes writing its iTunesDB, its firmware flips the screen back
+    to the menu and tells macOS it's safe to remove, at which point
+    the volume dismounts automatically. So by the time the user asks
+    you to eject, the iPod may already be gone. That's expected; tell
+    the user the iPod auto-disconnected and they're safe to unplug.
+    Other things that can cause an idle disconnect: macOS Music.app
+    auto-eject after activity, USB selective-suspend on battery, the
+    iPod's own drive-spindown power-saving.
 
     Errors:
-    - IpodNotFoundError if no iPod is mounted (treat as 'already ejected'
-      or 'never mounted' — surface gently).
-    - EjectFailedError if diskutil exits non-zero (typical cause: a process
-      has files open on the iPod). Suggest the user retry after closing
-      music apps.
+    - EjectFailedError if diskutil exits non-zero (typical cause: a
+      process has files open on the iPod). Suggest the user retry
+      after closing music apps.
 
-    When to use: after a successful sync or scrobble session, or any time
-    the user says "eject", "safely disconnect", "unmount the iPod".
+    When to use: after a successful sync or scrobble session, or any
+    time the user says "eject", "safely disconnect", "unmount the iPod".
     """
     with open_session() as (cfg, _db):
-        data = actions.eject_ipod(cfg)
-        return render("iPod ejected — safe to unplug.", data)
+        try:
+            data = actions.eject_ipod(cfg)
+            return render("iPod ejected — safe to unplug.", data)
+        except actions.IpodNotFoundError:
+            return render(
+                "iPod is already disconnected — likely auto-ejected after "
+                "the database write finished (that's normal classic-iPod "
+                "behaviour). Safe to unplug.",
+                {"ejected": False, "already_unmounted": True},
+            )

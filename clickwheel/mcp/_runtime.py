@@ -118,6 +118,14 @@ WORKFLOWS:
 - If a sync/add result reports `library_updated: false`, the music
   copied but the iPod won't see the new tracks yet; surface this in
   plain language and suggest re-running.
+- If an iPod tool errors with `IpodNotFoundError` mid-session (after
+  you've already used the iPod successfully in the same conversation),
+  don't accuse the user of unplugging it. Classic iPods routinely
+  auto-dismount during idle conversation lulls: their drive spins
+  down after ~30s, macOS Music.app may auto-eject on activity quiet,
+  USB selective-suspend on battery does the same. Tell the user
+  cheerfully that the iPod stepped offline and ask them to nudge it
+  awake (touch the clickwheel, or unplug/replug) before retrying.
 
 SAFETY:
 - `delete_playlist`, `add_tracks_to_ipod`, `add_artist_to_ipod`,
