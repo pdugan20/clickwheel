@@ -97,6 +97,17 @@ LINKING & RENDERING:
   status markers.
 
 WORKFLOWS:
+- BEFORE building a curated playlist destined for the iPod (mood /
+  genre / activity mixes — "throw together some grunge", "make me a
+  workout mix"), call `get_ipod_contents` so you know what's already
+  on the device. If an artist or band you'd include is heavily
+  represented (e.g., 50+ tracks), surface that to the user and ask:
+  "You've already got 92 Nirvana tracks on there — want me to lean on
+  the others for fresh material, or include the essentials anyway?"
+  Don't silently ship a playlist where half the tracks dedupe at
+  sync time; the user finds out at the very end and it reads as a
+  mistake. For pure "add this stuff to my iPod" flows (no playlist
+  artifact), skip this — sync is additive and dedups automatically.
 - After any destructive iPod operation (`add_tracks_to_ipod`,
   `add_artist_to_ipod`, `sync_playlist_to_ipod`, `submit_scrobbles`)
   succeeds, offer to eject the iPod via `eject_ipod` before the user
