@@ -672,11 +672,13 @@ def test_plex_health_disabled(tmp_path, monkeypatch):
 
 def test_plex_health_all_pass(tmp_path, monkeypatch):
     """Stub plexapi so all five stages succeed; verify the tool wraps
-    the result into the expected MCP shape."""
+    the result into the expected MCP shape. The plexapi extra check is
+    bypassed so this test works whether or not [plex] is installed."""
     from clickwheel import plex as _plex
     from clickwheel.mcp.tools.plex import plex_health
 
     cfg = _setup_plex(tmp_path, monkeypatch)
+    monkeypatch.setattr(_plex, "_import_plexapi", lambda: None)
 
     class _Part:
         file = "/music/A/Album1/01.mp3"
@@ -736,6 +738,7 @@ def test_sync_playlist_to_plex_success(tmp_path, monkeypatch):
     from clickwheel.mcp.tools.plex import sync_playlist_to_plex
 
     cfg = _setup_plex(tmp_path, monkeypatch)
+    monkeypatch.setattr(_plex, "_import_plexapi", lambda: None)
     db = Database(cfg.db_path)
     db.save_playlist("p", ["/music/A/Album1/01.mp3"])
     db.commit()

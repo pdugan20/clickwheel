@@ -304,6 +304,16 @@ class _StubServer:
         self.library = _StubLibrary(sections)
 
 
+@pytest.fixture()
+def _plexapi_stub(monkeypatch):
+    """Tests that stub `_plex.connect` must also bypass the
+    plexapi-extra check, otherwise the doctor stops there before the
+    stub kicks in. The "plexapi missing" path is the natural state when
+    the [plex] extra isn't installed; here we just need it to no-op so
+    the rest of the chain reports independently."""
+    monkeypatch.setattr(_plex, "_import_plexapi", lambda: None)
+
+
 def test_plex_doctor_stops_at_disabled_config(tmp_path, populated_db):
     cfg = Config(music_dir=tmp_path / "m", project_dir=tmp_path, plex_enabled=False)
     result = plex_doctor(cfg, populated_db)
@@ -311,7 +321,9 @@ def test_plex_doctor_stops_at_disabled_config(tmp_path, populated_db):
     assert [s.name for s in result.stages] == ["config"]
 
 
-def test_plex_doctor_all_stages_pass(tmp_path, populated_db, monkeypatch):
+def test_plex_doctor_all_stages_pass(
+    tmp_path, populated_db, monkeypatch, _plexapi_stub
+):
     """No remap; sample track resolves at the same path. All five
     stages should report ok=True.
 
@@ -348,7 +360,7 @@ def test_plex_doctor_all_stages_pass(tmp_path, populated_db, monkeypatch):
 
 
 def test_plex_doctor_flags_path_remap_mismatch(
-    plex_cfg: Config, populated_db, monkeypatch
+    plex_cfg: Config, populated_db, monkeypatch, _plexapi_stub
 ):
     """The sample-track stage should fail clearly when the configured
     remap can't translate the clickwheel-side path."""
@@ -363,7 +375,9 @@ def test_plex_doctor_flags_path_remap_mismatch(
     assert "remap" in sample_stage.detail.lower()
 
 
-def test_plex_doctor_handles_empty_library(tmp_path, monkeypatch, tmp_db):
+def test_plex_doctor_handles_empty_library(
+    tmp_path, monkeypatch, tmp_db, _plexapi_stub
+):
     """If the DB has no mp3 tracks to sample, sample-track stage fails
     with an instructive message (run scan) rather than a stack trace."""
     cfg = Config(
