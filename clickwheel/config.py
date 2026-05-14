@@ -27,6 +27,13 @@ _YAML_TO_ENV = {
     "lastfm_session_key": "LASTFM_SESSION_KEY",
     "auto_scan": "AUTO_SCAN",
     "auto_scan_staleness_minutes": "AUTO_SCAN_STALENESS_MINUTES",
+    "plex_enabled": "CLICKWHEEL_PLEX_ENABLED",
+    "plex_url": "CLICKWHEEL_PLEX_URL",
+    "plex_token": "CLICKWHEEL_PLEX_TOKEN",
+    "plex_library_name": "CLICKWHEEL_PLEX_LIBRARY_NAME",
+    "plex_playlist_dir": "CLICKWHEEL_PLEX_PLAYLIST_DIR",
+    "plex_path_remap_local": "CLICKWHEEL_PLEX_PATH_REMAP_LOCAL",
+    "plex_path_remap_plex": "CLICKWHEEL_PLEX_PATH_REMAP_PLEX",
 }
 
 
@@ -42,6 +49,13 @@ class Config:
     lastfm_session_key: str = ""
     auto_scan: bool = True
     auto_scan_staleness_minutes: int = DEFAULT_AUTO_SCAN_STALENESS_MINUTES
+    plex_enabled: bool = False
+    plex_url: str = ""
+    plex_token: str = ""
+    plex_library_name: str = "Music"
+    plex_playlist_dir: str = ""
+    plex_path_remap_local: str = ""
+    plex_path_remap_plex: str = ""
     db_path: Path = field(init=False)
 
     @property
@@ -93,6 +107,14 @@ def load_config() -> Config:
                 DEFAULT_AUTO_SCAN_STALENESS_MINUTES,
             )
         ),
+        plex_enabled=os.environ.get("CLICKWHEEL_PLEX_ENABLED", "").lower()
+        in ("1", "true", "yes"),
+        plex_url=os.environ.get("CLICKWHEEL_PLEX_URL", ""),
+        plex_token=os.environ.get("CLICKWHEEL_PLEX_TOKEN", ""),
+        plex_library_name=os.environ.get("CLICKWHEEL_PLEX_LIBRARY_NAME", "Music"),
+        plex_playlist_dir=os.environ.get("CLICKWHEEL_PLEX_PLAYLIST_DIR", ""),
+        plex_path_remap_local=os.environ.get("CLICKWHEEL_PLEX_PATH_REMAP_LOCAL", ""),
+        plex_path_remap_plex=os.environ.get("CLICKWHEEL_PLEX_PATH_REMAP_PLEX", ""),
     )
 
 
