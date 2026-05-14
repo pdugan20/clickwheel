@@ -65,32 +65,16 @@ clickwheel sync      # push to the iPod
 music_dir: /Volumes/Music/Library
 ipod_capacity_gb: 64
 auto_scan: true
-auto_scan_staleness_minutes: 1440 # default: 24h
-lastfm_api_key: your_key
-lastfm_api_secret: your_secret
-lastfm_username: your_username
 ```
 
-Environment variables (`MUSIC_DIR`, `AUTO_SCAN`, etc.) override config values. See [`docs/configuration.md`](docs/configuration.md) for the full schema, auto-scan internals, and `fix` / Last.fm walkthroughs.
+Environment variables (`MUSIC_DIR`, `AUTO_SCAN`, etc.) override config values. See [`docs/configuration.md`](docs/configuration.md) for the full schema and `fix` walkthrough.
 
-### Plex / Plexamp (optional)
+### Optional integrations
 
-clickwheel can mirror playlists into your Plex music library so Plexamp and Plex web see them alongside the iPod sync. Opt-in via the `[plex]` extra:
+Both off by default; opt in only if you use them.
 
-```bash
-pipx inject clickwheel 'clickwheel[plex]'   # or: pip install 'clickwheel[plex]'
-```
-
-```yaml
-plex_enabled: true
-plex_url: http://192.168.1.10:32400
-# Token in ~/.clickwheel/.env as CLICKWHEEL_PLEX_TOKEN=...
-# Path remap only needed when Plex runs on a different host (e.g. a NAS):
-plex_path_remap_local: /Volumes/Public/
-plex_path_remap_plex: /share/CACHEDEV1_DATA/Public/
-```
-
-Then `clickwheel plex doctor` to verify, and `clickwheel sync-plex <playlist>` to push. Full setup guide, troubleshooting, and rationale in [`docs/plex.md`](docs/plex.md).
+- **Last.fm scrobbling** — submit iPod listens to Last.fm. See [`docs/lastfm.md`](docs/lastfm.md).
+- **Plex / Plexamp** — mirror playlists into a Plex music library so Plexamp picks them up. See [`docs/plex.md`](docs/plex.md).
 
 ## MCP server
 
