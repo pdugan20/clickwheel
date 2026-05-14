@@ -41,20 +41,22 @@ clickwheel sync      # push to the iPod
 
 ## Commands
 
-| Command               | Description                                                             |
-| --------------------- | ----------------------------------------------------------------------- |
-| `clickwheel scan`     | Index your music library and report on metadata quality                 |
-| `clickwheel fix`      | Clean up metadata, fetch album art, fill genres via beets               |
-| `clickwheel select`   | Interactive picker — checkbox artist selection                          |
-| `clickwheel playlist` | List saved playlists or show details for one                            |
-| `clickwheel edit`     | Add or remove artists via interactive menus or `--add`/`--remove` flags |
-| `clickwheel heal`     | Drop playlist references to tracks no longer on disk                    |
-| `clickwheel delete`   | Delete a saved playlist (with confirmation)                             |
-| `clickwheel diff`     | Preview what would be added or removed on the iPod                      |
-| `clickwheel sync`     | Push your playlist to the iPod (with live progress table)               |
-| `clickwheel ls`       | Show what's on the iPod                                                 |
-| `clickwheel eject`    | Safely unmount the iPod                                                 |
-| `clickwheel scrobble` | Submit recent iPod listens to Last.fm                                   |
+| Command                  | Description                                                             |
+| ------------------------ | ----------------------------------------------------------------------- |
+| `clickwheel scan`        | Index your music library and report on metadata quality                 |
+| `clickwheel fix`         | Clean up metadata, fetch album art, fill genres via beets               |
+| `clickwheel select`      | Interactive picker — checkbox artist selection                          |
+| `clickwheel playlist`    | List saved playlists or show details for one                            |
+| `clickwheel edit`        | Add or remove artists via interactive menus or `--add`/`--remove` flags |
+| `clickwheel heal`        | Drop playlist references to tracks no longer on disk                    |
+| `clickwheel delete`      | Delete a saved playlist (with confirmation)                             |
+| `clickwheel diff`        | Preview what would be added or removed on the iPod                      |
+| `clickwheel sync`        | Push your playlist to the iPod (with live progress table)               |
+| `clickwheel sync-plex`   | Push playlist(s) to your Plex music library (Plexamp picks them up)     |
+| `clickwheel plex doctor` | Diagnose Plex configuration — one-shot setup check                      |
+| `clickwheel ls`          | Show what's on the iPod                                                 |
+| `clickwheel eject`       | Safely unmount the iPod                                                 |
+| `clickwheel scrobble`    | Submit recent iPod listens to Last.fm                                   |
 
 ## Configuration
 
@@ -70,6 +72,25 @@ lastfm_username: your_username
 ```
 
 Environment variables (`MUSIC_DIR`, `AUTO_SCAN`, etc.) override config values. See [`docs/configuration.md`](docs/configuration.md) for the full schema, auto-scan internals, and `fix` / Last.fm walkthroughs.
+
+### Plex / Plexamp (optional)
+
+clickwheel can mirror playlists into your Plex music library so Plexamp and Plex web see them alongside the iPod sync. Opt-in via the `[plex]` extra:
+
+```bash
+pipx inject clickwheel 'clickwheel[plex]'   # or: pip install 'clickwheel[plex]'
+```
+
+```yaml
+plex_enabled: true
+plex_url: http://192.168.1.10:32400
+# Token in ~/.clickwheel/.env as CLICKWHEEL_PLEX_TOKEN=...
+# Path remap only needed when Plex runs on a different host (e.g. a NAS):
+plex_path_remap_local: /Volumes/Public/
+plex_path_remap_plex: /share/CACHEDEV1_DATA/Public/
+```
+
+Then `clickwheel plex doctor` to verify, and `clickwheel sync-plex <playlist>` to push. Full setup guide, troubleshooting, and rationale in [`docs/plex.md`](docs/plex.md).
 
 ## MCP server
 

@@ -819,6 +819,40 @@ def sync_plex(
         raise typer.Exit(1)
 
 
+plex_app = typer.Typer(
+    name="plex",
+    help="Plex integration commands.",
+    no_args_is_help=True,
+)
+app.add_typer(plex_app, name="plex")
+
+
+@plex_app.command(name="doctor")
+def plex_doctor_cmd() -> None:
+    """Probe your Plex config end-to-end. Reports each stage (config,
+    plexapi install, server connect, music section lookup, sample-track
+    resolution) so failures point at exactly what's broken."""
+    cfg = load_config()
+    db = Database(cfg.db_path)
+    try:
+        result = actions.plex_doctor(cfg, db)
+    finally:
+        db.close()
+
+    status("Plex doctor")
+    for stage in result.stages:
+        prefix = f"  {stage.name}:"
+        if stage.ok:
+            success(f"{prefix} {stage.detail}")
+        else:
+            error(f"{prefix} {stage.detail}")
+
+    if not result.ok:
+        raise typer.Exit(1)
+    info("")
+    dim("All checks passed. Try: clickwheel sync-plex <playlist>")
+
+
 @app.command()
 def ls() -> None:
     """Show what's on your iPod."""

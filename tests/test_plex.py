@@ -15,6 +15,7 @@ from clickwheel.actions import (
     PlexPathRemapError,
     _require_plex_config,
     _slugify_for_filename,
+    plex_doctor,
     sync_playlist_to_plex,
 )
 from clickwheel.config import Config
@@ -255,3 +256,143 @@ def test_sync_playlist_to_plex_propagates_path_remap_error(
 
     with pytest.raises(PlexPathRemapError):
         sync_playlist_to_plex(plex_cfg, populated_db, "mismatched")
+
+
+# ---------------------------------------------------------------------------
+# plex_doctor
+# ---------------------------------------------------------------------------
+
+
+class _StubTrackPart:
+    def __init__(self, path: str) -> None:
+        self.file = path
+
+
+class _StubTrackMedia:
+    def __init__(self, path: str) -> None:
+        self.parts = [_StubTrackPart(path)]
+
+
+class _StubTrack:
+    def __init__(self, path: str) -> None:
+        self.media = [_StubTrackMedia(path)]
+
+
+# plexapi's API uses camelCase (searchTracks, friendlyName, leafCount,
+# ratingKey, totalSize). The stubs below mirror that surface verbatim
+# so the SUT can call them the same way it'd call the real Plex API.
+# Per-line N802/N815 silences are deliberate: these names aren't ours.
+class _StubSearchSection(_StubSection):
+    """Section stub that supports searchTracks() for the doctor's
+    sample-track stage."""
+
+    def __init__(self, returned_paths: list[str], *, title: str = "Music") -> None:
+        super().__init__(title, "artist")
+        self.key = "4"
+        self.totalSize = 285  # noqa: N815
+        self._paths = returned_paths
+
+    def searchTracks(self, **kwargs):  # noqa: N802
+        return [_StubTrack(p) for p in self._paths]
+
+
+class _StubServer:
+    friendlyName = "test-server"  # noqa: N815
+    version = "1.0.0"
+
+    def __init__(self, sections: list[_StubSection]) -> None:
+        self.library = _StubLibrary(sections)
+
+
+@pytest.fixture()
+def _plexapi_stub(monkeypatch):
+    """Tests that stub `_plex.connect` must also bypass the
+    plexapi-extra check, otherwise the doctor stops there before the
+    stub kicks in. The "plexapi missing" path is the natural state when
+    the [plex] extra isn't installed; here we just need it to no-op so
+    the rest of the chain reports independently."""
+    monkeypatch.setattr(_plex, "_import_plexapi", lambda: None)
+
+
+def test_plex_doctor_stops_at_disabled_config(tmp_path, populated_db):
+    cfg = Config(music_dir=tmp_path / "m", project_dir=tmp_path, plex_enabled=False)
+    result = plex_doctor(cfg, populated_db)
+    assert result.ok is False
+    assert [s.name for s in result.stages] == ["config"]
+
+
+def test_plex_doctor_all_stages_pass(
+    tmp_path, populated_db, monkeypatch, _plexapi_stub
+):
+    """No remap; sample track resolves at the same path. All five
+    stages should report ok=True.
+
+    `plex_doctor` picks the sample via `ORDER BY RANDOM()`, so the stub
+    needs to return every indexed path — that way whichever the doctor
+    picks, the expected path is in the result set."""
+    cfg = Config(
+        music_dir=tmp_path / "m",
+        project_dir=tmp_path,
+        plex_enabled=True,
+        plex_url="http://example.invalid:32400",
+        plex_token="t",
+        plex_library_name="Music",
+    )
+    all_paths = [
+        r["path"]
+        for r in populated_db.conn.execute("SELECT path FROM tracks").fetchall()
+    ]
+    monkeypatch.setattr(
+        _plex,
+        "connect",
+        lambda url, token: _StubServer([_StubSearchSection(all_paths)]),
+    )
+
+    result = plex_doctor(cfg, populated_db)
+    assert result.ok is True, [(s.name, s.detail) for s in result.stages if not s.ok]
+    assert [s.name for s in result.stages] == [
+        "config",
+        "plexapi extra",
+        "connect",
+        "music section",
+        "sample track",
+    ]
+
+
+def test_plex_doctor_flags_path_remap_mismatch(
+    plex_cfg: Config, populated_db, monkeypatch, _plexapi_stub
+):
+    """The sample-track stage should fail clearly when the configured
+    remap can't translate the clickwheel-side path."""
+    monkeypatch.setattr(
+        _plex,
+        "connect",
+        lambda url, token: _StubServer([_StubSearchSection(["/anywhere/01.mp3"])]),
+    )
+    result = plex_doctor(plex_cfg, populated_db)
+    sample_stage = next(s for s in result.stages if s.name == "sample track")
+    assert sample_stage.ok is False
+    assert "remap" in sample_stage.detail.lower()
+
+
+def test_plex_doctor_handles_empty_library(
+    tmp_path, monkeypatch, tmp_db, _plexapi_stub
+):
+    """If the DB has no mp3 tracks to sample, sample-track stage fails
+    with an instructive message (run scan) rather than a stack trace."""
+    cfg = Config(
+        music_dir=tmp_path / "m",
+        project_dir=tmp_path,
+        plex_enabled=True,
+        plex_url="http://example.invalid:32400",
+        plex_token="t",
+    )
+    monkeypatch.setattr(
+        _plex,
+        "connect",
+        lambda url, token: _StubServer([_StubSearchSection([])]),
+    )
+    result = plex_doctor(cfg, tmp_db)
+    sample_stage = next(s for s in result.stages if s.name == "sample track")
+    assert sample_stage.ok is False
+    assert "scan" in sample_stage.detail.lower()

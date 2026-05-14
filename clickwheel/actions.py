@@ -1567,3 +1567,179 @@ def delete_plex_playlist(cfg: Config, name: str) -> int:
     _require_plex_config(cfg)
     plex = _connect_plex(cfg)
     return _plex.delete_audio_playlist(plex, name)
+
+
+# ---------------------------------------------------------------------------
+# Plex diagnostic
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class PlexDoctorStage:
+    """One step of `plex_doctor`'s probe chain."""
+
+    name: str
+    ok: bool
+    detail: str
+
+
+@dataclass
+class PlexDoctorResult:
+    """Outcome of `plex_doctor` — an ordered list of stages and a roll-up
+    `ok` flag. The first failing stage halts the chain, but earlier
+    successful stages are still reported so the user sees how far they
+    got."""
+
+    stages: list[PlexDoctorStage] = field(default_factory=list)
+
+    @property
+    def ok(self) -> bool:
+        return bool(self.stages) and all(s.ok for s in self.stages)
+
+    def _add(self, name: str, ok: bool, detail: str) -> None:
+        self.stages.append(PlexDoctorStage(name=name, ok=ok, detail=detail))
+
+
+def plex_doctor(cfg: Config, db: Database) -> PlexDoctorResult:
+    """Probe the user's Plex setup end-to-end without mutating anything.
+
+    Stages: config check → plexapi extra installed → connect → find music
+    section → pick a clickwheel-side mp3 and confirm Plex resolves the
+    same physical file via the configured path remap. Each stage is
+    reported even if a later one fails; the first failure stops the
+    chain so we don't pile cascading errors.
+
+    Returns a `PlexDoctorResult`; never raises (errors become stages
+    with `ok=False`). Callers render it however they like.
+    """
+    from clickwheel import plex as _plex
+
+    result = PlexDoctorResult()
+
+    # 1. config
+    try:
+        _require_plex_config(cfg)
+    except PlexNotConfiguredError as exc:
+        result._add("config", False, str(exc))
+        return result
+    result._add(
+        "config",
+        True,
+        f"enabled, url={cfg.plex_url}, library={cfg.plex_library_name!r}",
+    )
+
+    # 2. extra
+    try:
+        _plex._import_plexapi()
+    except _plex.PlexExtraMissingError as exc:
+        result._add("plexapi extra", False, str(exc))
+        return result
+    result._add("plexapi extra", True, "installed")
+
+    # 3. connect
+    try:
+        plex = _plex.connect(cfg.plex_url, cfg.plex_token)
+    except Exception as exc:
+        result._add("connect", False, f"{cfg.plex_url}: {exc}")
+        return result
+    server_name = getattr(plex, "friendlyName", "(unknown)")
+    server_version = getattr(plex, "version", "(unknown)")
+    result._add(
+        "connect",
+        True,
+        f"server={server_name!r} version={server_version}",
+    )
+
+    # 4. section
+    try:
+        section = _plex.find_music_section(plex, cfg.plex_library_name)
+    except LookupError as exc:
+        result._add("music section", False, str(exc))
+        return result
+    total = getattr(section, "totalSize", "?")
+    result._add(
+        "music section",
+        True,
+        f"section [{section.key}] {section.title!r}, ~{total} artists",
+    )
+
+    # 5. sample track resolution
+    sample_row = db.conn.execute(
+        """
+        SELECT title, artist, album, path
+        FROM tracks
+        WHERE format = 'mp3'
+          AND title IS NOT NULL AND title != ''
+          AND artist IS NOT NULL AND artist != ''
+          AND album IS NOT NULL AND album != ''
+        ORDER BY RANDOM()
+        LIMIT 1
+        """
+    ).fetchone()
+    if not sample_row:
+        result._add(
+            "sample track",
+            False,
+            "library has no mp3 tracks to sample. Run `clickwheel scan`.",
+        )
+        return result
+    sample = dict(sample_row)
+    try:
+        matches = section.searchTracks(
+            title=sample["title"],
+            **{"artist.title": sample["artist"]},
+        )
+    except Exception as exc:
+        result._add("sample track", False, f"Plex search failed: {exc}")
+        return result
+
+    expected_plex_path: str | None
+    try:
+        expected_plex_path = _plex.local_to_plex_path(
+            sample["path"],
+            cfg.plex_path_remap_local,
+            cfg.plex_path_remap_plex,
+        )
+    except (_plex.PathRemapFailedError, _plex.PlexConfigInvalidError) as exc:
+        result._add("sample track", False, f"path remap config: {exc}")
+        return result
+
+    label = f"{sample['artist']} / {sample['album']} / {sample['title']}"
+    if not matches:
+        # Soft signal — not a real failure. M3U upload uses Plex's
+        # path-based indexer, not the metadata search this probe uses.
+        # The only way this branch fires AND sync also fails is if
+        # Plex hasn't scanned the file at all — which is the user's
+        # next thing to check, but most of the time everything works.
+        result._add(
+            "sample track",
+            True,
+            (
+                f"soft signal: Plex's metadata search didn't find "
+                f"{label}, but path-based sync may still work. If a "
+                "subsequent sync_playlist_to_plex reports low "
+                "resolved counts, trigger a Plex library scan."
+            ),
+        )
+        return result
+
+    plex_paths = [
+        part.file for m in matches[:5] for media in m.media for part in media.parts
+    ]
+    if expected_plex_path in plex_paths:
+        result._add(
+            "sample track",
+            True,
+            f"{label} found in Plex at the expected path",
+        )
+    else:
+        result._add(
+            "sample track",
+            False,
+            (
+                f"{label} found in Plex, but not at the expected path "
+                f"({expected_plex_path!r}). Plex returned: {plex_paths[:3]}. "
+                "Check plex_path_remap_local / plex_path_remap_plex."
+            ),
+        )
+    return result

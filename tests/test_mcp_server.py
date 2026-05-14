@@ -613,3 +613,164 @@ def test_heal_playlist_missing_playlist(tmp_path, monkeypatch):
 
     with pytest.raises(PlaylistNotFoundError):
         heal_playlist(name="ghost")
+
+
+# ---------------------------------------------------------------------------
+# Plex tools
+# ---------------------------------------------------------------------------
+
+
+def _setup_plex(tmp_path, monkeypatch, *, enabled: bool = True) -> Config:
+    """Variant of _setup() that returns a Plex-configured Config."""
+    music_dir = tmp_path / "music"
+    music_dir.mkdir()
+    cfg = Config(
+        music_dir=music_dir,
+        project_dir=tmp_path,
+        ipod_mount=tmp_path / "ipod-not-mounted",
+        auto_scan=False,
+        plex_enabled=enabled,
+        plex_url="http://example.invalid:32400",
+        plex_token="t",
+        plex_library_name="Music",
+    )
+    db = Database(cfg.db_path)
+    sample = {
+        "path": "/music/A/Album1/01.mp3",
+        "title": "T1",
+        "artist": "ArtistA",
+        "album": "Album1",
+        "album_artist": "ArtistA",
+        "genre": "Rock",
+        "track_number": 1,
+        "disc_number": 1,
+        "year": 2020,
+        "duration_seconds": 180.0,
+        "bitrate": 320000,
+        "sample_rate": 44100,
+        "format": "mp3",
+        "file_size": 5_000_000,
+        "has_art": 1,
+        "art_width": 500,
+        "art_height": 500,
+    }
+    db.upsert_track(sample)
+    db.commit()
+    db.close()
+    monkeypatch.setattr("clickwheel.mcp._runtime.load_config", lambda: cfg)
+    return cfg
+
+
+def test_plex_health_disabled(tmp_path, monkeypatch):
+    from clickwheel.mcp.tools.plex import plex_health
+
+    _setup_plex(tmp_path, monkeypatch, enabled=False)
+    result = _call(plex_health)
+    assert result["ok"] is False
+    assert result["stages"][0]["name"] == "config"
+
+
+def test_plex_health_all_pass(tmp_path, monkeypatch):
+    """Stub plexapi so all five stages succeed; verify the tool wraps
+    the result into the expected MCP shape. The plexapi extra check is
+    bypassed so this test works whether or not [plex] is installed."""
+    from clickwheel import plex as _plex
+    from clickwheel.mcp.tools.plex import plex_health
+
+    cfg = _setup_plex(tmp_path, monkeypatch)
+    monkeypatch.setattr(_plex, "_import_plexapi", lambda: None)
+
+    class _Part:
+        file = "/music/A/Album1/01.mp3"
+
+    class _Media:
+        parts = [_Part()]
+
+    class _Track:
+        media = [_Media()]
+
+    # plexapi attrs are camelCase by external API convention.
+    class _Section:
+        type = "artist"
+        title = "Music"
+        key = "4"
+        totalSize = 1  # noqa: N815
+
+        def searchTracks(self, **kwargs):  # noqa: N802
+            return [_Track()]
+
+    class _Library:
+        @staticmethod
+        def sections():
+            return [_Section()]
+
+    class _Server:
+        friendlyName = "test"  # noqa: N815
+        version = "1.0"
+        library = _Library()
+
+    monkeypatch.setattr(_plex, "connect", lambda url, token: _Server())
+
+    result = _call(plex_health)
+    assert result["ok"] is True
+    assert [s["name"] for s in result["stages"]] == [
+        "config",
+        "plexapi extra",
+        "connect",
+        "music section",
+        "sample track",
+    ]
+    assert cfg.plex_url  # use cfg so the lint doesn't grumble
+
+
+def test_sync_playlist_to_plex_returns_plex_not_configured_error(tmp_path, monkeypatch):
+    """Disabled config -> structured error payload, NOT an unhandled
+    exception."""
+    from clickwheel.mcp.tools.plex import sync_playlist_to_plex
+
+    _setup_plex(tmp_path, monkeypatch, enabled=False)
+    result = _call(sync_playlist_to_plex, playlist="anything")
+    assert result["error"] == "plex_not_configured"
+
+
+def test_sync_playlist_to_plex_success(tmp_path, monkeypatch):
+    from clickwheel import plex as _plex
+    from clickwheel.mcp.tools.plex import sync_playlist_to_plex
+
+    cfg = _setup_plex(tmp_path, monkeypatch)
+    monkeypatch.setattr(_plex, "_import_plexapi", lambda: None)
+    db = Database(cfg.db_path)
+    db.save_playlist("p", ["/music/A/Album1/01.mp3"])
+    db.commit()
+    db.close()
+
+    class _Section:
+        type = "artist"
+        title = "Music"
+        key = "4"
+
+    class _Library:
+        @staticmethod
+        def sections():
+            return [_Section()]
+
+    class _Server:
+        library = _Library()
+
+    class _UploadedPlaylist:
+        leafCount = 1  # noqa: N815
+        ratingKey = 42  # noqa: N815
+        title = "p"
+
+    monkeypatch.setattr(_plex, "connect", lambda url, token: _Server())
+    monkeypatch.setattr(
+        _plex,
+        "upload_playlist",
+        lambda plex, section, name, m3u: _UploadedPlaylist(),
+    )
+
+    result = _call(sync_playlist_to_plex, playlist="p")
+    assert result["pushed"] == 1
+    assert result["resolved"] == 1
+    assert result["plex_rating_key"] == 42
+    assert "test" not in result.get("error", "")
