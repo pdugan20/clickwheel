@@ -78,19 +78,11 @@ clickwheel fix
 
 ## Last.fm scrobbling
 
-clickwheel can submit your iPod listens to Last.fm.
+See [`docs/lastfm.md`](lastfm.md) for the API-key signup, authorization flow, and troubleshooting. The `lastfm_*` keys above are the wire-up.
 
-1. Get an API key at [last.fm/api/account/create](https://www.last.fm/api/account/create).
-2. Add the credentials to `~/.clickwheel/config.yaml` (the `lastfm_*` keys above).
-3. Authorize once:
+## Plex / Plexamp sync
 
-   ```bash
-   clickwheel scrobble --auth
-   ```
-
-4. After that, run `clickwheel scrobble` any time your iPod is connected.
-
-Plays are cached locally and tracked individually, so re-runs never duplicate-submit. If a submission batch fails (network blip, rate limit), the next run resumes where it left off.
+See [`docs/plex.md`](plex.md) for the install, token retrieval, path remap (NAS users), and the doctor diagnostic. The `plex_*` keys above are the wire-up.
 
 ## Database location
 
