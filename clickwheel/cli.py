@@ -16,6 +16,11 @@ from clickwheel.actions import (
     LibraryNotFoundError,
     MissingTracksError,
     PlaylistNotFoundError,
+    PlexExtraNotInstalledError,
+    PlexNotConfiguredError,
+    PlexPathRemapError,
+    PlexSectionNotFoundError,
+    PlexUnreachableError,
     ScanProgress,
     SyncEvent,
 )
@@ -737,6 +742,81 @@ def sync(
         )
 
     db.close()
+
+
+@app.command(name="sync-plex")
+def sync_plex(
+    playlist_name: str = typer.Argument(
+        None,
+        help="Playlist to push to Plex. Omit with --all to push every playlist.",
+    ),
+    all_playlists: bool = typer.Option(
+        False, "--all", help="Push every clickwheel playlist to Plex."
+    ),
+    no_scan: bool = typer.Option(
+        False, "--no-scan", help="Skip automatic library scan."
+    ),
+) -> None:
+    """Push playlist(s) to your Plex music library."""
+    if not all_playlists and not playlist_name:
+        error("Specify a playlist name or pass --all.")
+        raise typer.Exit(1)
+    if all_playlists and playlist_name:
+        error("Pass --all OR a playlist name, not both.")
+        raise typer.Exit(1)
+
+    cfg = load_config()
+    db = Database(cfg.db_path)
+    if not no_scan:
+        maybe_auto_scan(cfg, db)
+
+    if all_playlists:
+        targets = [p["name"] for p in actions.list_playlists(db)]
+        if not targets:
+            warn("No clickwheel playlists to push.")
+            db.close()
+            return
+    else:
+        targets = [playlist_name]
+
+    pushed_any = False
+    for target in targets:
+        status(f"Pushing '{target}' to Plex")
+        try:
+            with spinner(f"Uploading '{target}' to Plex..."):
+                result = actions.sync_playlist_to_plex(cfg, db, target)
+        except PlexExtraNotInstalledError as exc:
+            error(str(exc))
+            db.close()
+            raise typer.Exit(1) from exc
+        except (
+            PlexNotConfiguredError,
+            PlexUnreachableError,
+            PlexSectionNotFoundError,
+            PlexPathRemapError,
+            PlaylistNotFoundError,
+        ) as exc:
+            error(str(exc))
+            if not all_playlists:
+                db.close()
+                raise typer.Exit(1) from exc
+            continue
+
+        pushed_any = True
+        unresolved = result.pushed - result.resolved
+        success(
+            f"  '{target}' -> Plex: {result.resolved}/{result.pushed} tracks resolved"
+        )
+        if unresolved > 0:
+            warn(
+                f"  {unresolved} track(s) weren't found in Plex's index. "
+                "They may not be scanned into Plex yet."
+            )
+        dim(f"  M3U: {result.m3u_local_path}")
+
+    db.close()
+    if all_playlists and not pushed_any:
+        raise typer.Exit(1)
 
 
 @app.command()

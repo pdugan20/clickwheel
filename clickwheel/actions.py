@@ -140,6 +140,26 @@ class PlaylistConflictError(ClickwheelError):
         self.existing_track_count = existing_track_count
 
 
+class PlexNotConfiguredError(ClickwheelError):
+    """Plex integration is disabled or missing credentials."""
+
+
+class PlexExtraNotInstalledError(ClickwheelError):
+    """The `clickwheel[plex]` extra (plexapi) isn't installed."""
+
+
+class PlexUnreachableError(ClickwheelError):
+    """Couldn't connect to the Plex server (network error or bad token)."""
+
+
+class PlexSectionNotFoundError(ClickwheelError):
+    """The configured Plex music section name doesn't exist on the server."""
+
+
+class PlexPathRemapError(ClickwheelError):
+    """A track path didn't match the configured plex path remap prefix."""
+
+
 @dataclass
 class IpodPlaylistSpec:
     """Internal: a playlist destined for the iPod's iTunesDB.
@@ -1384,3 +1404,166 @@ def submit_pending_scrobbles(
         failed=failed,
         remaining_pending=remaining,
     )
+
+
+# ---------------------------------------------------------------------------
+# Plex sync
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class PlexSyncResult:
+    """Outcome of a `sync_playlist_to_plex` call.
+
+    `pushed` is the number of tracks we put into the M3U; `resolved` is
+    how many Plex actually matched against its index. A gap between the
+    two means some clickwheel files aren't visible to Plex — typically
+    because Plex hasn't scanned them yet, or they live outside Plex's
+    music section.
+    """
+
+    pushed: int = 0
+    resolved: int = 0
+    playlist_rating_key: int | None = None
+    m3u_local_path: str = ""
+    m3u_plex_path: str = ""
+
+
+def _default_plex_playlist_dir(cfg: Config) -> Path:
+    """Default location for clickwheel-written M3U files.
+
+    Lives inside the music library so Plex can read it without extra
+    share configuration — Plex already needs read access to the music
+    dir, so a hidden subdir there is the safe universal default.
+    """
+    return cfg.music_dir / ".clickwheel-playlists"
+
+
+def _plex_playlist_dir(cfg: Config) -> Path:
+    if cfg.plex_playlist_dir:
+        return Path(cfg.plex_playlist_dir)
+    return _default_plex_playlist_dir(cfg)
+
+
+def _slugify_for_filename(name: str) -> str:
+    """Sanitize a playlist name into a filesystem-safe slug.
+
+    Replaces anything outside [A-Za-z0-9._-] with `_`. Doesn't try to
+    handle case-folding or unicode normalization — Plex stores the
+    playlist title as given; the slug only governs the M3U filename.
+    """
+    safe = []
+    for ch in name:
+        if ch.isalnum() or ch in "._-":
+            safe.append(ch)
+        else:
+            safe.append("_")
+    return "".join(safe) or "playlist"
+
+
+def _require_plex_config(cfg: Config) -> None:
+    if not cfg.plex_enabled:
+        raise PlexNotConfiguredError(
+            "Plex sync is disabled. Set `plex_enabled: true` in "
+            "~/.clickwheel/config.yaml or CLICKWHEEL_PLEX_ENABLED=true."
+        )
+    missing = []
+    if not cfg.plex_url:
+        missing.append("plex_url")
+    if not cfg.plex_token:
+        missing.append("plex_token (CLICKWHEEL_PLEX_TOKEN)")
+    if missing:
+        raise PlexNotConfiguredError(
+            f"Plex sync is enabled but {', '.join(missing)} is not set."
+        )
+
+
+def _connect_plex(cfg: Config):
+    """Connect with all the plexapi-flavored exceptions translated to
+    our ClickwheelError hierarchy."""
+    from clickwheel import plex as _plex
+
+    try:
+        return _plex.connect(cfg.plex_url, cfg.plex_token)
+    except _plex.PlexExtraMissing as exc:
+        raise PlexExtraNotInstalledError(str(exc)) from exc
+    except Exception as exc:
+        # plexapi raises Unauthorized for bad tokens and various
+        # requests.exceptions for connection issues. Both surface to the
+        # user with the same advice: check the URL/token/network.
+        raise PlexUnreachableError(
+            f"Couldn't reach Plex at {cfg.plex_url}: {exc}"
+        ) from exc
+
+
+def sync_playlist_to_plex(
+    cfg: Config,
+    db: Database,
+    playlist_name: str,
+) -> PlexSyncResult:
+    """Push a clickwheel playlist into the user's Plex music library.
+
+    Writes an EXTM3U file inside `cfg.plex_playlist_dir` (default:
+    `{music_dir}/.clickwheel-playlists/`) containing the Plex-side
+    paths to each track, then asks Plex to import it. Plex resolves
+    each path against its own indexed library — paths Plex doesn't
+    recognize are silently skipped, which is why the result reports
+    both `pushed` and `resolved`.
+
+    Re-uploading the same playlist (same name -> same M3U path)
+    overwrites the prior playlist; that's plexapi's documented
+    behavior and is what makes the operation idempotent.
+
+    Raises: PlexNotConfiguredError, PlexExtraNotInstalledError, PlexUnreachableError,
+    PlexSectionNotFoundError, PlexPathRemapError, PlaylistNotFoundError.
+    """
+    from clickwheel import plex as _plex
+
+    _require_plex_config(cfg)
+
+    tracks = get_playlist(db, playlist_name)  # raises PlaylistNotFoundError
+
+    plex = _connect_plex(cfg)
+    try:
+        section = _plex.find_music_section(plex, cfg.plex_library_name)
+    except LookupError as exc:
+        raise PlexSectionNotFoundError(str(exc)) from exc
+
+    m3u_local = _plex_playlist_dir(cfg) / f"{_slugify_for_filename(playlist_name)}.m3u"
+    try:
+        m3u_local = _plex.build_m3u(
+            tracks,
+            m3u_local,
+            cfg.plex_path_remap_local,
+            cfg.plex_path_remap_plex,
+        )
+        m3u_plex = _plex.local_to_plex_path(
+            m3u_local.as_posix(),
+            cfg.plex_path_remap_local,
+            cfg.plex_path_remap_plex,
+        )
+    except _plex.PathRemapFailedError as exc:
+        raise PlexPathRemapError(str(exc)) from exc
+    except _plex.PlexConfigInvalidError as exc:
+        raise PlexNotConfiguredError(str(exc)) from exc
+
+    playlist = _plex.upload_playlist(plex, section, playlist_name, m3u_plex)
+
+    return PlexSyncResult(
+        pushed=len(tracks),
+        resolved=int(getattr(playlist, "leafCount", 0) or 0),
+        playlist_rating_key=getattr(playlist, "ratingKey", None),
+        m3u_local_path=str(m3u_local),
+        m3u_plex_path=m3u_plex,
+    )
+
+
+def delete_plex_playlist(cfg: Config, name: str) -> int:
+    """Delete every audio playlist on Plex matching `name`. Returns the
+    count actually deleted (0 if none existed). Does NOT touch the
+    clickwheel-side playlist."""
+    from clickwheel import plex as _plex
+
+    _require_plex_config(cfg)
+    plex = _connect_plex(cfg)
+    return _plex.delete_audio_playlist(plex, name)
