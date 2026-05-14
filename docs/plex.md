@@ -120,12 +120,3 @@ When using clickwheel through its MCP server (Claude Desktop, Claude Code, etc.)
 | `music section`                                                | `plex_library_name` doesn't match any section. The detail line lists available music sections — pick one.                                                                                              |
 | `sample track` says "not at the expected path"                 | Path remap is mismatched. The detail shows the expected vs returned paths — usually you need to adjust `plex_path_remap_local` or `plex_path_remap_plex`.                                              |
 | `sample track` says "Plex's metadata search returned no match" | Soft signal — M3U upload uses Plex's path-based indexer, not metadata search, so sync may still work. Most often this means Plex hasn't scanned the artist yet; trigger a Plex scan and re-run doctor. |
-
-## Why M3U upload instead of the API?
-
-Plex's playlist API doesn't support file-path lookup, so a "find this track by path and add it" call isn't possible. The two real options are:
-
-1. **Metadata-search matching** (`searchTracks(title=..., artist=...)`) — fast, but lossy. A single song that appears on three compilations returns three matches; a slightly-different artist casing returns zero.
-2. **M3U upload** — write a file Plex can read, let Plex's own indexer resolve each line.
-
-We picked option 2: it reuses Plex's own resolution logic (the same one that built its 10k-track index), so as long as Plex has the file at all, the M3U line resolves. The "re-uploading the same M3U overwrites the prior playlist" behavior gives idempotent sync for free.
