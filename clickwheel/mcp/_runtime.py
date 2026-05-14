@@ -43,6 +43,16 @@ TWO PLAYLIST CONCEPTS — DON'T CONFLATE THEM:
   `add_artist_to_playlist`) to build it, then `sync_playlist_to_ipod`
   to push the playlist to the device. This is the curated case.
 
+TWO DESTINATIONS FOR PLAYLISTS:
+- iPod: `sync_playlist_to_ipod` — physical device, the original target.
+- Plex / Plexamp: `sync_playlist_to_plex` — optional, only available
+  when the user has configured Plex (see `plex_health`). Pushes the
+  same playlist to their Plex music library so Plexamp picks it up.
+After `create_playlist` or `update_playlist`, ask the user which
+destination(s) they want: iPod, Plex, both, or neither. Don't assume.
+The two syncs are independent — call both if the user says "both",
+each triggers its own Allow/Deny prompt.
+
 When in doubt, ask the user: do they want it as a playlist they can
 browse on the iPod, or just want the songs added to the library? Don't
 auto-default to creating throwaway playlists — that pollutes their
@@ -129,14 +139,15 @@ WORKFLOWS:
 
 SAFETY:
 - `delete_playlist`, `add_tracks_to_ipod`, `add_artist_to_ipod`,
-  `sync_playlist_to_ipod`, `remove_tracks_from_ipod`,
-  `remove_artist_from_ipod`, and `remove_ipod_playlist` are flagged
-  destructive. Claude Code (and other compliant clients) surface a
-  native Allow/Deny prompt before invoking them — that is the user's
-  confirmation moment. Before calling, summarize the impact in your
-  reply (track count, size, target iPod) so the user has the context
-  to allow or deny. For remove operations especially: name the tracks
-  that will be deleted, so the user can confirm they meant those.
+  `sync_playlist_to_ipod`, `sync_playlist_to_plex`,
+  `remove_tracks_from_ipod`, `remove_artist_from_ipod`, and
+  `remove_ipod_playlist` are flagged destructive. Claude Code (and
+  other compliant clients) surface a native Allow/Deny prompt before
+  invoking them — that is the user's confirmation moment. Before
+  calling, summarize the impact in your reply (track count, size,
+  target device / Plex library) so the user has the context to allow
+  or deny. For remove operations especially: name the tracks that
+  will be deleted, so the user can confirm they meant those.
 - The CLI runs alongside this server with richer interactive UI; suggest
   it for complex flows (interactive picker, live sync progress).
 

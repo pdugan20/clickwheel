@@ -20,6 +20,15 @@ lastfm_api_key: your_key
 lastfm_api_secret: your_secret
 lastfm_username: your_username
 
+# Plex sync (opt-in; see docs/plex.md for the full walkthrough)
+plex_enabled: false # default: false
+plex_url: http://192.168.1.10:32400
+plex_library_name: Music # default: 'Music'
+plex_playlist_dir: '' # default: ${music_dir}/.clickwheel-playlists
+plex_path_remap_local: '' # only needed when Plex runs on a different host (e.g. a NAS)
+plex_path_remap_plex: ''
+# plex_token: ...   # prefer CLICKWHEEL_PLEX_TOKEN env var over inline YAML
+
 # Database location (rarely changed)
 db_path: ~/.clickwheel/library.db # default
 ```
