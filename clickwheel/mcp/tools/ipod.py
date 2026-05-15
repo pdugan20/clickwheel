@@ -24,6 +24,18 @@ from clickwheel.mcp._runtime import (
     open_session,
     render,
 )
+from clickwheel.mcp.models import (
+    AddArtistToIpodResult,
+    AddTracksToIpodResult,
+    EjectResult,
+    IpodContents,
+    IpodPlaylist,
+    IpodTrack,
+    RemoveArtistFromIpodResult,
+    RemoveIpodPlaylistResult,
+    RemoveTracksFromIpodResult,
+    SyncToIpodResult,
+)
 from clickwheel.mcp.ui import ui_tool_meta
 from clickwheel.mcp.ui_resources import IPOD_CAPACITY_URI, SYNC_RESULT_URI
 
@@ -67,7 +79,7 @@ def _summarize_track(t: dict) -> dict:
     annotations=READ_ONLY,
     meta=ui_tool_meta(IPOD_CAPACITY_URI),
 )
-def get_ipod_contents() -> dict:
+def get_ipod_contents() -> IpodContents:
     """High-level snapshot of what's on the iPod: capacity, used/free space,
     track/artist/album counts, and the top 25 artists by track count.
     Does NOT return the full track list — use `list_ipod_tracks` to page
@@ -119,7 +131,7 @@ def get_ipod_contents() -> dict:
 
 
 @mcp.tool(title="List iPod playlists", annotations=READ_ONLY)
-def list_ipod_playlists() -> list[dict]:
+def list_ipod_playlists() -> list[IpodPlaylist]:
     """List the playlists currently on the iPod (the ones visible under
     Music → Playlists on the device).
 
@@ -171,7 +183,7 @@ def list_ipod_tracks(
         int,
         Field(description="Pagination offset (0 = first page).", ge=0),
     ] = 0,
-) -> list[dict]:
+) -> list[IpodTrack]:
     """Paginated list of tracks on the iPod, optionally filtered by artist.
     Each track is the chat-friendly slice — artist, title, album, size in
     bytes. For the full per-track payload, use the CLI.
@@ -233,7 +245,7 @@ async def sync_playlist_to_ipod(
             ),
         ),
     ] = None,
-) -> dict:
+) -> SyncToIpodResult:
     """Push a saved playlist (the clickwheel-side draft) to the iPod
     AND create/update the corresponding playlist on the device under
     Music → Playlists. Copies any missing tracks first.
@@ -420,7 +432,7 @@ async def add_tracks_to_ipod(
         ),
     ],
     ctx: Context,
-) -> dict:
+) -> AddTracksToIpodResult:
     """Push specific tracks to the iPod's library WITHOUT creating a
     playlist on the device. Tracks land in the main library and are
     browsable by artist/album.
@@ -534,7 +546,7 @@ async def add_artist_to_ipod(
         Field(description="Artist name (exact match, case-sensitive)."),
     ],
     ctx: Context,
-) -> dict:
+) -> AddArtistToIpodResult:
     """Push every track by an artist to the iPod's library, no playlist
     artifact. Convenience wrapper over `add_tracks_to_ipod` that resolves
     the artist's tracks via the library index.
@@ -651,7 +663,7 @@ async def remove_tracks_from_ipod(
         ),
     ],
     ctx: Context,
-) -> dict:
+) -> RemoveTracksFromIpodResult:
     """Remove specific tracks from the iPod — drops them from the
     iTunesDB AND deletes the underlying audio files from the device.
 
@@ -755,7 +767,7 @@ async def remove_artist_from_ipod(
         ),
     ],
     ctx: Context,
-) -> dict:
+) -> RemoveArtistFromIpodResult:
     """Drop every track by an artist from the iPod, in one shot.
 
     Mirrors `add_artist_to_ipod`. Use for "delete all Weezer from my
@@ -840,7 +852,7 @@ def remove_ipod_playlist(
         str,
         Field(description="Name of the iPod playlist to remove."),
     ],
-) -> dict:
+) -> RemoveIpodPlaylistResult:
     """Remove a playlist from the iPod (Music → Playlists). The
     playlist's tracks are NOT deleted — they stay in the iPod's main
     library, browsable by artist/album. Only the playlist artifact
@@ -883,7 +895,7 @@ def remove_ipod_playlist(
 
 
 @mcp.tool(title="Eject iPod", annotations=MUTATION)
-def eject_ipod() -> dict:
+def eject_ipod() -> EjectResult:
     """Safely unmount the iPod via `diskutil eject`. Idempotent: if no
     iPod is currently mounted, returns `{"ejected": False,
     "already_unmounted": True}` rather than raising. This handles the

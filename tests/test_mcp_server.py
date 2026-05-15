@@ -774,3 +774,227 @@ def test_sync_playlist_to_plex_success(tmp_path, monkeypatch):
     assert result["resolved"] == 1
     assert result["plex_rating_key"] == 42
     assert "test" not in result.get("error", "")
+
+
+# ---------------------------------------------------------------------------
+# Output-schema conformance
+#
+# Every tool annotates a Pydantic return model, so FastMCP emits an
+# outputSchema. The MCP spec requires structuredContent to conform to that
+# schema, so each test below validates a real tool result against the model
+# the tool declares as its return type.
+# ---------------------------------------------------------------------------
+
+import types  # noqa: E402
+import typing  # noqa: E402
+
+from pydantic import TypeAdapter  # noqa: E402
+
+
+class _StubCtx:
+    """Minimal Context stand-in for the async iPod tools."""
+
+    async def report_progress(self, *_a, **_k):
+        return None
+
+
+def _conform(fn, **kwargs):
+    """Call a tool and validate its structuredContent against the Pydantic
+    model named in the tool's return annotation. Returns the payload."""
+    if inspect.iscoroutinefunction(fn):
+        result = asyncio.run(fn(**kwargs))
+    else:
+        result = fn(**kwargs)
+    ann = typing.get_type_hints(fn)["return"]
+    sc = result.structuredContent
+    assert sc is not None, f"{fn.__name__}: no structuredContent"
+    payload = sc["result"] if typing.get_origin(ann) is list else sc
+    TypeAdapter(ann).validate_python(payload)
+    return payload
+
+
+def test_all_tools_emit_output_schema():
+    from clickwheel.mcp._runtime import mcp
+
+    tools = asyncio.run(mcp.list_tools())
+    assert len(tools) == 29
+    for t in tools:
+        assert t.outputSchema, f"{t.name}: no outputSchema"
+        assert t.outputSchema.get("properties"), f"{t.name}: schema has no properties"
+
+
+def test_conformance_library_tools(tmp_path, monkeypatch):
+    from clickwheel.mcp.tools import library as lib
+
+    _setup(tmp_path, monkeypatch)
+
+    _conform(lib.library_stats)
+    _conform(lib.list_artists)
+    _conform(lib.list_albums_by_artist, artist="ArtistA")
+    _conform(lib.list_tracks_by_album, artist="ArtistA", album="Album1")
+    _conform(lib.search_tracks, query="T1")
+    _conform(lib.library_health)
+
+
+def test_conformance_playlist_tools(tmp_path, monkeypatch):
+    from clickwheel.mcp.tools import playlist as pl
+
+    cfg = _setup(tmp_path, monkeypatch)
+    db = Database(cfg.db_path)
+    db.save_playlist("mix", ["/music/A/Album1/01.mp3", "/music/B/Album2/01.mp3"])
+    db.close()
+
+    _conform(pl.list_playlists)
+    _conform(pl.get_playlist, name="mix")
+    _conform(pl.list_playlist_tracks, name="mix")
+    _conform(pl.create_playlist, name="fresh", track_paths=["/music/A/Album1/01.mp3"])
+    _conform(pl.update_playlist, name="mix", track_paths=["/music/A/Album1/01.mp3"])
+    _conform(pl.add_artist_to_playlist, playlist="mix", artist="ArtistB")
+    _conform(pl.remove_artist_from_playlist, playlist="mix", artist="ArtistB")
+    _conform(pl.heal_playlist, name="mix")
+    _conform(pl.delete_playlist, name="mix")
+
+
+def test_conformance_scrobbles_and_eject(tmp_path, monkeypatch):
+    from clickwheel.mcp.tools.ipod import eject_ipod
+    from clickwheel.mcp.tools.scrobble import get_pending_scrobbles
+
+    _setup(tmp_path, monkeypatch)
+
+    _conform(get_pending_scrobbles)
+    # No iPod mounted: eject returns the graceful "already disconnected"
+    # EjectResult shape rather than raising.
+    _conform(eject_ipod)
+
+
+def test_conformance_plex_tools(tmp_path, monkeypatch):
+    from clickwheel.mcp.tools.plex import plex_health, sync_playlist_to_plex
+
+    _setup_plex(tmp_path, monkeypatch, enabled=False)
+
+    _conform(plex_health)
+    # Disabled config: structured error variant of PlexSyncResult.
+    _conform(sync_playlist_to_plex, playlist="anything")
+
+
+def test_conformance_ipod_read_tools(tmp_path, monkeypatch):
+    """iPod read tools need a device; stub the actions layer they wrap."""
+    from clickwheel.mcp.tools import ipod as ip
+
+    _setup(tmp_path, monkeypatch)
+    fake_track = {
+        "artist": "ArtistA",
+        "album_artist": "ArtistA",
+        "album": "Album1",
+        "title": "T1",
+        "size": 5_000_000,
+    }
+    monkeypatch.setattr(
+        "clickwheel.actions.read_ipod_contents",
+        lambda cfg: {
+            "tracks": [fake_track],
+            "capacity_bytes": 80_000_000_000,
+            "used_bytes": 5_000_000,
+            "free_bytes": 79_995_000_000,
+        },
+    )
+    monkeypatch.setattr(
+        "clickwheel.actions.list_ipod_playlists",
+        lambda cfg: [
+            {
+                "name": "Road Trip",
+                "track_count": 1,
+                "total_bytes": 5_000_000,
+                "is_smart": False,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        "clickwheel.actions.list_ipod_tracks",
+        lambda cfg, artist=None, limit=50, offset=0: [fake_track],
+    )
+
+    _conform(ip.get_ipod_contents)
+    _conform(ip.list_ipod_playlists)
+    _conform(ip.list_ipod_tracks)
+
+
+def test_conformance_ipod_mutation_tools(tmp_path, monkeypatch):
+    """iPod write tools need a device; stub the actions layer they wrap so
+    the tools' real result-dict-building runs and is schema-validated."""
+    from clickwheel import actions
+    from clickwheel.mcp.tools import ipod as ip
+
+    cfg = _setup(tmp_path, monkeypatch)
+    db = Database(cfg.db_path)
+    db.save_playlist("mix", ["/music/A/Album1/01.mp3"])
+    db.close()
+
+    sync_result = actions.SyncResult(
+        copied=[({"file_size": 5_000_000}, "ok")],
+        failed=[],
+        kept_in_place_count=0,
+        library_updated=True,
+    )
+    remove_result = actions.RemoveResult(
+        removed=[{"artist": "ArtistA", "album": "Album1", "title": "T1"}],
+        not_matched=[],
+        bytes_freed=5_000_000,
+        library_updated=True,
+    )
+
+    monkeypatch.setattr(
+        "clickwheel.actions.compute_diff",
+        lambda cfg, db, playlist: actions.Diff(playlist=playlist),
+    )
+    monkeypatch.setattr(
+        "clickwheel.actions.sync_playlist",
+        lambda cfg, db, playlist, **kw: sync_result,
+    )
+    monkeypatch.setattr(
+        "clickwheel.actions.add_tracks_to_ipod",
+        lambda cfg, db, paths, **kw: sync_result,
+    )
+    monkeypatch.setattr(
+        "clickwheel.actions.collect_tracks_for_artist",
+        lambda db, artist: ["/music/A/Album1/01.mp3"],
+    )
+    monkeypatch.setattr(
+        "clickwheel.actions.remove_tracks_from_ipod",
+        lambda cfg, db, paths, **kw: remove_result,
+    )
+    monkeypatch.setattr(
+        "clickwheel.actions.remove_artist_from_ipod",
+        lambda cfg, artist, **kw: remove_result,
+    )
+    monkeypatch.setattr(
+        "clickwheel.actions.remove_ipod_playlist",
+        lambda cfg, name: remove_result,
+    )
+
+    ctx = _StubCtx()
+    _conform(ip.sync_playlist_to_ipod, playlist="mix", ctx=ctx)
+    _conform(ip.add_tracks_to_ipod, paths=["/music/A/Album1/01.mp3"], ctx=ctx)
+    _conform(ip.add_artist_to_ipod, artist="ArtistA", ctx=ctx)
+    _conform(ip.remove_tracks_from_ipod, paths=["/music/A/Album1/01.mp3"], ctx=ctx)
+    _conform(ip.remove_artist_from_ipod, artist="ArtistA", ctx=ctx)
+    _conform(ip.remove_ipod_playlist, name="mix")
+
+
+def test_conformance_submit_scrobbles(tmp_path, monkeypatch):
+    from clickwheel.mcp.tools.scrobble import submit_scrobbles
+
+    _setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        "clickwheel.actions.collect_ipod_plays",
+        lambda cfg, db: {"plays_found": 0, "new_cached": 0, "oldest_age_days": None},
+    )
+    monkeypatch.setattr(
+        "clickwheel.actions.submit_pending_scrobbles",
+        lambda cfg, db: types.SimpleNamespace(
+            submitted=0, failed=0, remaining_pending=0
+        ),
+    )
+
+    _conform(submit_scrobbles, dry_run=True)
+    _conform(submit_scrobbles, dry_run=False)
