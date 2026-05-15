@@ -17,7 +17,7 @@ from clickwheel.mcp._runtime import (
 )
 
 
-@mcp.tool(annotations=READ_ONLY)
+@mcp.tool(title="Get pending scrobbles", annotations=READ_ONLY)
 def get_pending_scrobbles() -> list[dict]:
     """Cached iPod plays that haven't yet been submitted to Last.fm. Each
     entry has `artist`, `title`, `album`, `timestamp` (unix seconds), and
@@ -44,7 +44,7 @@ def get_pending_scrobbles() -> list[dict]:
         return render(text, result)
 
 
-@mcp.tool(annotations=MUTATION_OPEN_WORLD)
+@mcp.tool(title="Submit scrobbles", annotations=MUTATION_OPEN_WORLD)
 def submit_scrobbles(
     dry_run: Annotated[
         bool,

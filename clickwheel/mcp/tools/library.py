@@ -21,7 +21,11 @@ from clickwheel.mcp.ui import ui_tool_meta
 from clickwheel.mcp.ui_resources import LIBRARY_STATS_URI
 
 
-@mcp.tool(annotations=READ_ONLY, meta=ui_tool_meta(LIBRARY_STATS_URI))
+@mcp.tool(
+    title="Library stats",
+    annotations=READ_ONLY,
+    meta=ui_tool_meta(LIBRARY_STATS_URI),
+)
 def library_stats() -> dict:
     """High-level stats for the indexed music library.
 
@@ -56,7 +60,7 @@ def library_stats() -> dict:
         return render(text, data)
 
 
-@mcp.tool(annotations=READ_ONLY)
+@mcp.tool(title="List artists", annotations=READ_ONLY)
 def list_artists(
     limit: Annotated[
         int,
@@ -87,7 +91,7 @@ def list_artists(
         return render(text, result)
 
 
-@mcp.tool(annotations=READ_ONLY)
+@mcp.tool(title="List albums by artist", annotations=READ_ONLY)
 def list_albums_by_artist(
     artist: Annotated[
         str,
@@ -124,7 +128,7 @@ def list_albums_by_artist(
         return render(text, result)
 
 
-@mcp.tool(annotations=READ_ONLY)
+@mcp.tool(title="List tracks by album", annotations=READ_ONLY)
 def list_tracks_by_album(
     artist: Annotated[
         str,
@@ -161,7 +165,7 @@ def list_tracks_by_album(
         return render(text, result)
 
 
-@mcp.tool(annotations=READ_ONLY)
+@mcp.tool(title="Search tracks", annotations=READ_ONLY)
 def search_tracks(
     query: Annotated[
         str,
@@ -217,7 +221,7 @@ def search_tracks(
         return render(text, result)
 
 
-@mcp.tool(annotations=READ_ONLY)
+@mcp.tool(title="Library health", annotations=READ_ONLY)
 def library_health() -> dict:
     """Setup probe: does the library directory exist, when was the last
     scan, how many indexed tracks are now missing from disk, is auto-scan

@@ -82,14 +82,17 @@ def register_ui_resource(
     uri: str,
     html: str,
     name: str | None = None,
+    title: str | None = None,
     description: str | None = None,
     csp: dict[str, Any] | None = None,
 ) -> Callable[[], str]:
     """Register a `ui://` resource that returns inlined HTML.
 
-    `csp` is forwarded under the resource's `_meta.ui.csp` so the host
-    knows which extra origins (e.g. an artwork CDN) the iframe is allowed
-    to load — without it, the host's default CSP blocks external assets.
+    `name` is the programmatic slug; `title` is the human display string
+    hosts render. `csp` is forwarded under the resource's `_meta.ui.csp`
+    so the host knows which extra origins (e.g. an artwork CDN) the iframe
+    is allowed to load — without it, the host's default CSP blocks
+    external assets.
     """
     meta: dict[str, Any] = {}
     if csp is not None:
@@ -98,6 +101,7 @@ def register_ui_resource(
     @mcp.resource(
         uri,
         name=name,
+        title=title,
         description=description,
         mime_type=RESOURCE_MIME_TYPE,
         meta=meta or None,

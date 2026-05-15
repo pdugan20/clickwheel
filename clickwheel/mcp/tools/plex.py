@@ -40,7 +40,7 @@ from clickwheel.mcp._runtime import (
 logger = logging.getLogger(__name__)
 
 
-@mcp.tool(annotations=READ_ONLY)
+@mcp.tool(title="Plex health", annotations=READ_ONLY)
 def plex_health() -> dict:
     """Probe the Plex integration end-to-end without changing anything.
 
@@ -76,7 +76,7 @@ def plex_health() -> dict:
     return render(text, {"ok": result.ok, "stages": stages})
 
 
-@mcp.tool(annotations=DESTRUCTIVE)
+@mcp.tool(title="Sync playlist to Plex", annotations=DESTRUCTIVE)
 def sync_playlist_to_plex(
     playlist: Annotated[
         str, Field(description="Saved clickwheel playlist name to push to Plex.")

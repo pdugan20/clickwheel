@@ -20,7 +20,7 @@ from clickwheel.mcp._runtime import (
 )
 
 
-@mcp.tool(annotations=READ_ONLY)
+@mcp.tool(title="List playlists", annotations=READ_ONLY)
 def list_playlists() -> list[dict]:
     """All saved playlists (the curated, named collections — workout
     mix, road trip, etc.) with track counts, total size in bytes, and
@@ -55,7 +55,7 @@ def list_playlists() -> list[dict]:
         return render(text, result)
 
 
-@mcp.tool(annotations=READ_ONLY)
+@mcp.tool(title="Get playlist", annotations=READ_ONLY)
 def get_playlist(
     name: Annotated[str, Field(description="Playlist name.")],
 ) -> dict:
@@ -90,7 +90,7 @@ def get_playlist(
         return render(text, data)
 
 
-@mcp.tool(annotations=READ_ONLY)
+@mcp.tool(title="List playlist tracks", annotations=READ_ONLY)
 def list_playlist_tracks(
     name: Annotated[str, Field(description="Playlist name.")],
     limit: Annotated[
@@ -127,7 +127,7 @@ def list_playlist_tracks(
         return render(text, tracks)
 
 
-@mcp.tool(annotations=MUTATION_NON_IDEMPOTENT)
+@mcp.tool(title="Create playlist", annotations=MUTATION_NON_IDEMPOTENT)
 def create_playlist(
     name: Annotated[str, Field(description="New playlist name (must not exist).")],
     track_paths: Annotated[
@@ -171,7 +171,7 @@ def create_playlist(
         return render(text, data)
 
 
-@mcp.tool(annotations=MUTATION)
+@mcp.tool(title="Update playlist", annotations=MUTATION)
 def update_playlist(
     name: Annotated[str, Field(description="Playlist name (created if missing).")],
     track_paths: Annotated[
@@ -199,7 +199,7 @@ def update_playlist(
         return render(text, data)
 
 
-@mcp.tool(annotations=DESTRUCTIVE)
+@mcp.tool(title="Delete playlist", annotations=DESTRUCTIVE)
 def delete_playlist(
     name: Annotated[str, Field(description="Playlist name.")],
 ) -> dict:
@@ -222,7 +222,7 @@ def delete_playlist(
         return render(f"Deleted '{name}'.", {"deleted": True, "name": name})
 
 
-@mcp.tool(annotations=MUTATION)
+@mcp.tool(title="Add artist to playlist", annotations=MUTATION)
 def add_artist_to_playlist(
     playlist: Annotated[str, Field(description="Playlist name (created if missing).")],
     artist: Annotated[str, Field(description="Artist name (exact match).")],
@@ -252,7 +252,7 @@ def add_artist_to_playlist(
         return render(text, data)
 
 
-@mcp.tool(annotations=MUTATION)
+@mcp.tool(title="Heal playlist", annotations=MUTATION)
 def heal_playlist(
     name: Annotated[str, Field(description="Playlist name.")],
 ) -> dict:
@@ -290,7 +290,7 @@ def heal_playlist(
         return render(text, result)
 
 
-@mcp.tool(annotations=MUTATION)
+@mcp.tool(title="Remove artist from playlist", annotations=MUTATION)
 def remove_artist_from_playlist(
     playlist: Annotated[str, Field(description="Playlist name.")],
     artist: Annotated[str, Field(description="Artist name (exact match).")],
