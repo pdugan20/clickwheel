@@ -62,7 +62,11 @@ def _summarize_track(t: dict) -> dict:
     }
 
 
-@mcp.tool(annotations=READ_ONLY, meta=ui_tool_meta(IPOD_CAPACITY_URI))
+@mcp.tool(
+    title="Get iPod contents",
+    annotations=READ_ONLY,
+    meta=ui_tool_meta(IPOD_CAPACITY_URI),
+)
 def get_ipod_contents() -> dict:
     """High-level snapshot of what's on the iPod: capacity, used/free space,
     track/artist/album counts, and the top 25 artists by track count.
@@ -114,7 +118,7 @@ def get_ipod_contents() -> dict:
         return render(text, data)
 
 
-@mcp.tool(annotations=READ_ONLY)
+@mcp.tool(title="List iPod playlists", annotations=READ_ONLY)
 def list_ipod_playlists() -> list[dict]:
     """List the playlists currently on the iPod (the ones visible under
     Music → Playlists on the device).
@@ -149,7 +153,7 @@ def list_ipod_playlists() -> list[dict]:
         return render(text, result)
 
 
-@mcp.tool(annotations=READ_ONLY)
+@mcp.tool(title="List iPod tracks", annotations=READ_ONLY)
 def list_ipod_tracks(
     artist: Annotated[
         str | None,
@@ -200,6 +204,7 @@ def list_ipod_tracks(
 
 
 @mcp.tool(
+    title="Sync playlist to iPod",
     annotations=DESTRUCTIVE,
     meta=ui_tool_meta(SYNC_RESULT_URI),
 )
@@ -399,6 +404,7 @@ async def sync_playlist_to_ipod(
 
 
 @mcp.tool(
+    title="Add tracks to iPod",
     annotations=DESTRUCTIVE,
     meta=ui_tool_meta(SYNC_RESULT_URI),
 )
@@ -518,6 +524,7 @@ async def add_tracks_to_ipod(
 
 
 @mcp.tool(
+    title="Add artist to iPod",
     annotations=DESTRUCTIVE,
     meta=ui_tool_meta(SYNC_RESULT_URI),
 )
@@ -627,6 +634,7 @@ async def add_artist_to_ipod(
 
 
 @mcp.tool(
+    title="Remove tracks from iPod",
     annotations=DESTRUCTIVE,
     meta=ui_tool_meta(SYNC_RESULT_URI),
 )
@@ -731,6 +739,7 @@ async def remove_tracks_from_ipod(
 
 
 @mcp.tool(
+    title="Remove artist from iPod",
     annotations=DESTRUCTIVE,
     meta=ui_tool_meta(SYNC_RESULT_URI),
 )
@@ -822,6 +831,7 @@ async def remove_artist_from_ipod(
 
 
 @mcp.tool(
+    title="Remove iPod playlist",
     annotations=DESTRUCTIVE,
     meta=ui_tool_meta(SYNC_RESULT_URI),
 )
@@ -872,7 +882,7 @@ def remove_ipod_playlist(
         return render(text, data)
 
 
-@mcp.tool(annotations=MUTATION)
+@mcp.tool(title="Eject iPod", annotations=MUTATION)
 def eject_ipod() -> dict:
     """Safely unmount the iPod via `diskutil eject`. Idempotent: if no
     iPod is currently mounted, returns `{"ejected": False,

@@ -24,7 +24,8 @@ register_ui_resource(
     mcp,
     uri=IPOD_CAPACITY_URI,
     html=IPOD_CAPACITY_HTML,
-    name="clickwheel — iPod capacity",
+    name="ipod-capacity",
+    title="clickwheel — iPod capacity",
     description=(
         "Stacked capacity bar for the connected iPod, segmented by top "
         "artists with free space on the right. Consumes the structured "
@@ -37,7 +38,8 @@ register_ui_resource(
     mcp,
     uri=LIBRARY_STATS_URI,
     html=LIBRARY_STATS_HTML,
-    name="clickwheel — library overview",
+    name="library-stats",
+    title="clickwheel — library overview",
     description=(
         "Headline counts (tracks, artists, albums, size, hours) plus a "
         "format-breakdown bar. Consumes the structured payload from "
@@ -50,7 +52,8 @@ register_ui_resource(
     mcp,
     uri=SYNC_RESULT_URI,
     html=SYNC_RESULT_HTML,
-    name="clickwheel — sync result",
+    name="sync-result",
+    title="clickwheel — sync result",
     description=(
         "Live progress + post-completion summary for any iPod write "
         "(sync_playlist_to_ipod, add_tracks_to_ipod, add_artist_to_ipod, "
@@ -73,7 +76,8 @@ SYNC_PROGRESS_URI = "state://clickwheel/sync-progress"
 
 @mcp.resource(
     SYNC_PROGRESS_URI,
-    name="clickwheel — sync progress (live)",
+    name="sync-progress",
+    title="clickwheel — sync progress (live)",
     description=(
         "Snapshot of the in-flight sync/add/remove operation. Kind, "
         "current, total, last-track message, done flag. Polled by the "

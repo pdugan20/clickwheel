@@ -13,7 +13,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 from mcp.server.fastmcp import FastMCP
-from mcp.types import CallToolResult, TextContent, ToolAnnotations
+from mcp.types import CallToolResult, Icon, TextContent, ToolAnnotations
 
 from clickwheel.config import Config, load_config
 from clickwheel.db import Database
@@ -161,7 +161,41 @@ LANGUAGE:
 """
 
 
-mcp = FastMCP(name="clickwheel", instructions=INSTRUCTIONS)
+# Server icon: the clickwheel mark — a white iPod-and-click-wheel glyph
+# on a rounded orange tile. Inlined as a base64 SVG data URI so the stdio
+# server is self-contained — there's no HTTP endpoint to serve an asset
+# file from.
+SERVER_ICON = Icon(
+    src=(
+        "data:image/svg+xml;base64,"
+        "PHN2ZyB3aWR0aD0iMTIwIiBoZWlnaHQ9IjEyMCIgdmlld0JveD0iMCAwIDEyMCAx"
+        "MjAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2"
+        "ZyI+CjxyZWN0IHdpZHRoPSIxMjAiIGhlaWdodD0iMTIwIiByeD0iMTIiIGZpbGw9"
+        "IiNGRjlBMDYiLz4KPHBhdGggZD0iTTc3LjAwMSAxOEM4MS40MTkxIDE4LjAwMDEg"
+        "ODUuMDAxIDIxLjU4MTggODUuMDAxIDI2Vjk0LjYxNDNDODUuMDAxIDk5LjAzMjQg"
+        "ODEuNDE5MSAxMDIuNjE0IDc3LjAwMSAxMDIuNjE0SDQyQzM3LjU4MTcgMTAyLjYx"
+        "NCAzNCA5OS4wMzI1IDM0IDk0LjYxNDNWMjZDMzQgMjEuNTgxNyAzNy41ODE3IDE4"
+        "IDQyIDE4SDc3LjAwMVpNNTkuNSA2MC44ODY3QzUwLjUzOCA2MC44ODcgNDMuMjcy"
+        "NSA2OC4xNTIzIDQzLjI3MjUgNzcuMTE0M0M0My4yNzI2IDg2LjA3NjEgNTAuNTM4"
+        "MSA5My4zNDA2IDU5LjUgOTMuMzQwOEM2OC40NjIxIDkzLjM0MDggNzUuNzI3NCA4"
+        "Ni4wNzYyIDc1LjcyNzUgNzcuMTE0M0M3NS43Mjc1IDY4LjE1MjEgNjguNDYyMiA2"
+        "MC44ODY3IDU5LjUgNjAuODg2N1pNNDcuMTE0MyAyNC45NTMxQzQ0LjM1MyAyNC45"
+        "NTMxIDQyLjExNDUgMjcuMTkxOSA0Mi4xMTQzIDI5Ljk1MzFWNDcuNzcxNUM0Mi4x"
+        "MTQzIDUwLjUzMjkgNDQuMzUyOCA1Mi43NzE1IDQ3LjExNDMgNTIuNzcxNUg3MS44"
+        "ODY3Qzc0LjY0ODEgNTIuNzcxNSA3Ni44ODY3IDUwLjUzMjkgNzYuODg2NyA0Ny43"
+        "NzE1VjI5Ljk1MzFDNzYuODg2NSAyNy4xOTE5IDc0LjY0OCAyNC45NTMxIDcxLjg4"
+        "NjcgMjQuOTUzMUg0Ny4xMTQzWiIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTU5"
+        "LjU0NSA3MC42ODQ2QzU2LjAyNCA3MC42ODQ2IDUzLjE1ODIgNzMuNTUwNyA1My4x"
+        "NTgyIDc3LjA3MDZDNTMuMTU4MiA4MC41OTA1IDU2LjAyNCA4My40NTY2IDU5LjU0"
+        "NSA4My40NTY2QzYzLjA2NDUgODMuNDU2NiA2NS45MzAzIDgwLjU5MDUgNjUuOTMw"
+        "MyA3Ny4wNzA2QzY1LjkzMDMgNzMuNTUwNyA2My4wNjQ1IDcwLjY4NDYgNTkuNTQ1"
+        "IDcwLjY4NDZaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K"
+    ),
+    mimeType="image/svg+xml",
+    sizes=["any"],
+)
+
+mcp = FastMCP(name="clickwheel", instructions=INSTRUCTIONS, icons=[SERVER_ICON])
 
 
 # Advertise the MCP Apps extension in the initialize handshake so hosts
