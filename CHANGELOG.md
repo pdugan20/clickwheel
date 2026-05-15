@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/) and
 [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [0.7.0](https://github.com/pdugan20/clickwheel/compare/v0.6.1...v0.7.0) (2026-05-15)
+
+
+### Features
+
+* **mcp:** add tool titles, server icon, and resource display titles ([#18](https://github.com/pdugan20/clickwheel/issues/18)) ([d9d53bd](https://github.com/pdugan20/clickwheel/commit/d9d53bd1edfc60f146e3336929cd9ca9e5fc6555))
+* **mcp:** emit output schemas for all tools via typed return models ([#19](https://github.com/pdugan20/clickwheel/issues/19)) ([16898f4](https://github.com/pdugan20/clickwheel/commit/16898f42cd85b31f55dc316e4ce209a762fc81be))
+* **plex:** add optional plex playlist sync ([#12](https://github.com/pdugan20/clickwheel/issues/12)) ([d8afd75](https://github.com/pdugan20/clickwheel/commit/d8afd75ea6dd4334a9cc7007cc75b6685b635fd0))
+* **plex:** mcp tools, doctor command, and docs ([#13](https://github.com/pdugan20/clickwheel/issues/13)) ([b7a9094](https://github.com/pdugan20/clickwheel/commit/b7a90946da822e7237e09954925bbaa5bbb4d749))
+
+
+### Documentation
+
+* **plex:** drop design-rationale section ([#16](https://github.com/pdugan20/clickwheel/issues/16)) ([3d70d8d](https://github.com/pdugan20/clickwheel/commit/3d70d8d4d51600b9e3fbfa63107df252890044c6))
+* trim readme integrations, extract docs/lastfm.md ([#15](https://github.com/pdugan20/clickwheel/issues/15)) ([1277ffb](https://github.com/pdugan20/clickwheel/commit/1277ffba5e8d53128f25e2715e51be9b008f42d6))
+
 ## [0.6.1](https://github.com/pdugan20/clickwheel/compare/v0.6.0...v0.6.1) (2026-05-12)
 
 
