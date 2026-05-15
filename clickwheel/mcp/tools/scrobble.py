@@ -15,10 +15,11 @@ from clickwheel.mcp._runtime import (
     open_session,
     render,
 )
+from clickwheel.mcp.models import ScrobbleRecord, SubmitScrobblesResult
 
 
 @mcp.tool(title="Get pending scrobbles", annotations=READ_ONLY)
-def get_pending_scrobbles() -> list[dict]:
+def get_pending_scrobbles() -> list[ScrobbleRecord]:
     """Cached iPod plays that haven't yet been submitted to Last.fm. Each
     entry has `artist`, `title`, `album`, `timestamp` (unix seconds), and
     `duration_seconds`.
@@ -55,7 +56,7 @@ def submit_scrobbles(
             ),
         ),
     ] = False,
-) -> dict:
+) -> SubmitScrobblesResult:
     """Pull recent plays from the iPod and submit them to Last.fm.
 
     Workflow inside this one tool:

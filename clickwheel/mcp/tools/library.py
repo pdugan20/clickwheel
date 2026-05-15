@@ -17,6 +17,14 @@ from clickwheel.mcp._runtime import (
     open_session,
     render,
 )
+from clickwheel.mcp.models import (
+    AlbumSummary,
+    ArtistSummary,
+    FullTrack,
+    LibraryHealth,
+    LibraryStats,
+    LibraryTrack,
+)
 from clickwheel.mcp.ui import ui_tool_meta
 from clickwheel.mcp.ui_resources import LIBRARY_STATS_URI
 
@@ -26,7 +34,7 @@ from clickwheel.mcp.ui_resources import LIBRARY_STATS_URI
     annotations=READ_ONLY,
     meta=ui_tool_meta(LIBRARY_STATS_URI),
 )
-def library_stats() -> dict:
+def library_stats() -> LibraryStats:
     """High-level stats for the indexed music library.
 
     Returns total tracks/artists/albums, total size in bytes, total duration
@@ -66,7 +74,7 @@ def list_artists(
         int,
         Field(description="Max artists to return.", ge=1, le=5000),
     ] = 500,
-) -> list[dict]:
+) -> list[ArtistSummary]:
     """All artists in the indexed library, alphabetical, with track count,
     album count, and total size in bytes per artist. FLAC tracks are excluded
     (the iPod doesn't play FLAC).
@@ -97,7 +105,7 @@ def list_albums_by_artist(
         str,
         Field(description="Artist name (exact match, case-sensitive)."),
     ],
-) -> list[dict]:
+) -> list[AlbumSummary]:
     """Albums for a single artist, ordered by year then album title. Each
     entry includes track count, total size in bytes, and the year (if known).
 
@@ -138,7 +146,7 @@ def list_tracks_by_album(
         str,
         Field(description="Album title (exact match)."),
     ],
-) -> list[dict]:
+) -> list[FullTrack]:
     """All tracks on one album, ordered by disc/track number. Returns full
     track records: title, path, duration, file size, format, year, etc.
 
@@ -175,7 +183,7 @@ def search_tracks(
         int,
         Field(description="Max results.", ge=1, le=500),
     ] = 50,
-) -> list[dict]:
+) -> list[LibraryTrack]:
     """Case-insensitive substring search across artist, album, and title.
 
     When to use: FUZZY DISCOVERY only. The user describes a track they
@@ -222,7 +230,7 @@ def search_tracks(
 
 
 @mcp.tool(title="Library health", annotations=READ_ONLY)
-def library_health() -> dict:
+def library_health() -> LibraryHealth:
     """Setup probe: does the library directory exist, when was the last
     scan, how many indexed tracks are now missing from disk, is auto-scan
     enabled, etc.

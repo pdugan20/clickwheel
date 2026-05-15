@@ -36,12 +36,13 @@ from clickwheel.mcp._runtime import (
     open_session,
     render,
 )
+from clickwheel.mcp.models import PlexHealth, PlexSyncResult
 
 logger = logging.getLogger(__name__)
 
 
 @mcp.tool(title="Plex health", annotations=READ_ONLY)
-def plex_health() -> dict:
+def plex_health() -> PlexHealth:
     """Probe the Plex integration end-to-end without changing anything.
 
     Walks five stages: config (enabled + url + token set), plexapi
@@ -81,7 +82,7 @@ def sync_playlist_to_plex(
     playlist: Annotated[
         str, Field(description="Saved clickwheel playlist name to push to Plex.")
     ],
-) -> dict:
+) -> PlexSyncResult:
     """Push a clickwheel playlist into the user's Plex music library so
     it shows up in Plex web and Plexamp alongside the iPod sync.
 
