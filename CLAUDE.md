@@ -31,7 +31,7 @@ A Python CLI for syncing a music library to a classic iPod from a modern Mac.
 - `clickwheel fix` — clean up metadata via beets (requires `[fix]` extras)
 - `clickwheel select` — interactive iPod subset picker (questionary checkbox, auto-scans if stale)
 - `clickwheel playlist` — list saved playlists
-- `clickwheel edit` — add/remove artists (interactive questionary menus or `--add`/`--remove` flags)
+- `clickwheel edit` — add/remove artists, set a description (interactive questionary menus or `--add`/`--remove`/`--description` flags)
 - `clickwheel delete` — delete a playlist (with confirmation)
 - `clickwheel diff` — preview iPod sync changes (panel + colored tables)
 - `clickwheel sync` — push playlist to iPod (Rich Live table, confirmation)

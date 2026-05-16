@@ -93,8 +93,11 @@ What happens under the hood:
 1. clickwheel writes `road-trip.m3u` into `${music_dir}/.clickwheel-playlists/` (or your configured `plex_playlist_dir`). Each line is the Plex-side path to a track.
 2. Plex's `/playlists/upload` endpoint reads the M3U and resolves each line through its own indexer (the same one that built the library).
 3. The Plex playlist appears under your Music library and Plexamp picks it up automatically.
+4. If the clickwheel playlist has a description, it's applied to the Plex playlist's summary. M3U import can't carry a description, so this is a separate edit after upload.
 
 Re-syncing the same playlist **overwrites** the prior clickwheel-managed Plex playlist (idempotent). A user-created Plex playlist with the same name — one you made directly in Plexamp — is left alone; clickwheel only touches playlists it created.
+
+Set a playlist's description with `clickwheel select --description`, `clickwheel edit --description`, or the `set_playlist_description` MCP tool.
 
 ### Result reporting
 

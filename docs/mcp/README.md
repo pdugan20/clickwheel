@@ -60,7 +60,7 @@ The server includes a built-in `build_playlist` prompt that walks the model thro
 
 ## Tool reference
 
-25 tools + 1 prompt, grouped by domain.
+30 tools + 1 prompt, grouped by domain.
 
 ### Library (read)
 
@@ -77,11 +77,12 @@ The server includes a built-in `build_playlist` prompt that walks the model thro
 
 | Tool                          | What it does                                                          |
 | ----------------------------- | --------------------------------------------------------------------- |
-| `list_playlists`              | All saved playlists with track counts and total size                  |
+| `list_playlists`              | All saved playlists with track counts, total size, and descriptions   |
 | `get_playlist`                | One playlist's summary (use `list_playlist_tracks` for the full list) |
 | `list_playlist_tracks`        | Paginated tracks in a playlist, in order                              |
-| `create_playlist`             | New playlist from a list of track paths                               |
-| `update_playlist`             | Replace a playlist's contents wholesale                               |
+| `create_playlist`             | New playlist from track paths, with an optional description           |
+| `update_playlist`             | Replace a playlist's contents wholesale (optional description)        |
+| `set_playlist_description`    | Set a playlist's description without touching its tracks              |
 | `add_artist_to_playlist`      | Add every track by an artist (skips duplicates)                       |
 | `remove_artist_from_playlist` | Remove every track by an artist                                       |
 | `heal_playlist`               | Drop references to tracks no longer on disk                           |
@@ -101,6 +102,13 @@ The server includes a built-in `build_playlist` prompt that walks the model thro
 | `remove_artist_from_ipod` | Drop every track by an artist from the iPod (destructive; tracks stay in the library)   |
 | `remove_ipod_playlist`    | Delete a playlist artifact from the iPod without touching its tracks (destructive)      |
 | `eject_ipod`              | Safely unmount via `diskutil eject`                                                     |
+
+### Plex
+
+| Tool                    | What it does                                                             |
+| ----------------------- | ------------------------------------------------------------------------ |
+| `plex_health`           | Probe the Plex integration end-to-end (config, reachability, path remap) |
+| `sync_playlist_to_plex` | Push a saved playlist to the Plex music library (destructive)            |
 
 ### Last.fm scrobbling
 
