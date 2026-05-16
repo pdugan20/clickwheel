@@ -41,22 +41,22 @@ clickwheel sync      # push to the iPod
 
 ## Commands
 
-| Command                  | Description                                                             |
-| ------------------------ | ----------------------------------------------------------------------- |
-| `clickwheel scan`        | Index your music library and report on metadata quality                 |
-| `clickwheel fix`         | Clean up metadata, fetch album art, fill genres via beets               |
-| `clickwheel select`      | Interactive picker — checkbox artist selection                          |
-| `clickwheel playlist`    | List saved playlists or show details for one                            |
-| `clickwheel edit`        | Add or remove artists via interactive menus or `--add`/`--remove` flags |
-| `clickwheel heal`        | Drop playlist references to tracks no longer on disk                    |
-| `clickwheel delete`      | Delete a saved playlist (with confirmation)                             |
-| `clickwheel diff`        | Preview what would be added or removed on the iPod                      |
-| `clickwheel sync`        | Push your playlist to the iPod (with live progress table)               |
-| `clickwheel sync-plex`   | Push playlist(s) to your Plex music library (Plexamp picks them up)     |
-| `clickwheel plex doctor` | Diagnose Plex configuration — one-shot setup check                      |
-| `clickwheel ls`          | Show what's on the iPod                                                 |
-| `clickwheel eject`       | Safely unmount the iPod                                                 |
-| `clickwheel scrobble`    | Submit recent iPod listens to Last.fm                                   |
+| Command                  | Description                                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------------------------- |
+| `clickwheel scan`        | Index your music library and report on metadata quality                                           |
+| `clickwheel fix`         | Clean up metadata, fetch album art, fill genres via beets                                         |
+| `clickwheel select`      | Interactive picker — checkbox artist selection                                                    |
+| `clickwheel playlist`    | List saved playlists or show details for one                                                      |
+| `clickwheel edit`        | Add/remove artists or set a description (interactive menus or `--add`/`--remove`/`--description`) |
+| `clickwheel heal`        | Drop playlist references to tracks no longer on disk                                              |
+| `clickwheel delete`      | Delete a saved playlist (with confirmation)                                                       |
+| `clickwheel diff`        | Preview what would be added or removed on the iPod                                                |
+| `clickwheel sync`        | Push your playlist to the iPod (with live progress table)                                         |
+| `clickwheel sync-plex`   | Push playlist(s) to your Plex music library (Plexamp picks them up)                               |
+| `clickwheel plex doctor` | Diagnose Plex configuration — one-shot setup check                                                |
+| `clickwheel ls`          | Show what's on the iPod                                                                           |
+| `clickwheel eject`       | Safely unmount the iPod                                                                           |
+| `clickwheel scrobble`    | Submit recent iPod listens to Last.fm                                                             |
 
 ## Configuration
 
@@ -93,7 +93,7 @@ pipx inject clickwheel 'clickwheel[mcp]'
 claude mcp add clickwheel clickwheel-mcp --scope user
 ```
 
-The server exposes 21 tools across library, playlist, iPod, and Last.fm domains, plus a `build_playlist` prompt with anti-hallucination rules. Destructive operations (`delete_playlist`, `sync_playlist_to_ipod`) are gated by client confirmation.
+The server exposes 30 tools across library, playlist, iPod, Plex, and Last.fm domains, plus a `build_playlist` prompt with anti-hallucination rules. Destructive operations (`delete_playlist`, `sync_playlist_to_ipod`) are gated by client confirmation.
 
 For Claude Desktop config, the full tool reference, and other clients (Cursor, Continue, Cline, Zed), see [`docs/mcp/`](docs/mcp/).
 

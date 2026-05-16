@@ -517,11 +517,18 @@ def playlist_exists(db: Database, name: str) -> bool:
     return row is not None
 
 
-def save_playlist(db: Database, name: str, track_paths: list[str]) -> None:
-    db.save_playlist(name, track_paths)
+def save_playlist(
+    db: Database, name: str, track_paths: list[str], description: str | None = None
+) -> None:
+    db.save_playlist(name, track_paths, description)
 
 
-def create_playlist(db: Database, name: str, track_paths: list[str]) -> int:
+def create_playlist(
+    db: Database,
+    name: str,
+    track_paths: list[str],
+    description: str | None = None,
+) -> int:
     """Create a new playlist. Raises PlaylistAlreadyExistsError if `name`
     is taken — callers should use `update_playlist` to overwrite.
 
@@ -533,21 +540,38 @@ def create_playlist(db: Database, name: str, track_paths: list[str]) -> int:
             f"Playlist '{name}' already exists. "
             "Use update_playlist to replace its contents."
         )
-    db.save_playlist(name, track_paths)
+    db.save_playlist(name, track_paths, description)
     return len(db.get_playlist(name))
 
 
 def update_playlist(
-    db: Database, name: str, track_paths: list[str]
+    db: Database,
+    name: str,
+    track_paths: list[str],
+    description: str | None = None,
 ) -> tuple[int, bool]:
     """Replace a playlist's contents (or create it if it doesn't exist).
+
+    `description=None` leaves any existing description untouched.
 
     Returns (track_count, replaced) — `replaced` is True if a playlist by
     this name already existed.
     """
     replaced = playlist_exists(db, name)
-    db.save_playlist(name, track_paths)
+    db.save_playlist(name, track_paths, description)
     return len(db.get_playlist(name)), replaced
+
+
+def set_playlist_description(db: Database, name: str, description: str) -> None:
+    """Set a playlist's description without touching its tracks. Raises
+    PlaylistNotFoundError if the playlist doesn't exist."""
+    if not db.set_playlist_description(name, description):
+        raise PlaylistNotFoundError(f"Playlist '{name}' not found.")
+
+
+def get_playlist_description(db: Database, name: str) -> str | None:
+    """Return a playlist's description, or None if unset / no such playlist."""
+    return db.get_playlist_description(name)
 
 
 def delete_playlist(db: Database, name: str) -> bool:
@@ -1548,6 +1572,13 @@ def sync_playlist_to_plex(
         raise PlexNotConfiguredError(str(exc)) from exc
 
     playlist = _plex.upload_playlist(plex, section, playlist_name, m3u_plex)
+
+    # Carry the clickwheel-side description over to the Plex playlist's
+    # summary. M3U import can't convey a description, so this is a
+    # separate edit call after the playlist exists.
+    description = db.get_playlist_description(playlist_name)
+    if description:
+        _plex.set_playlist_summary(playlist, description)
 
     return PlexSyncResult(
         pushed=len(tracks),

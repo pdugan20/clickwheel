@@ -167,6 +167,9 @@ def fix(
 @app.command()
 def select(
     playlist_name: str = typer.Option("ipod", "--name", "-n", help="Playlist name"),
+    description: str = typer.Option(
+        "", "--description", "-d", help="Optional playlist description"
+    ),
     no_scan: bool = typer.Option(
         False, "--no-scan", help="Skip automatic library scan"
     ),
@@ -229,7 +232,7 @@ def select(
         warn(f"Over capacity by {_fmt_size(over)}.")
 
     if selected_paths:
-        actions.save_playlist(db, playlist_name, selected_paths)
+        actions.save_playlist(db, playlist_name, selected_paths, description or None)
         success(
             f"Playlist '{playlist_name}' saved — "
             f"{len(selected_paths)} tracks, {_fmt_size(selected_size)}"
@@ -274,6 +277,9 @@ def playlist(
             )
 
         print_table(t)
+        desc = actions.get_playlist_description(db, name)
+        if desc:
+            dim(desc)
         total_gb = total_size / (1024 * 1024 * 1024)
         status(f"\n{len(tracks)} tracks, {total_gb:.1f} GB")
     else:
@@ -285,13 +291,20 @@ def playlist(
 
         t = table(title="Playlists")
         t.add_column("Name")
+        t.add_column("Description")
         t.add_column("Tracks", justify="right")
         t.add_column("Size", justify="right")
         t.add_column("Updated")
 
         for p in playlists:
             size_gb = (p["total_bytes"] or 0) / (1024 * 1024 * 1024)
-            t.add_row(p["name"], str(p["tracks"]), f"{size_gb:.1f} GB", p["updated_at"])
+            t.add_row(
+                p["name"],
+                p["description"] or "",
+                str(p["tracks"]),
+                f"{size_gb:.1f} GB",
+                p["updated_at"],
+            )
 
         print_table(t)
 
@@ -386,6 +399,9 @@ def edit(
     playlist_name: str = typer.Argument("ipod", help="Playlist to edit"),
     add: list[str] = typer.Option([], "--add", "-a", help="Artist to add"),
     remove: list[str] = typer.Option([], "--remove", "-r", help="Artist to remove"),
+    description: str = typer.Option(
+        "", "--description", "-d", help="Set the playlist description"
+    ),
     no_scan: bool = typer.Option(
         False, "--no-scan", help="Skip automatic library scan"
     ),
@@ -396,8 +412,8 @@ def edit(
     if not no_scan:
         maybe_auto_scan(cfg, db)
 
-    # Non-interactive mode: --add and/or --remove flags
-    if add or remove:
+    # Non-interactive mode: --add / --remove / --description flags
+    if add or remove or description:
         capacity = cfg.ipod_capacity_bytes
 
         for artist in add:
@@ -413,6 +429,18 @@ def edit(
                 info(f"- {artist}: {removed} tracks removed")
             else:
                 warn(f"'{artist}' not in playlist.")
+
+        if description:
+            try:
+                actions.set_playlist_description(db, playlist_name, description)
+                confirm(f'Description set for "{playlist_name}"')
+            except actions.PlaylistNotFoundError:
+                error(
+                    f"Playlist '{playlist_name}' not found. Add artists "
+                    "first, or run `clickwheel select` to create it."
+                )
+                db.close()
+                raise typer.Exit(1) from None
 
         final_size = actions.get_playlist_size(db, playlist_name)
         tracks = db.get_playlist(playlist_name)

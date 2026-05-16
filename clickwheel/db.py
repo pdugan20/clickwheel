@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS tracks (
 CREATE TABLE IF NOT EXISTS playlists (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT UNIQUE NOT NULL,
+    description TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -91,6 +92,13 @@ class Database:
             self.conn.execute("ALTER TABLE tracks ADD COLUMN mtime REAL")
         if "missing_since" not in columns:
             self.conn.execute("ALTER TABLE tracks ADD COLUMN missing_since TIMESTAMP")
+
+        pl_columns = {
+            row["name"]
+            for row in self.conn.execute("PRAGMA table_info(playlists)").fetchall()
+        }
+        if "description" not in pl_columns:
+            self.conn.execute("ALTER TABLE playlists ADD COLUMN description TEXT")
 
     def upsert_track(self, track: dict) -> None:
         """Insert or update a track record."""
@@ -214,15 +222,32 @@ class Database:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def save_playlist(self, name: str, track_paths: list[str]) -> None:
-        """Create or replace a playlist with the given tracks."""
-        self.conn.execute(
-            """
-            INSERT INTO playlists (name) VALUES (?)
-            ON CONFLICT(name) DO UPDATE SET updated_at = CURRENT_TIMESTAMP
-        """,
-            (name,),
-        )
+    def save_playlist(
+        self, name: str, track_paths: list[str], description: str | None = None
+    ) -> None:
+        """Create or replace a playlist with the given tracks.
+
+        `description=None` leaves any existing description untouched (a
+        fresh playlist gets a NULL description); pass a string to set it.
+        """
+        if description is None:
+            self.conn.execute(
+                """
+                INSERT INTO playlists (name) VALUES (?)
+                ON CONFLICT(name) DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+            """,
+                (name,),
+            )
+        else:
+            self.conn.execute(
+                """
+                INSERT INTO playlists (name, description) VALUES (?, ?)
+                ON CONFLICT(name) DO UPDATE SET
+                    updated_at = CURRENT_TIMESTAMP,
+                    description = excluded.description
+            """,
+                (name, description),
+            )
         playlist_id = self.conn.execute(
             "SELECT id FROM playlists WHERE name = ?", (name,)
         ).fetchone()["id"]
@@ -306,6 +331,7 @@ class Database:
         rows = self.conn.execute("""
             SELECT
                 p.name,
+                p.description,
                 p.created_at,
                 p.updated_at,
                 COUNT(pt.track_id) as tracks,
@@ -317,6 +343,23 @@ class Database:
             ORDER BY p.name
         """).fetchall()
         return [dict(r) for r in rows]
+
+    def get_playlist_description(self, name: str) -> str | None:
+        """Return a playlist's description, or None if unset / no such playlist."""
+        row = self.conn.execute(
+            "SELECT description FROM playlists WHERE name = ?", (name,)
+        ).fetchone()
+        return row["description"] if row else None
+
+    def set_playlist_description(self, name: str, description: str) -> bool:
+        """Set a playlist's description. Returns False if no such playlist."""
+        cur = self.conn.execute(
+            "UPDATE playlists SET description = ?, updated_at = CURRENT_TIMESTAMP "
+            "WHERE name = ?",
+            (description, name),
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
 
     def delete_playlist(self, name: str) -> bool:
         """Delete a playlist by name. Returns True if it existed."""
