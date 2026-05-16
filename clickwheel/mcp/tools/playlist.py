@@ -27,6 +27,7 @@ from clickwheel.mcp.models import (
     PlaylistDetail,
     PlaylistSummary,
     RemoveArtistFromPlaylistResult,
+    SetPlaylistDescriptionResult,
     UpdatePlaylistResult,
 )
 
@@ -90,6 +91,7 @@ def get_playlist(
         size = actions.get_playlist_size(db, name)
         data = {
             "name": name,
+            "description": actions.get_playlist_description(db, name),
             "track_count": len(tracks),
             "size_bytes": size,
             "artists": artists,
@@ -150,6 +152,16 @@ def create_playlist(
             ),
         ),
     ],
+    description: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Optional free-text description. Shown in playlist "
+                "listings and carried over to Plex as the playlist "
+                "summary when synced via sync_playlist_to_plex."
+            ),
+        ),
+    ] = None,
 ) -> CreatePlaylistResult:
     """Create a new named playlist (a curated collection — workout mix,
     road trip, etc.) with the given track paths. Errors if a playlist
@@ -173,7 +185,7 @@ def create_playlist(
     (`add_artist_to_playlist` / `update_playlist`).
     """
     with open_session() as (_cfg, db):
-        count = actions.create_playlist(db, name, track_paths)
+        count = actions.create_playlist(db, name, track_paths, description)
         data = {"name": name, "track_count": count}
         text = (
             f"Created '{name}' with {format_count(count, 'track')}. "
@@ -189,6 +201,15 @@ def update_playlist(
         list[str],
         Field(description="Absolute file paths from the library."),
     ],
+    description: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Optional free-text description. Omit to leave any "
+                "existing description untouched; pass a string to set it."
+            ),
+        ),
+    ] = None,
 ) -> UpdatePlaylistResult:
     """Replace a playlist's contents wholesale (or create it if it doesn't
     exist). Returns the new track count and `replaced` (True if a playlist
@@ -197,10 +218,13 @@ def update_playlist(
     When to use: rebuilding a playlist from scratch, or the user explicitly
     says "replace" / "set the playlist to ...".
 
+    To change only the description without rebuilding the track list, use
+    `set_playlist_description` instead.
+
     After this: `sync_playlist_to_ipod` to push the new contents.
     """
     with open_session() as (_cfg, db):
-        count, replaced = actions.update_playlist(db, name, track_paths)
+        count, replaced = actions.update_playlist(db, name, track_paths, description)
         data = {"name": name, "track_count": count, "replaced": replaced}
         verb = "Replaced" if replaced else "Created"
         text = (
@@ -208,6 +232,37 @@ def update_playlist(
             "Sync to iPod with `sync_playlist_to_ipod`."
         )
         return render(text, data)
+
+
+@mcp.tool(title="Set playlist description", annotations=MUTATION)
+def set_playlist_description(
+    name: Annotated[str, Field(description="Playlist name.")],
+    description: Annotated[
+        str,
+        Field(
+            description=(
+                "Free-text description to set. Replaces any existing "
+                "description; pass an empty string to clear it."
+            ),
+        ),
+    ],
+) -> SetPlaylistDescriptionResult:
+    """Set a saved playlist's description without touching its track list.
+
+    The description shows up in playlist listings and is carried over to
+    Plex as the playlist summary on the next `sync_playlist_to_plex`.
+
+    Errors if the playlist doesn't exist.
+
+    When to use: the user wants to label or describe an existing playlist
+    ("describe Upper Left as ..."). To set a description while creating or
+    rebuilding a playlist, pass `description` to `create_playlist` /
+    `update_playlist` instead.
+    """
+    with open_session() as (_cfg, db):
+        actions.set_playlist_description(db, name, description)
+        data = {"name": name, "description": description}
+        return render(f"Set the description for '{name}'.", data)
 
 
 @mcp.tool(title="Delete playlist", annotations=DESTRUCTIVE)

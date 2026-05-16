@@ -282,3 +282,44 @@ def test_remove_artist_from_playlist_can_remove_dead_refs(
     removed = populated_db.remove_artist_from_playlist("p", "ArtistA")
     assert removed == 2
     assert populated_db.get_playlist("p") == []
+
+
+# ---------------------------------------------------------------------------
+# Playlist descriptions
+# ---------------------------------------------------------------------------
+
+
+def test_playlist_description_save_and_get(populated_db: Database):
+    populated_db.save_playlist(
+        "described", ["/music/A/Album1/01 T1.mp3"], description="late-night picks"
+    )
+    assert populated_db.get_playlist_description("described") == "late-night picks"
+
+
+def test_get_playlist_description_unset_is_none(populated_db: Database):
+    populated_db.save_playlist("plain", ["/music/A/Album1/01 T1.mp3"])
+    assert populated_db.get_playlist_description("plain") is None
+    # No such playlist also returns None rather than raising.
+    assert populated_db.get_playlist_description("ghost") is None
+
+
+def test_save_playlist_none_description_preserves_existing(populated_db: Database):
+    paths = ["/music/A/Album1/01 T1.mp3"]
+    populated_db.save_playlist("p", paths, description="keep me")
+    # Re-saving without a description must NOT clobber the existing one.
+    populated_db.save_playlist("p", paths)
+    assert populated_db.get_playlist_description("p") == "keep me"
+
+
+def test_set_playlist_description(populated_db: Database):
+    populated_db.save_playlist("p", ["/music/A/Album1/01 T1.mp3"])
+    assert populated_db.set_playlist_description("p", "new text") is True
+    assert populated_db.get_playlist_description("p") == "new text"
+    # No such playlist -> False, no error.
+    assert populated_db.set_playlist_description("ghost", "x") is False
+
+
+def test_list_playlists_includes_description(populated_db: Database):
+    populated_db.save_playlist("p", ["/music/A/Album1/01 T1.mp3"], description="my mix")
+    pl = next(p for p in populated_db.list_playlists() if p["name"] == "p")
+    assert pl["description"] == "my mix"

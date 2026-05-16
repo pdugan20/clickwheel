@@ -169,3 +169,13 @@ def upload_playlist(
     return _Playlist.create(
         plex, title=name, section=section, m3ufilepath=m3u_plex_path
     )
+
+
+def set_playlist_summary(playlist: Playlist, summary: str) -> None:
+    """Set a Plex playlist's description (its `summary` field).
+
+    M3U import carries no description, so callers run this after
+    `upload_playlist` to mirror the clickwheel-side description onto the
+    Plex playlist. Raises plexapi's own exceptions on network/auth errors.
+    """
+    playlist.editSummary(summary)

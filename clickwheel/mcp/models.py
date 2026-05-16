@@ -107,6 +107,9 @@ class PlaylistSummary(BaseModel):
     """A saved clickwheel playlist with aggregate counts."""
 
     name: str = Field(description="Playlist name.")
+    description: str | None = Field(
+        description="Free-text playlist description, or null if unset."
+    )
     tracks: int = Field(description="Number of tracks in the playlist.")
     total_bytes: int = Field(
         description="Total size of the playlist's tracks in bytes."
@@ -212,9 +215,19 @@ class PlaylistDetail(BaseModel):
     """Result of `get_playlist`."""
 
     name: str = Field(description="Playlist name.")
+    description: str | None = Field(
+        description="Free-text playlist description, or null if unset."
+    )
     track_count: int = Field(description="Number of tracks in the playlist.")
     size_bytes: int = Field(description="Total size of the playlist's tracks in bytes.")
     artists: list[PlaylistArtistSummary] = Field(description="Per-artist breakdown.")
+
+
+class SetPlaylistDescriptionResult(BaseModel):
+    """Result of `set_playlist_description`."""
+
+    name: str = Field(description="Playlist name.")
+    description: str = Field(description="The description that was set.")
 
 
 class CreatePlaylistResult(BaseModel):

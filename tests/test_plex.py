@@ -396,3 +396,25 @@ def test_plex_doctor_handles_empty_library(
     sample_stage = next(s for s in result.stages if s.name == "sample track")
     assert sample_stage.ok is False
     assert "scan" in sample_stage.detail.lower()
+
+
+# ---------------------------------------------------------------------------
+# set_playlist_summary
+# ---------------------------------------------------------------------------
+
+
+def test_set_playlist_summary_calls_edit_summary():
+    """set_playlist_summary mirrors a clickwheel description onto a Plex
+    playlist via plexapi's editSummary()."""
+    from clickwheel.plex import set_playlist_summary
+
+    class _StubPlaylist:
+        def __init__(self) -> None:
+            self.summary: str | None = None
+
+        def editSummary(self, value: str) -> None:  # noqa: N802
+            self.summary = value
+
+    pl = _StubPlaylist()
+    set_playlist_summary(pl, "a tidy description")
+    assert pl.summary == "a tidy description"

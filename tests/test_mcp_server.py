@@ -776,6 +776,55 @@ def test_sync_playlist_to_plex_success(tmp_path, monkeypatch):
     assert "test" not in result.get("error", "")
 
 
+def test_sync_playlist_to_plex_sets_description(tmp_path, monkeypatch):
+    """A playlist with a clickwheel-side description pushes that text to
+    the Plex playlist's summary after upload."""
+    from clickwheel import plex as _plex
+    from clickwheel.mcp.tools.plex import sync_playlist_to_plex
+
+    cfg = _setup_plex(tmp_path, monkeypatch)
+    monkeypatch.setattr(_plex, "_import_plexapi", lambda: None)
+    db = Database(cfg.db_path)
+    db.save_playlist("p", ["/music/A/Album1/01.mp3"], description="road trip vibes")
+    db.commit()
+    db.close()
+
+    class _Section:
+        type = "artist"
+        title = "Music"
+        key = "4"
+
+    class _Library:
+        @staticmethod
+        def sections():
+            return [_Section()]
+
+    class _Server:
+        library = _Library()
+
+    class _UploadedPlaylist:
+        leafCount = 1  # noqa: N815
+        ratingKey = 7  # noqa: N815
+        title = "p"
+
+    summaries: list[str] = []
+    monkeypatch.setattr(_plex, "connect", lambda url, token: _Server())
+    monkeypatch.setattr(
+        _plex,
+        "upload_playlist",
+        lambda plex, section, name, m3u: _UploadedPlaylist(),
+    )
+    monkeypatch.setattr(
+        _plex,
+        "set_playlist_summary",
+        lambda playlist, summary: summaries.append(summary),
+    )
+
+    result = _call(sync_playlist_to_plex, playlist="p")
+    assert result["resolved"] == 1
+    assert summaries == ["road trip vibes"]
+
+
 # ---------------------------------------------------------------------------
 # Output-schema conformance
 #
@@ -817,7 +866,7 @@ def test_all_tools_emit_output_schema():
     from clickwheel.mcp._runtime import mcp
 
     tools = asyncio.run(mcp.list_tools())
-    assert len(tools) == 29
+    assert len(tools) == 30
     for t in tools:
         assert t.outputSchema, f"{t.name}: no outputSchema"
         assert t.outputSchema.get("properties"), f"{t.name}: schema has no properties"
@@ -852,6 +901,7 @@ def test_conformance_playlist_tools(tmp_path, monkeypatch):
     _conform(pl.add_artist_to_playlist, playlist="mix", artist="ArtistB")
     _conform(pl.remove_artist_from_playlist, playlist="mix", artist="ArtistB")
     _conform(pl.heal_playlist, name="mix")
+    _conform(pl.set_playlist_description, name="mix", description="a road trip mix")
     _conform(pl.delete_playlist, name="mix")
 
 

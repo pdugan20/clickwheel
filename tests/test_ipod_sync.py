@@ -322,3 +322,59 @@ def test_action_sync_playlist_passes_existing_through(tmp_path, monkeypatch):
     # The default merge behavior must be in effect — full_replace must NOT
     # be True. If anyone changes the default they'll trip this.
     assert full_replace_flags == [False]
+
+
+def test_sync_playlist_with_description_unaffected(tmp_path, monkeypatch):
+    """Regression: a description on the clickwheel playlist must not
+    affect the iPod sync path. The iPod writer never reads the playlists
+    table — it consumes IpodPlaylistSpec(name, tracks) — so a description
+    column is invisible to it. Syncing a described playlist must succeed
+    exactly as an undescribed one."""
+    from clickwheel import actions
+    from clickwheel.actions import Diff
+    from clickwheel.config import Config
+    from clickwheel.db import Database
+
+    music = tmp_path / "music"
+    music.mkdir()
+    cfg = Config(
+        music_dir=music,
+        project_dir=tmp_path,
+        ipod_mount=tmp_path / "ipod",
+        auto_scan=False,
+    )
+    cfg.ipod_mount.mkdir()
+
+    db = Database(cfg.db_path)
+    db.save_playlist("p", [], description="a described playlist")
+
+    monkeypatch.setattr(
+        actions, "compute_diff", lambda *a, **kw: Diff(playlist="p", to_add=[])
+    )
+    monkeypatch.setattr(actions, "require_ipod", lambda _cfg: {"fake": "db"})
+    monkeypatch.setattr("clickwheel.ipod.get_ipod_playlists", lambda _db: [])
+
+    def fake_write_ipod_db(
+        mount,
+        copied,
+        *,
+        full_replace=False,
+        playlist_specs=None,
+        overwrite_playlist_names=None,
+    ):
+        return True
+
+    import shutil as _shutil
+
+    monkeypatch.setattr(
+        _shutil, "disk_usage", lambda p: type("DU", (), {"free": 10**12})()
+    )
+    monkeypatch.setattr(
+        "clickwheel.ipod.sync.copy_tracks_to_ipod", lambda *a, **kw: ([], [])
+    )
+    monkeypatch.setattr("clickwheel.ipod.sync.write_ipod_db", fake_write_ipod_db)
+
+    result = actions.sync_playlist(cfg, db, "p", diff=Diff(playlist="p", to_add=[]))
+    db.close()
+
+    assert result.library_updated is True
