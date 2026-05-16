@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/) and
 [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [0.8.0](https://github.com/pdugan20/clickwheel/compare/v0.7.0...v0.8.0) (2026-05-16)
+
+
+### Features
+
+* **playlist:** add playlist descriptions, synced to Plex ([#20](https://github.com/pdugan20/clickwheel/issues/20)) ([687c07b](https://github.com/pdugan20/clickwheel/commit/687c07b129b3929ef9d306ad50d5d9bbeb6872b0))
+
 ## [0.7.0](https://github.com/pdugan20/clickwheel/compare/v0.6.1...v0.7.0) (2026-05-15)
 
 
