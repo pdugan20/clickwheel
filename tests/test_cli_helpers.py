@@ -87,3 +87,87 @@ def test_capacity_bar_over():
         assert "[ERROR]" not in result
     finally:
         output.console = original
+
+
+# ---------------------------------------------------------------------------
+# _run_beets_fix — scoping, timeouts, missing-beets handling
+# ---------------------------------------------------------------------------
+
+
+def _fix_cfg(tmp_path):
+    from clickwheel.config import Config
+
+    music = tmp_path / "music"
+    music.mkdir()
+    return Config(music_dir=music, project_dir=tmp_path, auto_scan=False)
+
+
+def test_run_beets_fix_missing_beets_exits_cleanly(tmp_path, monkeypatch):
+    """A missing `beet` binary raises FileNotFoundError from subprocess;
+    the pipeline must catch it and exit 1, not surface a traceback."""
+    import subprocess
+
+    import pytest
+    import typer
+
+    from clickwheel.cli import _run_beets_fix
+
+    cfg = _fix_cfg(tmp_path)
+
+    def fake_run(*_a, **_kw):
+        raise FileNotFoundError(2, "No such file or directory", "beet")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(typer.Exit) as exc:
+        _run_beets_fix(cfg, str(cfg.music_dir / "SomeAlbum"))
+    assert exc.value.exit_code == 1
+
+
+def test_run_beets_fix_phase_timeout_is_reported_not_raised(tmp_path, monkeypatch):
+    """A beets phase that exceeds the timeout must be reported as a failed
+    step — never propagate as an unhandled exception or hang."""
+    import subprocess
+    import types
+
+    from clickwheel.cli import _run_beets_fix
+
+    cfg = _fix_cfg(tmp_path)
+
+    def fake_run(cmd, **_kw):
+        if "version" in cmd:
+            return types.SimpleNamespace(returncode=0, stderr="")
+        raise subprocess.TimeoutExpired(cmd, 1)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    # Must return normally — the TimeoutExpired is caught per phase.
+    _run_beets_fix(cfg, str(cfg.music_dir / "SomeAlbum"))
+
+
+def test_run_beets_fix_scopes_every_call_to_a_temp_library(tmp_path, monkeypatch):
+    """Every beets invocation must run against a fresh temp library, never
+    the persistent one — that's what keeps fetchart/embedart/etc. scoped
+    to the target instead of the whole accumulated collection."""
+    import subprocess
+    import types
+
+    from clickwheel.cli import _run_beets_fix
+
+    cfg = _fix_cfg(tmp_path)
+    persistent_db = str(cfg.project_dir / "beets" / "library.db")
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, **_kw):
+        calls.append(list(cmd))
+        return types.SimpleNamespace(returncode=0, stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    _run_beets_fix(cfg, str(cfg.music_dir / "SomeAlbum"))
+
+    beet_calls = [c for c in calls if "version" not in c]
+    assert beet_calls, "expected at least the import + four phase calls"
+    for c in beet_calls:
+        assert c[:2] == ["beet", "-l"], f"call not scoped with -l: {c}"
+        assert c[2] != persistent_db, "must not use the persistent library"
+        assert "clickwheel-beets-" in c[2], f"not a temp library: {c[2]}"
