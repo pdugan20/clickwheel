@@ -1216,14 +1216,27 @@ def _get_path() -> str:
     return ":".join(extra + [path])
 
 
+# Per-phase timeout for beets subprocess calls. A correctly-scoped `fix`
+# finishes a phase in minutes; this only trips when an SMB/NAS operation
+# genuinely stalls, turning an indefinite hang into a reported failure.
+FIX_PHASE_TIMEOUT = 1800
+
+
 def _run_beets_fix(cfg, target: str) -> None:
     """Run the beets metadata cleanup pipeline.
 
     Runs five phases: catalog, fetch art, embed art, fill genres, write tags.
     Requires beets to be installed: pipx inject clickwheel 'clickwheel[fix]'
+
+    Each run uses a fresh, temporary beets library. The catalog phase
+    imports only `target` into it, so the whole-library phases that follow
+    (fetchart, embedart, lastgenre, write) stay scoped to `target` rather
+    than grinding over the entire collection — a single shared library
+    would accumulate every album ever cataloged.
     """
     import os
     import subprocess
+    import tempfile
 
     beets_dir = cfg.project_dir / "beets"
     beets_dir.mkdir(parents=True, exist_ok=True)
@@ -1234,29 +1247,17 @@ def _run_beets_fix(cfg, target: str) -> None:
 
     env = {**os.environ, "BEETSDIR": str(beets_dir)}
 
-    def _beet(args: list[str], phase: str) -> bool:
-        with spinner(phase):
-            result = subprocess.run(
-                ["beet", *args],
-                env=env,
-                capture_output=True,
-                text=True,
-            )
-        if result.returncode != 0:
-            if result.stderr:
-                warn(f"  Failed: {result.stderr.strip()}")
-            else:
-                warn("  Failed (no error details)")
-            return False
-        confirm(f"  {phase} Done")
-        return True
-
-    check = subprocess.run(
-        ["beet", "version"],
-        env=env,
-        capture_output=True,
-    )
-    if check.returncode != 0:
+    # A missing `beet` on PATH makes subprocess raise FileNotFoundError
+    # rather than returning non-zero — catch it so the user gets the
+    # install hint instead of a traceback.
+    try:
+        check = subprocess.run(
+            ["beet", "version"], env=env, capture_output=True, timeout=30
+        )
+        beets_available = check.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        beets_available = False
+    if not beets_available:
         error(
             "beets is not installed.\n"
             "  If you installed clickwheel with pipx:\n"
@@ -1266,46 +1267,81 @@ def _run_beets_fix(cfg, target: str) -> None:
         )
         raise typer.Exit(1)
 
-    target_path = Path(target)
-    if target_path.is_dir() and target == str(cfg.music_dir):
-        status("Step 1/5: Cataloging library...")
-        subdirs = sorted(
-            d
-            for d in target_path.iterdir()
-            if d.is_dir() and not d.name.startswith(".")
-        )
-        import_ok = 0
-        import_fail = 0
-        for d in subdirs:
-            result = subprocess.run(
-                ["beet", "import", "-A", str(d)],
-                env=env,
-                capture_output=True,
-                text=True,
+    with tempfile.TemporaryDirectory(prefix="clickwheel-beets-") as tmp:
+        # Fresh library per run: `import` populates it with only `target`,
+        # so the whole-library phases below cannot escape that scope.
+        beet = ["beet", "-l", str(Path(tmp) / "library.db")]
+
+        def _beet(args: list[str], phase: str) -> bool:
+            with spinner(phase):
+                try:
+                    result = subprocess.run(
+                        [*beet, *args],
+                        env=env,
+                        capture_output=True,
+                        text=True,
+                        timeout=FIX_PHASE_TIMEOUT,
+                    )
+                except subprocess.TimeoutExpired:
+                    warn(
+                        f"  Timed out after {FIX_PHASE_TIMEOUT // 60} min — "
+                        "the music share may be slow or disconnected."
+                    )
+                    return False
+            if result.returncode != 0:
+                if result.stderr:
+                    warn(f"  Failed: {result.stderr.strip()}")
+                else:
+                    warn("  Failed (no error details)")
+                return False
+            confirm(f"  {phase} Done")
+            return True
+
+        target_path = Path(target)
+        if target_path.is_dir() and target == str(cfg.music_dir):
+            status("Step 1/5: Cataloging library...")
+            subdirs = sorted(
+                d
+                for d in target_path.iterdir()
+                if d.is_dir() and not d.name.startswith(".")
             )
-            if result.returncode == 0:
-                import_ok += 1
+            import_ok = 0
+            import_fail = 0
+            for d in subdirs:
+                try:
+                    result = subprocess.run(
+                        [*beet, "import", "-A", str(d)],
+                        env=env,
+                        capture_output=True,
+                        text=True,
+                        timeout=FIX_PHASE_TIMEOUT,
+                    )
+                    imported = result.returncode == 0
+                except subprocess.TimeoutExpired:
+                    imported = False
+                if imported:
+                    import_ok += 1
+                else:
+                    import_fail += 1
+                    dim(f"  Skipped: {d.name}")
+            if import_fail:
+                warn(f"  Cataloged {import_ok} folders, {import_fail} skipped")
             else:
-                import_fail += 1
-                dim(f"  Skipped: {d.name}")
-        if import_fail:
-            warn(f"  Cataloged {import_ok} folders, {import_fail} skipped")
+                confirm(f"  Done ({import_ok} folders)")
         else:
-            confirm(f"  Done ({import_ok} folders)")
-    else:
-        _beet(["import", "-A", target], "Step 1/5: Cataloging library...")
+            _beet(["import", "-A", target], "Step 1/5: Cataloging library...")
 
-    remaining = [
-        (["fetchart", "-f"], "Step 2/5: Fetching missing album art..."),
-        (["embedart", "-y"], "Step 3/5: Embedding album art..."),
-        (["lastgenre"], "Step 4/5: Filling missing genres..."),
-        (["write"], "Step 5/5: Writing tags to files..."),
-    ]
+        remaining = [
+            (["fetchart", "-f"], "Step 2/5: Fetching missing album art..."),
+            (["embedart", "-y"], "Step 3/5: Embedding album art..."),
+            (["lastgenre"], "Step 4/5: Filling missing genres..."),
+            (["write"], "Step 5/5: Writing tags to files..."),
+        ]
 
-    failed = 0
-    for args, phase in remaining:
-        if not _beet(args, phase):
-            failed += 1
+        failed = 0
+        for args, phase in remaining:
+            if not _beet(args, phase):
+                failed += 1
 
     if failed == 0:
         success("Metadata cleanup complete.")
