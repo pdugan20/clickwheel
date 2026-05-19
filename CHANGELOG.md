@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/) and
 [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [0.9.0](https://github.com/pdugan20/clickwheel/compare/v0.8.0...v0.9.0) (2026-05-19)
+
+
+### Features
+
+* **fix:** fetch album art and release years from musicbrainz ([#25](https://github.com/pdugan20/clickwheel/issues/25)) ([2fb694a](https://github.com/pdugan20/clickwheel/commit/2fb694a72ead1fbfaec65d726def6c669d03d992))
+
+
+### Bug Fixes
+
+* **cli:** keep beets metadata cleanup scoped to its target ([#23](https://github.com/pdugan20/clickwheel/issues/23)) ([597b4fe](https://github.com/pdugan20/clickwheel/commit/597b4fe371f7e64408e07c8b14513270b3d6308c))
+
 ## [0.8.0](https://github.com/pdugan20/clickwheel/compare/v0.7.0...v0.8.0) (2026-05-16)
 
 
