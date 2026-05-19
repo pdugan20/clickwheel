@@ -1223,16 +1223,20 @@ FIX_PHASE_TIMEOUT = 1800
 
 
 def _run_beets_fix(cfg, target: str) -> None:
-    """Run the beets metadata cleanup pipeline.
+    """Run the metadata cleanup pipeline.
 
-    Runs five phases: catalog, fetch art, embed art, fill genres, write tags.
+    Four phases: catalog, cloud artwork + dates, fill genres, write tags.
     Requires beets to be installed: pipx inject clickwheel 'clickwheel[fix]'
 
+    Album art and release years come from a native MusicBrainz / Cover Art
+    Archive lookup (see `actions.apply_cloud_artwork`) rather than beets —
+    beets' import matcher stalls on multi-pressing ambiguity in batch mode.
+    Genres still come from beets `lastgenre`.
+
     Each run uses a fresh, temporary beets library. The catalog phase
-    imports only `target` into it, so the whole-library phases that follow
-    (fetchart, embedart, lastgenre, write) stay scoped to `target` rather
-    than grinding over the entire collection — a single shared library
-    would accumulate every album ever cataloged.
+    imports only `target` into it, so the whole-library beets phases that
+    follow stay scoped to `target` rather than grinding over the entire
+    collection — a single shared library would accumulate every album.
     """
     import os
     import subprocess
@@ -1299,7 +1303,7 @@ def _run_beets_fix(cfg, target: str) -> None:
 
         target_path = Path(target)
         if target_path.is_dir() and target == str(cfg.music_dir):
-            status("Step 1/5: Cataloging library...")
+            status("Step 1/4: Cataloging library...")
             subdirs = sorted(
                 d
                 for d in target_path.iterdir()
@@ -1329,16 +1333,31 @@ def _run_beets_fix(cfg, target: str) -> None:
             else:
                 confirm(f"  Done ({import_ok} folders)")
         else:
-            _beet(["import", "-A", target], "Step 1/5: Cataloging library...")
-
-        remaining = [
-            (["fetchart", "-f"], "Step 2/5: Fetching missing album art..."),
-            (["embedart", "-y"], "Step 3/5: Embedding album art..."),
-            (["lastgenre"], "Step 4/5: Filling missing genres..."),
-            (["write"], "Step 5/5: Writing tags to files..."),
-        ]
+            _beet(["import", "-A", target], "Step 1/4: Cataloging library...")
 
         failed = 0
+
+        # Step 2: cloud artwork + release years (native — see the
+        # _run_beets_fix docstring for why this isn't a beets phase).
+        status("Step 2/4: Fetching album art + dates from MusicBrainz...")
+        try:
+            art = actions.apply_cloud_artwork(
+                target_path, on_album=lambda a: dim(f"  {a}")
+            )
+            confirm(
+                f"  {art.albums_matched}/{art.albums_seen} albums matched — "
+                f"art on {art.art_embedded} tracks, years on {art.years_set}"
+            )
+            if art.unmatched:
+                warn("  No MusicBrainz match: " + ", ".join(art.unmatched))
+        except Exception as exc:
+            warn(f"  Artwork step failed: {exc}")
+            failed += 1
+
+        remaining = [
+            (["lastgenre"], "Step 3/4: Filling missing genres..."),
+            (["write"], "Step 4/4: Writing tags to files..."),
+        ]
         for args, phase in remaining:
             if not _beet(args, phase):
                 failed += 1
@@ -1378,26 +1397,10 @@ paths:
   singleton: Non-Album/$artist/$title
   comp: Compilations/$album%aunique{{}}/$track $title
 
+# Album art and release years are handled natively by clickwheel
+# (MusicBrainz + Cover Art Archive); beets is used only for genres.
 plugins:
-  - fetchart
-  - embedart
   - lastgenre
-
-fetchart:
-  auto: no
-  minwidth: 500
-  maxwidth: 1200
-  sources:
-    - filesystem
-    - coverart
-    - itunes
-    - amazon
-
-embedart:
-  auto: no
-  ifempty: no
-  maxwidth: 1200
-  remove_art_file: no
 
 lastgenre:
   auto: no

@@ -281,6 +281,17 @@ class ScrobbleSubmitResult:
     oldest_age_days: float | None = None
 
 
+@dataclass
+class ArtworkResult:
+    """Outcome of a cloud-artwork pass over a set of album folders."""
+
+    albums_seen: int = 0
+    albums_matched: int = 0
+    art_embedded: int = 0  # track count
+    years_set: int = 0  # track count
+    unmatched: list[str] = field(default_factory=list)
+
+
 # ---------------------------------------------------------------------------
 # Library scanning
 # ---------------------------------------------------------------------------
@@ -463,6 +474,72 @@ def search_tracks(db: Database, query: str, limit: int = 50) -> list[dict]:
         (pattern, pattern, pattern, limit),
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+def apply_cloud_artwork(
+    target: Path,
+    *,
+    on_album: Callable[[str], None] | None = None,
+) -> ArtworkResult:
+    """Embed cloud cover art and canonical release years under `target`.
+
+    Walks `target` for audio files, groups them into albums by folder, and
+    for each album resolves it to a MusicBrainz release group — then embeds
+    the Cover Art Archive front cover (only on tracks lacking art) and sets
+    the release year. Albums MusicBrainz can't confidently match are left
+    untouched and reported in `unmatched`.
+
+    `on_album` is called with "Artist — Album" as each album is processed.
+    """
+    from collections import defaultdict
+
+    from clickwheel import artwork
+    from clickwheel.library import find_audio_files, write_album_metadata
+
+    groups: dict[Path, list[Path]] = defaultdict(list)
+    for f in find_audio_files(target):
+        groups[f.parent].append(f)
+
+    result = ArtworkResult()
+    for folder, paths in sorted(groups.items()):
+        meta = None
+        for p in paths:
+            meta = scan_file(p)
+            if meta and meta.get("album"):
+                break
+        album = (meta or {}).get("album")
+        artist = (meta or {}).get("album_artist") or (meta or {}).get("artist")
+        if not album or not artist:
+            continue
+
+        result.albums_seen += 1
+        if on_album:
+            on_album(f"{artist} — {album}")
+        # MusicBrainz asks for <=1 request/sec; the first call needn't wait.
+        if result.albums_seen > 1:
+            time.sleep(1.1)
+
+        try:
+            match = artwork.lookup_release_group(artist, album)
+        except artwork.ArtworkLookupError:
+            match = None
+        if match is None:
+            result.unmatched.append(f"{artist} — {album}")
+            continue
+        result.albums_matched += 1
+
+        art: bytes | None = None
+        try:
+            art = artwork.fetch_front_cover(match.mbid)
+        except artwork.ArtworkLookupError:
+            art = None
+
+        for p in paths:
+            art_done, year_done = write_album_metadata(p, art=art, year=match.year)
+            result.art_embedded += int(art_done)
+            result.years_set += int(year_done)
+
+    return result
 
 
 # ---------------------------------------------------------------------------
