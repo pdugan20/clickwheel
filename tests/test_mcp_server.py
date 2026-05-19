@@ -394,12 +394,16 @@ def test_read_tools_have_read_only_annotation():
 
 
 def test_eject_ipod_no_ipod(tmp_path, monkeypatch):
+    """With no iPod mounted, eject is idempotent: the tool catches the
+    IpodNotFoundError and returns a graceful 'already disconnected'
+    result rather than raising."""
     from clickwheel.mcp.tools.ipod import eject_ipod
 
     _setup(tmp_path, monkeypatch)
 
-    with pytest.raises(IpodNotFoundError):
-        eject_ipod()
+    result = _call(eject_ipod)
+    assert result["ejected"] is False
+    assert result["already_unmounted"] is True
 
 
 def test_build_playlist_prompt_registered():
