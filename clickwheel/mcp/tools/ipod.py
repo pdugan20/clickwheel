@@ -20,6 +20,7 @@ from clickwheel.mcp._runtime import (
     READ_ONLY,
     format_bytes,
     format_count,
+    logger,
     mcp,
     open_session,
     render,
@@ -53,15 +54,25 @@ def _push_progress(
     is a belt-and-suspenders fallback for clients that DO render
     notifications/progress visibly (Claude Desktop currently doesn't,
     but the spec says they should).
+
+    Called from the sync worker thread. We block until the scheduled
+    notification has actually run on the event loop — fire-and-forget
+    would let the tool return (and `asyncio.run` close the loop) before
+    the last events execute, silently dropping them.
     """
     artist = ev.track.get("artist") or "Unknown"
     title = ev.track.get("title") or "Unknown"
     message = f"{artist} — {title}"
     _sync_state.update(ev.current, ev.total, message)
-    asyncio.run_coroutine_threadsafe(
+    future = asyncio.run_coroutine_threadsafe(
         ctx.report_progress(ev.current, ev.total, message),
         loop,
     )
+    try:
+        future.result(timeout=30)
+    except Exception:
+        # A progress-notification hiccup must never abort the sync.
+        logger.debug("progress notification failed", exc_info=True)
 
 
 def _summarize_track(t: dict) -> dict:
