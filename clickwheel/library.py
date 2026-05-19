@@ -147,3 +147,69 @@ def _image_dimensions(data: bytes) -> dict | None:
             return {"width": width, "height": height}
 
     return {"width": None, "height": None}
+
+
+_PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+
+
+def write_album_metadata(
+    path: Path, *, art: bytes | None = None, year: int | None = None
+) -> tuple[bool, bool]:
+    """Embed front-cover `art` (only when the file has none) and/or set the
+    release `year` on a track, in place.
+
+    Returns (art_embedded, year_set). MP3 and MP4/M4A are supported; other
+    formats are skipped and return (False, False).
+    """
+    suffix = path.suffix.lower()
+    if suffix == ".mp3":
+        return _write_mp3_metadata(path, art, year)
+    if suffix in (".m4a", ".aac", ".mp4"):
+        return _write_mp4_metadata(path, art, year)
+    return (False, False)
+
+
+def _write_mp3_metadata(
+    path: Path, art: bytes | None, year: int | None
+) -> tuple[bool, bool]:
+    from mutagen.id3 import APIC, ID3, TDRC, ID3NoHeaderError
+
+    try:
+        tags = ID3(str(path))
+    except ID3NoHeaderError:
+        tags = ID3()
+
+    art_done = year_done = False
+    if art and not any(k.startswith("APIC") for k in tags):
+        mime = "image/png" if art[:8] == _PNG_MAGIC else "image/jpeg"
+        tags.add(APIC(encoding=3, mime=mime, type=3, desc="Cover", data=art))
+        art_done = True
+    if year:
+        tags.setall("TDRC", [TDRC(encoding=3, text=[str(year)])])
+        tags.pop("TYER", None)
+        year_done = True
+    if art_done or year_done:
+        tags.save(str(path))
+    return (art_done, year_done)
+
+
+def _write_mp4_metadata(
+    path: Path, art: bytes | None, year: int | None
+) -> tuple[bool, bool]:
+    from mutagen.mp4 import MP4Cover
+
+    mp4 = MP4(str(path))
+    if mp4.tags is None:
+        mp4.add_tags()
+
+    art_done = year_done = False
+    if art and "covr" not in mp4.tags:
+        fmt = MP4Cover.FORMAT_PNG if art[:8] == _PNG_MAGIC else MP4Cover.FORMAT_JPEG
+        mp4.tags["covr"] = [MP4Cover(art, imageformat=fmt)]
+        art_done = True
+    if year:
+        mp4.tags["\xa9day"] = [str(year)]
+        year_done = True
+    if art_done or year_done:
+        mp4.save()
+    return (art_done, year_done)
