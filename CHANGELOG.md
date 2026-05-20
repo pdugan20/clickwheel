@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/) and
 [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [0.10.0](https://github.com/pdugan20/clickwheel/compare/v0.9.0...v0.10.0) (2026-05-20)
+
+
+### Features
+
+* **plex:** add playlist pull command for read-back recovery ([#27](https://github.com/pdugan20/clickwheel/issues/27)) ([e6fed7b](https://github.com/pdugan20/clickwheel/commit/e6fed7b64a3211cdb35fd0f6bf2a80977f9114e1))
+
 ## [0.9.0](https://github.com/pdugan20/clickwheel/compare/v0.8.0...v0.9.0) (2026-05-19)
 
 
