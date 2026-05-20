@@ -428,6 +428,103 @@ class PlexSyncResult(BaseModel):
     )
 
 
+class PlexPlaylistEntry(BaseModel):
+    """One audio playlist on the user's Plex server."""
+
+    name: str = Field(description="The Plex playlist title.")
+    smart: bool = Field(
+        description=(
+            "True if this is a smart playlist (dynamically computed by Plex). "
+            "Smart playlists need include_smart=True to pull."
+        )
+    )
+    track_count: int = Field(description="Number of tracks Plex reports for it.")
+    summary: str = Field(
+        default="", description="Plex's description for the playlist (may be empty)."
+    )
+
+
+class PlexPlaylistListResult(BaseModel):
+    """Result of `list_plex_playlists`."""
+
+    playlists: list[PlexPlaylistEntry] = Field(
+        description="All audio playlists found on the server."
+    )
+    error: str | None = Field(
+        default=None, description="Machine-readable error code, on failure."
+    )
+    message: str | None = Field(
+        default=None, description="Human-readable error message, on failure."
+    )
+
+
+class PlexPullUnmatched(BaseModel):
+    """One Plex track that couldn't be matched into the clickwheel index."""
+
+    title: str = Field(default="", description="Track title as Plex sees it.")
+    artist: str = Field(default="", description="Artist as Plex sees it.")
+    album: str = Field(default="", description="Album as Plex sees it.")
+    plex_path: str = Field(description="The file path as Plex reports it.")
+    local_path: str | None = Field(
+        default=None,
+        description=(
+            "Translated clickwheel-side path, when the remap succeeded but the "
+            "path wasn't in the scan index."
+        ),
+    )
+    reason: str = Field(description="`path_remap_failed` or `not_in_clickwheel_index`.")
+
+
+class PlexPullResult(BaseModel):
+    """Result of `pull_playlist_from_plex`."""
+
+    playlist: str | None = Field(
+        default=None, description="The Plex playlist name that was pulled."
+    )
+    smart: bool | None = Field(
+        default=None, description="True if the source playlist was smart."
+    )
+    total_plex_tracks: int | None = Field(
+        default=None, description="Tracks the Plex playlist contained."
+    )
+    matched: int | None = Field(
+        default=None,
+        description=(
+            "Tracks whose remapped path was found in clickwheel's index — "
+            "these are what landed in the new playlist."
+        ),
+    )
+    unmatched: int | None = Field(
+        default=None,
+        description="Tracks Plex had that clickwheel couldn't resolve locally.",
+    )
+    skipped_no_path: int | None = Field(
+        default=None,
+        description=(
+            "Tracks Plex returned with no file path (stale references to "
+            "deleted media)."
+        ),
+    )
+    description: str | None = Field(
+        default=None,
+        description="Playlist description carried over from Plex's `summary` field.",
+    )
+    replaced: bool | None = Field(
+        default=None,
+        description="True if a clickwheel playlist with this name already existed.",
+    )
+    unmatched_details: list[PlexPullUnmatched] | None = Field(
+        default=None,
+        description="Per-track details for the unmatched count, for triage.",
+    )
+    error: str | None = Field(
+        default=None, description="Machine-readable error code, on failure."
+    )
+    message: str | None = Field(
+        default=None, description="Human-readable error message, on failure."
+    )
+
+
 class SubmitScrobblesResult(BaseModel):
     """Result of `submit_scrobbles` — dry-run preview or a real submission."""
 

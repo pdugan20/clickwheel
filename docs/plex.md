@@ -106,12 +106,47 @@ Set a playlist's description with `clickwheel select --description`, `clickwheel
 - Trigger a Plex library scan (Plex web → Settings → Libraries → Scan Library Files), then re-run `clickwheel sync-plex`.
 - Or, leave it: the M3U landed, and re-running after the scan will pick up the missing tracks (Plex will re-resolve the same file paths).
 
+## Pull a playlist back (recovery)
+
+Push isn't the whole story. Plex retains its playlists server-side, but clickwheel's local SQLite doesn't — a fresh install or a wiped Mac leaves you with an indexed library but no playlists. `clickwheel plex pull` is the read-back direction: it recovers a Plex playlist into clickwheel's local store so you can `sync` it to the iPod or keep iterating on it.
+
+```bash
+# See what's available on Plex first.
+clickwheel plex list
+
+# Pull a manual playlist back.
+clickwheel plex pull "Road Trip"
+
+# Allow a smart playlist (materializes a snapshot — see warnings below).
+clickwheel plex pull "Recently Added" --include-smart
+
+# Replace an existing clickwheel playlist with the same name.
+clickwheel plex pull "Road Trip" --overwrite
+```
+
+What happens:
+
+1. clickwheel reads the named Plex playlist's track list.
+2. For each track, the Plex-side file path (e.g. `/share/CACHEDEV1_DATA/Public/...`) is translated back to clickwheel's view (e.g. `/Volumes/Public/...`) using the configured remap — inverse of the push direction.
+3. Each translated path is looked up in the local scan index. Matched tracks become the new playlist's contents, in Plex's order; unmatched tracks are listed so you know what to chase (typically a missing `clickwheel scan` or a file Plex sees but clickwheel doesn't).
+4. The Plex playlist's `summary` is carried over as the local description, mirroring the push side.
+
+### Smart vs manual
+
+Plex distinguishes manual playlists (hand-curated) from smart playlists (dynamic queries like "Recently Added" or "Favorites"). Pulling a smart playlist freezes a snapshot — once it's in clickwheel, it stops updating as your listening or library changes. That's usually not what you want, so `clickwheel plex pull` refuses smart playlists by default; pass `--include-smart` if a snapshot is genuinely what you're after.
+
+### Existing local playlists
+
+If a clickwheel playlist with the same name already exists, `pull` refuses to clobber it. Pass `--overwrite` to replace its contents. The two-way push/pull cycle is idempotent: pull → edit locally → push back will mirror the local copy onto Plex without re-uploading what didn't change.
+
 ## MCP tools
 
-When using clickwheel through its MCP server (Claude Desktop, Claude Code, etc.), two Plex tools are exposed:
+When using clickwheel through its MCP server (Claude Desktop, Claude Code, etc.), four Plex tools are exposed:
 
 - `plex_health` — read-only. Same five-stage probe as `clickwheel plex doctor`, surfaced as a structured response so the chat client can call it on your behalf for diagnostics.
+- `list_plex_playlists` — read-only. Returns every audio playlist on the server with `smart` flag, track count, and summary. Use it before `pull_playlist_from_plex` so the agent can ask which to recover.
 - `sync_playlist_to_plex(playlist=...)` — destructive, gated by a native Allow/Deny prompt in the client. After `create_playlist` or `update_playlist`, the agent should ask which destination(s) you want — iPod, Plex, both, or neither — rather than assuming.
+- `pull_playlist_from_plex(name=..., include_smart=False, overwrite=False)` — destructive (writes to the local SQLite). Same flags as the CLI; the agent should `list_plex_playlists` first to know whether the target is smart or already exists locally.
 
 ## Troubleshooting
 

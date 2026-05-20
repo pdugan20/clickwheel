@@ -15,11 +15,14 @@ from clickwheel.actions import (
     LastfmNotConfiguredError,
     LibraryNotFoundError,
     MissingTracksError,
+    PlaylistAlreadyExistsError,
     PlaylistNotFoundError,
     PlexExtraNotInstalledError,
     PlexNotConfiguredError,
     PlexPathRemapError,
+    PlexPlaylistNotFoundError,
     PlexSectionNotFoundError,
+    PlexSmartPlaylistError,
     PlexUnreachableError,
     ScanProgress,
     SyncEvent,
@@ -879,6 +882,121 @@ def plex_doctor_cmd() -> None:
         raise typer.Exit(1)
     info("")
     dim("All checks passed. Try: clickwheel sync-plex <playlist>")
+
+
+@plex_app.command(name="list")
+def plex_list_cmd() -> None:
+    """List every audio playlist on your Plex server, with kind and size.
+
+    Manual playlists are safe to pull back into clickwheel via
+    `clickwheel plex pull <name>`. Smart playlists are dynamically
+    computed by Plex; pulling one freezes a snapshot and requires
+    `--include-smart`.
+    """
+    cfg = load_config()
+    try:
+        with spinner("Reading Plex playlists..."):
+            playlists = actions.list_plex_playlists(cfg)
+    except PlexExtraNotInstalledError as exc:
+        error(str(exc))
+        raise typer.Exit(1) from exc
+    except (PlexNotConfiguredError, PlexUnreachableError) as exc:
+        error(str(exc))
+        raise typer.Exit(1) from exc
+
+    if not playlists:
+        warn("No audio playlists on Plex.")
+        return
+
+    t = table(title="Plex audio playlists")
+    t.add_column("Name")
+    t.add_column("Kind")
+    t.add_column("Tracks", justify="right")
+    for pl in sorted(playlists, key=lambda p: (p.smart, p.name.lower())):
+        kind_style = "[dim]smart[/dim]" if pl.smart else "[green]manual[/green]"
+        t.add_row(pl.name, kind_style, f"{pl.track_count:,}")
+    print_table(t)
+
+
+@plex_app.command(name="pull")
+def plex_pull_cmd(
+    name: str = typer.Argument(..., help="Plex playlist to pull into clickwheel."),
+    include_smart: bool = typer.Option(
+        False,
+        "--include-smart",
+        help="Allow pulling a smart playlist (freezes a snapshot).",
+    ),
+    overwrite: bool = typer.Option(
+        False,
+        "--overwrite",
+        help="Replace an existing clickwheel playlist with the same name.",
+    ),
+) -> None:
+    """Pull a playlist from Plex back into clickwheel's local store.
+
+    Useful for recovering hand-curated playlists after a clean install
+    (Plex retains them server-side; clickwheel's SQLite did not). Each
+    Plex track's file path is translated back to clickwheel's view via
+    the configured remap and looked up in the index — only matched
+    tracks land in the new playlist; unmatched ones are listed below
+    so you know what to chase.
+    """
+    cfg = load_config()
+    db = Database(cfg.db_path)
+    try:
+        with spinner(f"Pulling '{name}' from Plex..."):
+            result = actions.pull_playlist_from_plex(
+                cfg,
+                db,
+                name,
+                include_smart=include_smart,
+                overwrite=overwrite,
+            )
+    except PlexExtraNotInstalledError as exc:
+        error(str(exc))
+        raise typer.Exit(1) from exc
+    except (
+        PlexNotConfiguredError,
+        PlexUnreachableError,
+        PlexPlaylistNotFoundError,
+        PlexSmartPlaylistError,
+        PlaylistAlreadyExistsError,
+    ) as exc:
+        error(str(exc))
+        raise typer.Exit(1) from exc
+    finally:
+        db.close()
+
+    verb = "Replaced" if result.replaced else "Created"
+    success(
+        f"{verb} '{result.playlist_name}': "
+        f"{result.matched}/{result.total_plex_tracks} tracks matched"
+    )
+    if result.description:
+        dim(f"  Description: {result.description}")
+    if result.skipped_no_path:
+        warn(
+            f"  {result.skipped_no_path} track(s) on Plex had no resolvable file "
+            "path and were skipped."
+        )
+    if result.unmatched:
+        warn(
+            f"  {result.unmatched} track(s) on Plex didn't match clickwheel's "
+            "index. Run `clickwheel scan` if the library has changed."
+        )
+        unmatched_table = table(title="Unmatched")
+        unmatched_table.add_column("Artist")
+        unmatched_table.add_column("Title")
+        unmatched_table.add_column("Why", style="dim")
+        for u in result.unmatched_details[:20]:
+            unmatched_table.add_row(
+                u.get("artist", "") or "?",
+                u.get("title", "") or "?",
+                u.get("reason", "") or "?",
+            )
+        print_table(unmatched_table)
+        if len(result.unmatched_details) > 20:
+            dim(f"  ... and {len(result.unmatched_details) - 20} more.")
 
 
 @app.command()

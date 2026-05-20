@@ -53,6 +53,16 @@ destination(s) they want: iPod, Plex, both, or neither. Don't assume.
 The two syncs are independent — call both if the user says "both",
 each triggers its own Allow/Deny prompt.
 
+PLEX → CLICKWHEEL (recovery direction):
+- `list_plex_playlists` shows what's on the Plex side; use it when
+  the user wants to know "what playlists do I have on Plex?" or
+  before pulling.
+- `pull_playlist_from_plex` recovers a Plex playlist into clickwheel's
+  local store. Use after a fresh install / Mac wipe when the user's
+  Plex still has playlists but clickwheel's SQLite is empty. Smart
+  playlists need `include_smart=true` (snapshots the current query).
+  Existing local playlists with the same name need `overwrite=true`.
+
 When in doubt, ask the user: do they want it as a playlist they can
 browse on the iPod, or just want the songs added to the library? Don't
 auto-default to creating throwaway playlists — that pollutes their
@@ -140,8 +150,9 @@ WORKFLOWS:
 SAFETY:
 - `delete_playlist`, `add_tracks_to_ipod`, `add_artist_to_ipod`,
   `sync_playlist_to_ipod`, `sync_playlist_to_plex`,
-  `remove_tracks_from_ipod`, `remove_artist_from_ipod`, and
-  `remove_ipod_playlist` are flagged destructive. Claude Code (and
+  `pull_playlist_from_plex`, `remove_tracks_from_ipod`,
+  `remove_artist_from_ipod`, and `remove_ipod_playlist` are flagged
+  destructive. Claude Code (and
   other compliant clients) surface a native Allow/Deny prompt before
   invoking them — that is the user's confirmation moment. Before
   calling, summarize the impact in your reply (track count, size,

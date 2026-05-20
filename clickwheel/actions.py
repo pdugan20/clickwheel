@@ -156,6 +156,17 @@ class PlexSectionNotFoundError(ClickwheelError):
     """The configured Plex music section name doesn't exist on the server."""
 
 
+class PlexPlaylistNotFoundError(ClickwheelError):
+    """Raised when a named Plex playlist doesn't exist on the server."""
+
+
+class PlexSmartPlaylistError(ClickwheelError):
+    """Raised when pull is asked for a smart Plex playlist without
+    `include_smart=True`. Smart playlists are dynamically computed by
+    Plex; materializing them produces a stale snapshot, so we require
+    an explicit opt-in."""
+
+
 class PlexPathRemapError(ClickwheelError):
     """A track path didn't match the configured plex path remap prefix."""
 
@@ -1675,6 +1686,172 @@ def delete_plex_playlist(cfg: Config, name: str) -> int:
     _require_plex_config(cfg)
     plex = _connect_plex(cfg)
     return _plex.delete_audio_playlist(plex, name)
+
+
+# ---------------------------------------------------------------------------
+# Plex pull (read-back)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class PlexPlaylistSummary:
+    """One entry in `list_plex_playlists`."""
+
+    name: str
+    smart: bool
+    track_count: int
+    summary: str = ""
+
+
+@dataclass
+class PlexPullResult:
+    """Outcome of `pull_playlist_from_plex`.
+
+    `matched` is the number of Plex tracks whose remapped path was
+    found in clickwheel's SQLite index — only those get written to the
+    new local playlist. `unmatched` typically means the file lives on
+    Plex but not in clickwheel's scanned tree (or vice versa), or the
+    path remap can't translate the Plex-side path.
+    """
+
+    playlist_name: str
+    smart: bool
+    total_plex_tracks: int
+    matched: int
+    unmatched: int
+    skipped_no_path: int
+    description: str
+    replaced: bool
+    unmatched_details: list[dict] = field(default_factory=list)
+
+
+def list_plex_playlists(cfg: Config) -> list[PlexPlaylistSummary]:
+    """Return every audio playlist on the user's Plex server.
+
+    Each entry includes `smart` so callers can distinguish smart
+    (Plex-managed, dynamic) from manual (hand-curated) playlists.
+    Manual ones are the safe targets for `pull_playlist_from_plex`;
+    smart ones materialize a snapshot.
+
+    Raises: PlexNotConfiguredError, PlexExtraNotInstalledError,
+    PlexUnreachableError.
+    """
+    from clickwheel import plex as _plex
+
+    _require_plex_config(cfg)
+    plex = _connect_plex(cfg)
+    out: list[PlexPlaylistSummary] = []
+    for pl in _plex.list_audio_playlists(plex):
+        out.append(
+            PlexPlaylistSummary(
+                name=pl.title,
+                smart=bool(getattr(pl, "smart", False)),
+                track_count=int(getattr(pl, "leafCount", 0) or len(pl.items())),
+                summary=getattr(pl, "summary", "") or "",
+            )
+        )
+    return out
+
+
+def pull_playlist_from_plex(
+    cfg: Config,
+    db: Database,
+    name: str,
+    *,
+    include_smart: bool = False,
+    overwrite: bool = False,
+) -> PlexPullResult:
+    """Recover a Plex playlist into clickwheel's local SQLite store.
+
+    For each track in the Plex playlist we translate the Plex-side
+    file path back to clickwheel's view (via the configured remap) and
+    look it up in the tracks index. Matched paths become the new
+    playlist's contents, in Plex's order. Unmatched tracks are
+    reported in `unmatched_details` so the caller can show the user
+    which ones to chase down — typical causes are FLAC originals that
+    Plex has indexed but clickwheel's scanner skipped, or files added
+    to Plex after the last `clickwheel scan`.
+
+    The Plex playlist's `summary` field is carried over as the
+    clickwheel playlist's description, mirroring the push direction
+    (`sync_playlist_to_plex` does the reverse).
+
+    Smart playlists are refused by default (PlexSmartPlaylistError);
+    pass `include_smart=True` to materialize a snapshot. If a
+    clickwheel playlist with this name already exists, refuses with
+    PlaylistAlreadyExistsError unless `overwrite=True`.
+
+    Raises: PlexNotConfiguredError, PlexExtraNotInstalledError,
+    PlexUnreachableError, PlexPlaylistNotFoundError,
+    PlexSmartPlaylistError, PlaylistAlreadyExistsError.
+    """
+    from clickwheel import plex as _plex
+
+    _require_plex_config(cfg)
+    plex = _connect_plex(cfg)
+
+    target = _plex.find_audio_playlist(plex, name)
+    if target is None:
+        raise PlexPlaylistNotFoundError(f"No audio playlist named {name!r} on Plex.")
+
+    is_smart = bool(getattr(target, "smart", False))
+    if is_smart and not include_smart:
+        raise PlexSmartPlaylistError(
+            f"Playlist {name!r} is a smart playlist (dynamically computed by "
+            "Plex). Pulling it would freeze a snapshot. Re-run with "
+            "include_smart=True if that's what you want."
+        )
+
+    already_exists = playlist_exists(db, name)
+    if already_exists and not overwrite:
+        raise PlaylistAlreadyExistsError(
+            f"Playlist '{name}' already exists locally. "
+            "Pass overwrite=True to replace its contents."
+        )
+
+    plex_tracks = _plex.read_playlist_tracks(target)
+    skipped_no_path = int(getattr(target, "leafCount", 0) or 0) - len(plex_tracks)
+    if skipped_no_path < 0:
+        skipped_no_path = 0
+
+    matched_paths: list[str] = []
+    unmatched: list[dict] = []
+    for pt in plex_tracks:
+        plex_path = pt["plex_path"]
+        try:
+            local_path = _plex.plex_to_local_path(
+                plex_path, cfg.plex_path_remap_local, cfg.plex_path_remap_plex
+            )
+        except _plex.PathRemapFailedError:
+            unmatched.append({**pt, "reason": "path_remap_failed"})
+            continue
+        except _plex.PlexConfigInvalidError as exc:
+            raise PlexNotConfiguredError(str(exc)) from exc
+
+        row = db.conn.execute(
+            "SELECT 1 FROM tracks WHERE path = ?", (local_path,)
+        ).fetchone()
+        if row is None:
+            unmatched.append(
+                {**pt, "local_path": local_path, "reason": "not_in_clickwheel_index"}
+            )
+            continue
+        matched_paths.append(local_path)
+
+    description = getattr(target, "summary", "") or ""
+    db.save_playlist(name, matched_paths, description or None)
+
+    return PlexPullResult(
+        playlist_name=name,
+        smart=is_smart,
+        total_plex_tracks=len(plex_tracks) + skipped_no_path,
+        matched=len(matched_paths),
+        unmatched=len(unmatched),
+        skipped_no_path=skipped_no_path,
+        description=description,
+        replaced=already_exists,
+        unmatched_details=unmatched,
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -100,6 +100,36 @@ def local_to_plex_path(local_path: str, remap_local: str, remap_plex: str) -> st
     return remap_plex + local_path[len(remap_local) :]
 
 
+def plex_to_local_path(plex_path: str, remap_local: str, remap_plex: str) -> str:
+    """Translate a Plex-side path to the clickwheel-side path.
+
+    Inverse of `local_to_plex_path`. Used when pulling a Plex playlist
+    back into clickwheel: each track in the Plex playlist exposes the
+    file path *as Plex sees it* (e.g. `/share/CACHEDEV1_DATA/...`),
+    which has to be translated to the SMB-mounted path
+    (e.g. `/Volumes/Public/...`) before we can match it against the
+    SQLite index.
+
+    Same rules as the forward direction: both remaps empty -> identity;
+    one set without the other -> PlexConfigInvalidError; configured
+    remap but the input path doesn't start with `remap_plex` ->
+    PathRemapFailedError.
+    """
+    if not remap_local and not remap_plex:
+        return plex_path
+    if not remap_local or not remap_plex:
+        raise PlexConfigInvalidError(
+            "plex_path_remap_local and plex_path_remap_plex must both be "
+            "set, or both empty."
+        )
+    if not plex_path.startswith(remap_plex):
+        raise PathRemapFailedError(
+            f"Path {plex_path!r} doesn't start with remap prefix "
+            f"{remap_plex!r}; can't translate to clickwheel's view."
+        )
+    return remap_local + plex_path[len(remap_plex) :]
+
+
 def build_m3u(
     tracks: list[dict],
     dest_local: Path,
@@ -127,6 +157,56 @@ def build_m3u(
         lines.append(local_to_plex_path(t["path"], remap_local, remap_plex))
     dest_local.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return dest_local
+
+
+def list_audio_playlists(plex: PlexServer) -> list[Playlist]:
+    """Return every audio playlist on the server.
+
+    Plex doesn't scope playlists to a single library section, so we
+    just filter by `playlistType == "audio"`. Smart vs manual is
+    available on each playlist as `.smart` (bool); callers decide
+    whether to surface or skip smart ones.
+    """
+    return [pl for pl in plex.playlists() if pl.playlistType == "audio"]
+
+
+def read_playlist_tracks(playlist: Playlist) -> list[dict]:
+    """Extract the track list from a Plex playlist into clickwheel dicts.
+
+    Each track yields a dict with `plex_path` (the file path as Plex
+    sees it), `title`, `artist`, `album`, and `duration_seconds`.
+    Path remap to the clickwheel view is the caller's job — keeping it
+    out of here means this function never raises a PathRemapFailedError
+    and stays pure-Plex.
+
+    Tracks whose Plex media metadata is missing a file part are
+    skipped silently (rare, but possible for stale playlists pointing
+    at deleted media).
+    """
+    out: list[dict] = []
+    for t in playlist.items():
+        media = getattr(t, "media", None) or []
+        if not media:
+            continue
+        parts = getattr(media[0], "parts", None) or []
+        if not parts:
+            continue
+        file_path = getattr(parts[0], "file", None)
+        if not file_path:
+            continue
+        duration_ms = getattr(t, "duration", None)
+        out.append(
+            {
+                "plex_path": file_path,
+                "title": getattr(t, "title", "") or "",
+                "artist": getattr(t, "grandparentTitle", "") or "",
+                "album": getattr(t, "parentTitle", "") or "",
+                "duration_seconds": (duration_ms / 1000.0)
+                if isinstance(duration_ms, (int, float))
+                else None,
+            }
+        )
+    return out
 
 
 def find_audio_playlist(plex: PlexServer, name: str) -> Playlist | None:
