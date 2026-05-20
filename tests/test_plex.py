@@ -11,11 +11,16 @@ import pytest
 
 from clickwheel import plex as _plex
 from clickwheel.actions import (
+    PlaylistAlreadyExistsError,
     PlexNotConfiguredError,
     PlexPathRemapError,
+    PlexPlaylistNotFoundError,
+    PlexSmartPlaylistError,
     _require_plex_config,
     _slugify_for_filename,
+    list_plex_playlists,
     plex_doctor,
+    pull_playlist_from_plex,
     sync_playlist_to_plex,
 )
 from clickwheel.config import Config
@@ -418,3 +423,267 @@ def test_set_playlist_summary_calls_edit_summary():
     pl = _StubPlaylist()
     set_playlist_summary(pl, "a tidy description")
     assert pl.summary == "a tidy description"
+
+
+# ---------------------------------------------------------------------------
+# plex_to_local_path (inverse remap)
+# ---------------------------------------------------------------------------
+
+
+def test_plex_to_local_path_basic():
+    out = _plex.plex_to_local_path(
+        "/share/CACHEDEV1_DATA/Public/Multimedia/Music/Artist/Album/01.mp3",
+        "/Volumes/Public/",
+        "/share/CACHEDEV1_DATA/Public/",
+    )
+    assert out == "/Volumes/Public/Multimedia/Music/Artist/Album/01.mp3"
+
+
+def test_plex_to_local_path_identity_when_unset():
+    out = _plex.plex_to_local_path("/music/foo.mp3", "", "")
+    assert out == "/music/foo.mp3"
+
+
+def test_plex_to_local_path_partial_config_raises():
+    with pytest.raises(_plex.PlexConfigInvalidError):
+        _plex.plex_to_local_path("/music/foo.mp3", "/Volumes/", "")
+    with pytest.raises(_plex.PlexConfigInvalidError):
+        _plex.plex_to_local_path("/music/foo.mp3", "", "/share/")
+
+
+def test_plex_to_local_path_mismatch_raises():
+    with pytest.raises(_plex.PathRemapFailedError):
+        _plex.plex_to_local_path(
+            "/elsewhere/01.mp3",
+            "/Volumes/Public/",
+            "/share/CACHEDEV1_DATA/Public/",
+        )
+
+
+def test_plex_and_local_path_roundtrip():
+    """Forward then inverse should be an identity for any path inside
+    the remapped tree — the two functions exist as exact inverses."""
+    local = "/Volumes/Public/Music/Foo/Bar/01.mp3"
+    remap_l = "/Volumes/Public/"
+    remap_p = "/share/CACHEDEV1_DATA/Public/"
+    plex_path = _plex.local_to_plex_path(local, remap_l, remap_p)
+    assert _plex.plex_to_local_path(plex_path, remap_l, remap_p) == local
+
+
+# ---------------------------------------------------------------------------
+# Plex pull (list_plex_playlists + pull_playlist_from_plex)
+# ---------------------------------------------------------------------------
+
+
+class _StubPlexPlaylist:
+    """plexapi.Playlist surface stub for pull tests."""
+
+    def __init__(
+        self,
+        title: str,
+        tracks: list[_StubTrack],
+        *,
+        smart: bool = False,
+        summary: str = "",
+    ) -> None:
+        self.title = title
+        self.playlistType = "audio"  # noqa: N815
+        self.smart = smart
+        self.summary = summary
+        self._tracks = tracks
+        self.leafCount = len(tracks)  # noqa: N815
+
+    def items(self) -> list[_StubTrack]:
+        return self._tracks
+
+
+def _make_audio_track(path: str, *, title="t", artist="a", album="b", dur_ms=200_000):
+    t = _StubTrack(path)
+    t.title = title
+    t.grandparentTitle = artist  # noqa: N815
+    t.parentTitle = album  # noqa: N815
+    t.duration = dur_ms
+    return t
+
+
+class _StubServerWithPlaylists(_StubServer):
+    """Server stub that also supports `.playlists()` for pull/list."""
+
+    def __init__(
+        self,
+        sections: list[_StubSection],
+        playlists: list[_StubPlexPlaylist],
+    ) -> None:
+        super().__init__(sections)
+        self._playlists = playlists
+
+    def playlists(self) -> list[_StubPlexPlaylist]:
+        return self._playlists
+
+
+def test_list_plex_playlists_returns_smart_flag(
+    plex_cfg: Config, populated_db, monkeypatch, _plexapi_stub
+):
+    """list_plex_playlists surfaces smart vs manual so the caller can
+    pick which to pull."""
+    server = _StubServerWithPlaylists(
+        [_StubSection("Music", "artist")],
+        [
+            _StubPlexPlaylist("Workout", [], smart=False, summary="curated"),
+            _StubPlexPlaylist("Recently Added", [], smart=True),
+        ],
+    )
+    monkeypatch.setattr(_plex, "connect", lambda url, token: server)
+
+    out = list_plex_playlists(plex_cfg)
+    by_name = {p.name: p for p in out}
+    assert by_name["Workout"].smart is False
+    assert by_name["Workout"].summary == "curated"
+    assert by_name["Recently Added"].smart is True
+
+
+def test_pull_playlist_matches_indexed_tracks(
+    plex_cfg: Config, populated_db, monkeypatch, _plexapi_stub
+):
+    """Happy path: every Plex track's remapped path is in clickwheel's
+    SQLite index, so all of them land in the new local playlist."""
+    indexed_paths = [
+        r["path"] for r in populated_db.conn.execute("SELECT path FROM tracks")
+    ]
+    # Plex sees the same files under /share/CACHEDEV1_DATA/Public/...
+    # but the populated_db fixture uses /music/... — translate manually.
+    # Easier: stub the remap to identity for this test.
+    cfg = Config(
+        music_dir=plex_cfg.music_dir,
+        project_dir=plex_cfg.project_dir,
+        plex_enabled=True,
+        plex_url=plex_cfg.plex_url,
+        plex_token=plex_cfg.plex_token,
+        plex_library_name="Music",
+    )
+    tracks = [
+        _make_audio_track(p, title=f"t{i}", artist="x", album="y")
+        for i, p in enumerate(indexed_paths)
+    ]
+    server = _StubServerWithPlaylists(
+        [_StubSection("Music", "artist")],
+        [_StubPlexPlaylist("Recovered", tracks, summary="from plex")],
+    )
+    monkeypatch.setattr(_plex, "connect", lambda url, token: server)
+
+    result = pull_playlist_from_plex(cfg, populated_db, "Recovered")
+    assert result.matched == len(indexed_paths)
+    assert result.unmatched == 0
+    assert result.description == "from plex"
+    assert result.replaced is False
+    saved = [
+        r["path"]
+        for r in populated_db.conn.execute(
+            "SELECT t.path FROM tracks t "
+            "JOIN playlist_tracks pt ON t.id = pt.track_id "
+            "JOIN playlists p ON pt.playlist_id = p.id "
+            "WHERE p.name = 'Recovered' ORDER BY pt.position"
+        )
+    ]
+    assert saved == indexed_paths
+
+
+def test_pull_playlist_reports_unmatched(
+    populated_db, monkeypatch, _plexapi_stub, tmp_path
+):
+    """Tracks Plex has but clickwheel's index doesn't are reported in
+    unmatched_details rather than silently dropped — recovery surfaces
+    the gap so the user knows to re-scan or copy missing files."""
+    cfg = Config(
+        music_dir=tmp_path / "m",
+        project_dir=tmp_path,
+        plex_enabled=True,
+        plex_url="http://example.invalid:32400",
+        plex_token="t",
+        plex_library_name="Music",
+    )
+    indexed = next(iter(populated_db.conn.execute("SELECT path FROM tracks")))["path"]
+    tracks = [
+        _make_audio_track(indexed, title="known"),
+        _make_audio_track("/music/Missing/01.mp3", title="ghost", artist="g"),
+    ]
+    server = _StubServerWithPlaylists(
+        [_StubSection("Music", "artist")],
+        [_StubPlexPlaylist("Mixed", tracks)],
+    )
+    monkeypatch.setattr(_plex, "connect", lambda url, token: server)
+
+    result = pull_playlist_from_plex(cfg, populated_db, "Mixed")
+    assert result.matched == 1
+    assert result.unmatched == 1
+    assert result.unmatched_details[0]["reason"] == "not_in_clickwheel_index"
+    assert result.unmatched_details[0]["title"] == "ghost"
+
+
+def test_pull_playlist_refuses_smart_by_default(
+    populated_db, monkeypatch, _plexapi_stub, tmp_path
+):
+    cfg = Config(
+        music_dir=tmp_path / "m",
+        project_dir=tmp_path,
+        plex_enabled=True,
+        plex_url="http://example.invalid:32400",
+        plex_token="t",
+    )
+    server = _StubServerWithPlaylists(
+        [_StubSection("Music", "artist")],
+        [_StubPlexPlaylist("Recently Added", [], smart=True)],
+    )
+    monkeypatch.setattr(_plex, "connect", lambda url, token: server)
+
+    with pytest.raises(PlexSmartPlaylistError):
+        pull_playlist_from_plex(cfg, populated_db, "Recently Added")
+
+    # include_smart=True lets it through (empty playlist is fine).
+    result = pull_playlist_from_plex(
+        cfg, populated_db, "Recently Added", include_smart=True
+    )
+    assert result.smart is True
+    assert result.matched == 0
+
+
+def test_pull_playlist_refuses_overwrite_by_default(
+    populated_db, monkeypatch, _plexapi_stub, tmp_path
+):
+    cfg = Config(
+        music_dir=tmp_path / "m",
+        project_dir=tmp_path,
+        plex_enabled=True,
+        plex_url="http://example.invalid:32400",
+        plex_token="t",
+    )
+    populated_db.save_playlist("Taken", [])
+    populated_db.commit()
+    server = _StubServerWithPlaylists(
+        [_StubSection("Music", "artist")],
+        [_StubPlexPlaylist("Taken", [])],
+    )
+    monkeypatch.setattr(_plex, "connect", lambda url, token: server)
+
+    with pytest.raises(PlaylistAlreadyExistsError):
+        pull_playlist_from_plex(cfg, populated_db, "Taken")
+
+    result = pull_playlist_from_plex(cfg, populated_db, "Taken", overwrite=True)
+    assert result.replaced is True
+
+
+def test_pull_playlist_missing_on_plex(
+    populated_db, monkeypatch, _plexapi_stub, tmp_path
+):
+    cfg = Config(
+        music_dir=tmp_path / "m",
+        project_dir=tmp_path,
+        plex_enabled=True,
+        plex_url="http://example.invalid:32400",
+        plex_token="t",
+    )
+    server = _StubServerWithPlaylists([_StubSection("Music", "artist")], [])
+    monkeypatch.setattr(_plex, "connect", lambda url, token: server)
+
+    with pytest.raises(PlexPlaylistNotFoundError):
+        pull_playlist_from_plex(cfg, populated_db, "Nope")

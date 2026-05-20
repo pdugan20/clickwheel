@@ -829,6 +829,55 @@ def test_sync_playlist_to_plex_sets_description(tmp_path, monkeypatch):
     assert summaries == ["road trip vibes"]
 
 
+def test_list_plex_playlists_returns_plex_not_configured_error(tmp_path, monkeypatch):
+    """Disabled config -> structured error payload, NOT an exception."""
+    from clickwheel.mcp.tools.plex import list_plex_playlists
+
+    _setup_plex(tmp_path, monkeypatch, enabled=False)
+    result = _call(list_plex_playlists)
+    assert result["error"] == "plex_not_configured"
+
+
+def test_pull_playlist_from_plex_returns_plex_not_configured_error(
+    tmp_path, monkeypatch
+):
+    from clickwheel.mcp.tools.plex import pull_playlist_from_plex
+
+    _setup_plex(tmp_path, monkeypatch, enabled=False)
+    result = _call(pull_playlist_from_plex, name="anything")
+    assert result["error"] == "plex_not_configured"
+
+
+def test_pull_playlist_from_plex_smart_error(tmp_path, monkeypatch):
+    """Trying to pull a smart playlist without include_smart returns a
+    structured `plex_smart_playlist` error rather than an exception."""
+    from clickwheel import plex as _plex
+    from clickwheel.mcp.tools.plex import pull_playlist_from_plex
+
+    _setup_plex(tmp_path, monkeypatch)
+    monkeypatch.setattr(_plex, "_import_plexapi", lambda: None)
+
+    class _Playlist:
+        title = "Recently Added"
+        playlistType = "audio"  # noqa: N815
+        smart = True
+        summary = ""
+        leafCount = 0  # noqa: N815
+
+        def items(self):
+            return []
+
+    class _Server:
+        @staticmethod
+        def playlists():
+            return [_Playlist()]
+
+    monkeypatch.setattr(_plex, "connect", lambda url, token: _Server())
+
+    result = _call(pull_playlist_from_plex, name="Recently Added")
+    assert result["error"] == "plex_smart_playlist"
+
+
 # ---------------------------------------------------------------------------
 # Output-schema conformance
 #
@@ -870,7 +919,7 @@ def test_all_tools_emit_output_schema():
     from clickwheel.mcp._runtime import mcp
 
     tools = asyncio.run(mcp.list_tools())
-    assert len(tools) == 30
+    assert len(tools) == 32
     for t in tools:
         assert t.outputSchema, f"{t.name}: no outputSchema"
         assert t.outputSchema.get("properties"), f"{t.name}: schema has no properties"

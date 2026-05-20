@@ -1,17 +1,24 @@
 """Plex integration tools.
 
-Two tools:
+Four tools:
 
 - `sync_playlist_to_plex` — push a clickwheel playlist into the user's
   Plex music library so Plexamp / Plex web see it alongside the iPod
   sync. Flagged destructive; clients gate with a native Allow/Deny
   prompt before invocation.
+- `pull_playlist_from_plex` — read-back direction; recovers a Plex
+  playlist into clickwheel's local store. Useful after a fresh install
+  when local SQLite playlists are gone but the Plex server still has
+  them. Destructive (writes to the local DB).
+- `list_plex_playlists` — read-only listing of what's available on the
+  Plex side, so callers can decide what to pull.
 - `plex_health` — read-only probe. Useful when the user reports
   "Plex sync isn't working" — surfaces exactly which stage of the
   pipeline failed without changing anything.
 
-The same library powers `clickwheel sync-plex` and `clickwheel plex
-doctor` on the CLI. Logic lives in `actions.py` per CLAUDE.md rule 11.
+The same library powers `clickwheel sync-plex`, `clickwheel plex pull`,
+`clickwheel plex list`, and `clickwheel plex doctor` on the CLI. Logic
+lives in `actions.py` per CLAUDE.md rule 11.
 """
 
 from __future__ import annotations
@@ -23,10 +30,13 @@ from pydantic import Field
 
 from clickwheel import actions
 from clickwheel.actions import (
+    PlaylistAlreadyExistsError,
     PlexExtraNotInstalledError,
     PlexNotConfiguredError,
     PlexPathRemapError,
+    PlexPlaylistNotFoundError,
     PlexSectionNotFoundError,
+    PlexSmartPlaylistError,
     PlexUnreachableError,
 )
 from clickwheel.mcp._runtime import (
@@ -36,7 +46,12 @@ from clickwheel.mcp._runtime import (
     open_session,
     render,
 )
-from clickwheel.mcp.models import PlexHealth, PlexSyncResult
+from clickwheel.mcp.models import (
+    PlexHealth,
+    PlexPlaylistListResult,
+    PlexPullResult,
+    PlexSyncResult,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -179,5 +194,180 @@ def sync_playlist_to_plex(
             "plex_rating_key": result.playlist_rating_key,
             "m3u_local_path": result.m3u_local_path,
             "m3u_plex_path": result.m3u_plex_path,
+        },
+    )
+
+
+@mcp.tool(title="List Plex playlists", annotations=READ_ONLY)
+def list_plex_playlists() -> PlexPlaylistListResult:
+    """List every audio playlist on the user's Plex server.
+
+    Use before `pull_playlist_from_plex` so the user can pick which to
+    recover. The `smart` flag matters: smart playlists are dynamically
+    computed by Plex (e.g. "Recently Added", "Favorites") and pulling
+    one freezes a snapshot rather than mirroring an ongoing query —
+    require `include_smart=true` on the pull side. Manual playlists
+    are the safe default targets.
+
+    Cheap to call; safe to repeat. Errors mirror `plex_health` — see
+    that tool's docstring for triage guidance.
+
+    Errors
+    ------
+    - PlexNotConfiguredError, PlexExtraNotInstalledError,
+      PlexUnreachableError: surface the message; the user needs to
+      fix config or install the extra. `plex_health` pinpoints which.
+    """
+    with open_session() as (cfg, _db):
+        try:
+            playlists = actions.list_plex_playlists(cfg)
+        except PlexExtraNotInstalledError as exc:
+            return render(
+                f"List Plex playlists failed: {exc}",
+                {"error": "plex_extra_not_installed", "message": str(exc)},
+            )
+        except PlexNotConfiguredError as exc:
+            return render(
+                f"List Plex playlists failed: {exc}",
+                {"error": "plex_not_configured", "message": str(exc)},
+            )
+        except PlexUnreachableError as exc:
+            return render(
+                f"List Plex playlists failed: {exc}",
+                {"error": "plex_unreachable", "message": str(exc)},
+            )
+
+    entries = [
+        {
+            "name": p.name,
+            "smart": p.smart,
+            "track_count": p.track_count,
+            "summary": p.summary,
+        }
+        for p in playlists
+    ]
+    manual = sum(1 for p in playlists if not p.smart)
+    smart = len(playlists) - manual
+    text = f"{len(playlists)} playlist(s) on Plex: {manual} manual, {smart} smart."
+    return render(text, {"playlists": entries})
+
+
+@mcp.tool(title="Pull playlist from Plex", annotations=DESTRUCTIVE)
+def pull_playlist_from_plex(
+    name: Annotated[
+        str, Field(description="Plex playlist name to recover into clickwheel.")
+    ],
+    include_smart: Annotated[
+        bool,
+        Field(
+            description=(
+                "Required to pull a smart playlist — materializes a snapshot "
+                "rather than mirroring the live query."
+            )
+        ),
+    ] = False,
+    overwrite: Annotated[
+        bool,
+        Field(
+            description=(
+                "Replace an existing clickwheel playlist with the same name. "
+                "Without this, the operation refuses to clobber."
+            )
+        ),
+    ] = False,
+) -> PlexPullResult:
+    """Recover a Plex audio playlist into clickwheel's local SQLite.
+
+    The Plex playlist's track list is translated path-by-path back to
+    clickwheel's view (inverse of `sync_playlist_to_plex`'s remap) and
+    looked up in the scanned index. Matched tracks become the new
+    clickwheel playlist's contents, in Plex's order; the Plex
+    playlist's `summary` becomes the local description.
+
+    Primary use case: a fresh clickwheel install (or a Mac wipe) lost
+    the local SQLite playlists, but Plex still has them. This tool
+    is the recovery path. It's also fine for ongoing one-direction
+    mirroring — re-running with `overwrite=True` refreshes the local
+    copy.
+
+    Flagged destructive — clients gate with native Allow/Deny prompts.
+    Before invoking, summarize for the user: "About to pull '<name>'
+    from Plex (manual, <N> tracks) into clickwheel."
+
+    Errors
+    ------
+    - PlexNotConfiguredError, PlexExtraNotInstalledError,
+      PlexUnreachableError: config / install / network problem; see
+      `plex_health` to triage.
+    - PlexPlaylistNotFoundError: no audio playlist by that name on
+      Plex. Use `list_plex_playlists` to see what's available.
+    - PlexSmartPlaylistError: the named playlist is smart; re-call
+      with `include_smart=true` if the user wants a snapshot.
+    - PlaylistAlreadyExistsError: a clickwheel playlist already uses
+      this name. Confirm with the user, then re-call with
+      `overwrite=true`.
+    """
+    with open_session() as (cfg, db):
+        try:
+            result = actions.pull_playlist_from_plex(
+                cfg, db, name, include_smart=include_smart, overwrite=overwrite
+            )
+        except PlexExtraNotInstalledError as exc:
+            return render(
+                f"Plex pull failed: {exc}",
+                {"error": "plex_extra_not_installed", "message": str(exc)},
+            )
+        except PlexNotConfiguredError as exc:
+            return render(
+                f"Plex pull failed: {exc}",
+                {"error": "plex_not_configured", "message": str(exc)},
+            )
+        except PlexUnreachableError as exc:
+            return render(
+                f"Plex pull failed: {exc}",
+                {"error": "plex_unreachable", "message": str(exc)},
+            )
+        except PlexPlaylistNotFoundError as exc:
+            return render(
+                f"Plex pull failed: {exc}",
+                {"error": "plex_playlist_not_found", "message": str(exc)},
+            )
+        except PlexSmartPlaylistError as exc:
+            return render(
+                f"Plex pull failed: {exc}",
+                {"error": "plex_smart_playlist", "message": str(exc)},
+            )
+        except PlaylistAlreadyExistsError as exc:
+            return render(
+                f"Plex pull failed: {exc}",
+                {"error": "playlist_already_exists", "message": str(exc)},
+            )
+
+    verb = "Replaced" if result.replaced else "Created"
+    text = (
+        f"{verb} clickwheel playlist '{result.playlist_name}': "
+        f"{result.matched}/{result.total_plex_tracks} tracks matched"
+    )
+    if result.unmatched:
+        text += f" ({result.unmatched} unmatched)"
+    logger.info(
+        "pull_playlist_from_plex name=%r matched=%d unmatched=%d replaced=%s",
+        name,
+        result.matched,
+        result.unmatched,
+        result.replaced,
+    )
+    return render(
+        text,
+        {
+            "playlist": result.playlist_name,
+            "smart": result.smart,
+            "total_plex_tracks": result.total_plex_tracks,
+            "matched": result.matched,
+            "unmatched": result.unmatched,
+            "skipped_no_path": result.skipped_no_path,
+            "description": result.description,
+            "replaced": result.replaced,
+            "unmatched_details": result.unmatched_details,
         },
     )

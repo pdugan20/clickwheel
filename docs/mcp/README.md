@@ -60,7 +60,7 @@ The server includes a built-in `build_playlist` prompt that walks the model thro
 
 ## Tool reference
 
-30 tools + 1 prompt, grouped by domain.
+32 tools + 1 prompt, grouped by domain.
 
 ### Library (read)
 
@@ -105,10 +105,12 @@ The server includes a built-in `build_playlist` prompt that walks the model thro
 
 ### Plex
 
-| Tool                    | What it does                                                             |
-| ----------------------- | ------------------------------------------------------------------------ |
-| `plex_health`           | Probe the Plex integration end-to-end (config, reachability, path remap) |
-| `sync_playlist_to_plex` | Push a saved playlist to the Plex music library (destructive)            |
+| Tool                      | What it does                                                                                            |
+| ------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `plex_health`             | Probe the Plex integration end-to-end (config, reachability, path remap)                                |
+| `list_plex_playlists`     | List every audio playlist on the Plex server (manual vs smart, track counts)                            |
+| `sync_playlist_to_plex`   | Push a saved playlist to the Plex music library (destructive)                                           |
+| `pull_playlist_from_plex` | Recover a Plex playlist into clickwheel's local store (destructive — writes to SQLite). Read-back path. |
 
 ### Last.fm scrobbling
 
@@ -119,7 +121,7 @@ The server includes a built-in `build_playlist` prompt that walks the model thro
 
 ## Destructive-tool gating
 
-Seven tools carry the MCP `destructiveHint=true` annotation: `delete_playlist`, `sync_playlist_to_ipod`, `add_tracks_to_ipod`, `add_artist_to_ipod`, `remove_tracks_from_ipod`, `remove_artist_from_ipod`, `remove_ipod_playlist`. Different clients honor the flag differently:
+Nine tools carry the MCP `destructiveHint=true` annotation: `delete_playlist`, `sync_playlist_to_ipod`, `sync_playlist_to_plex`, `pull_playlist_from_plex`, `add_tracks_to_ipod`, `add_artist_to_ipod`, `remove_tracks_from_ipod`, `remove_artist_from_ipod`, `remove_ipod_playlist`. Different clients honor the flag differently:
 
 - **Claude Code** shows a per-call Allow/Deny prompt before each invocation.
 - **Claude Desktop** asks once when the tool is first used in a conversation, then runs freely thereafter.
