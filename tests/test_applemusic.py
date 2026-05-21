@@ -120,6 +120,25 @@ def test_generate_developer_token_signs_and_decodes(_gen_p8: Path):
 # ---------------------------------------------------------------------------
 
 
+def test_decode_body_gzip(monkeypatch):
+    """_decode_body unwraps gzip — Apple Music's library/playlists POST
+    sometimes returns gzip even when the client didn't request it."""
+    import gzip
+
+    raw = gzip.compress(b'{"ok":true}')
+    assert _am._decode_body(raw, "gzip") == '{"ok":true}'
+
+
+def test_decode_body_identity_passthrough():
+    """No encoding → decode utf-8 directly."""
+    assert _am._decode_body(b'{"a":1}', None) == '{"a":1}'
+
+
+def test_decode_body_empty():
+    assert _am._decode_body(b"", None) == ""
+    assert _am._decode_body(b"", "gzip") == ""
+
+
 def test_request_json_wraps_http_errors(monkeypatch):
     """A urllib HTTPError gets re-raised as AppleMusicHTTPError carrying
     the status and body."""

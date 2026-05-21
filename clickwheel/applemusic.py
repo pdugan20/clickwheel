@@ -15,6 +15,7 @@ only the JWT helpers actually touch pyjwt.
 
 from __future__ import annotations
 
+import gzip
 import json
 import logging
 import socket
@@ -24,6 +25,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import webbrowser
+import zlib
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -174,6 +176,21 @@ def generate_developer_token(
     return jwt.encode(payload, key_pem, algorithm="ES256", headers={"kid": key_id})
 
 
+def _decode_body(raw: bytes, encoding: str | None) -> str:
+    """Decompress (if needed) and decode an HTTP body to text.
+
+    Apple Music's REST API sometimes returns gzip-compressed responses
+    even when the client doesn't send `Accept-Encoding: gzip` — the
+    library/playlists POST endpoint is the most consistent offender.
+    Detecting and unwrapping here keeps callers naive.
+    """
+    if encoding == "gzip":
+        raw = gzip.decompress(raw)
+    elif encoding == "deflate":
+        raw = zlib.decompress(raw)
+    return raw.decode("utf-8") if raw else ""
+
+
 def _request_json(
     url: str,
     *,
@@ -187,12 +204,12 @@ def _request_json(
     req = urllib.request.Request(url, method=method, data=data, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw = resp.read().decode("utf-8") or "{}"
-            return json.loads(raw)
+            text = _decode_body(resp.read(), resp.headers.get("Content-Encoding"))
+            return json.loads(text) if text else {}
     except urllib.error.HTTPError as exc:
         body = ""
         try:
-            body = exc.read().decode("utf-8")
+            body = _decode_body(exc.read(), exc.headers.get("Content-Encoding"))
         except Exception:
             pass
         raise AppleMusicHTTPError(exc.code, body, url) from exc
