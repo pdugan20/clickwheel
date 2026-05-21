@@ -182,7 +182,7 @@ Caveats:
 
 ## MCP tools
 
-When using clickwheel through its MCP server, four Apple Music tools are exposed:
+When using clickwheel through its MCP server, five Apple Music tools are exposed:
 
 - `apple_music_health` — read-only, mirrors the CLI doctor.
 - `list_apple_music_playlists` — read-only listing of every library playlist in your Apple Music account.

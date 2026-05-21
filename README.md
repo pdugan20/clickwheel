@@ -41,31 +41,27 @@ clickwheel sync      # push to the iPod
 
 ## Commands
 
-| Command                   | Description                                                                                       |
-| ------------------------- | ------------------------------------------------------------------------------------------------- |
-| `clickwheel scan`         | Index your music library and report on metadata quality                                           |
-| `clickwheel fix`          | Clean up metadata, fetch album art, fill genres via beets                                         |
-| `clickwheel select`       | Interactive picker — checkbox artist selection                                                    |
-| `clickwheel playlist`     | List saved playlists or show details for one                                                      |
-| `clickwheel edit`         | Add/remove artists or set a description (interactive menus or `--add`/`--remove`/`--description`) |
-| `clickwheel heal`         | Drop playlist references to tracks no longer on disk                                              |
-| `clickwheel delete`       | Delete a saved playlist (with confirmation)                                                       |
-| `clickwheel diff`         | Preview what would be added or removed on the iPod                                                |
-| `clickwheel sync`         | Push your playlist to the iPod (with live progress table)                                         |
-| `clickwheel sync-plex`    | Push playlist(s) to your Plex music library (Plexamp picks them up)                               |
-| `clickwheel plex list`    | List audio playlists on your Plex server (manual vs smart, track counts)                          |
-| `clickwheel plex pull`    | Recover a Plex playlist into clickwheel's local store (read-back direction)                       |
-| `clickwheel plex doctor`  | Diagnose Plex configuration — one-shot setup check                                                |
-| `clickwheel apple auth`   | Authorize clickwheel with your Apple Music account (browser-based one-time flow)                  |
-| `clickwheel apple match`  | Preview how a playlist's tracks resolve to Apple Music catalog/library song IDs                   |
-| `clickwheel apple push`   | Create a playlist in your Apple Music account from a clickwheel playlist                          |
-| `clickwheel apple list`   | List every library playlist in your Apple Music account                                           |
-| `clickwheel apple pull`   | Import an Apple Music playlist into clickwheel's local store                                      |
-| `clickwheel apple delete` | Delete a library playlist from Apple Music (AppleScript via Music.app; iCML propagates)           |
-| `clickwheel apple doctor` | Diagnose Apple Music configuration — config, .p8, dev token, user token, iCloud Music Library     |
-| `clickwheel ls`           | Show what's on the iPod                                                                           |
-| `clickwheel eject`        | Safely unmount the iPod                                                                           |
-| `clickwheel scrobble`     | Submit recent iPod listens to Last.fm                                                             |
+The iPod workflow:
+
+| Command               | Description                                                                                       |
+| --------------------- | ------------------------------------------------------------------------------------------------- |
+| `clickwheel scan`     | Index your music library and report on metadata quality                                           |
+| `clickwheel fix`      | Clean up metadata, fetch album art, fill genres via beets                                         |
+| `clickwheel select`   | Interactive picker — checkbox artist selection                                                    |
+| `clickwheel playlist` | List saved playlists or show details for one                                                      |
+| `clickwheel edit`     | Add/remove artists or set a description (interactive menus or `--add`/`--remove`/`--description`) |
+| `clickwheel heal`     | Drop playlist references to tracks no longer on disk                                              |
+| `clickwheel delete`   | Delete a saved playlist (with confirmation)                                                       |
+| `clickwheel diff`     | Preview what would be added or removed on the iPod                                                |
+| `clickwheel sync`     | Push your playlist to the iPod (with live progress table)                                         |
+| `clickwheel ls`       | Show what's on the iPod                                                                           |
+| `clickwheel eject`    | Safely unmount the iPod                                                                           |
+
+Each optional integration ships its own subcommand group — full reference lives in that integration's doc:
+
+- **Plex / Plexamp** — `clickwheel sync-plex`, `clickwheel plex {list,pull,doctor}` — see [`docs/plex.md`](docs/plex.md).
+- **Apple Music** — `clickwheel apple {auth,doctor,list,match,push,pull,delete}` — see [`docs/applemusic.md`](docs/applemusic.md).
+- **Last.fm** — `clickwheel scrobble` — see [`docs/lastfm.md`](docs/lastfm.md).
 
 ## Configuration
 
@@ -76,15 +72,7 @@ ipod_capacity_gb: 64
 auto_scan: true
 ```
 
-Environment variables (`MUSIC_DIR`, `AUTO_SCAN`, etc.) override config values. See [`docs/configuration.md`](docs/configuration.md) for the full schema and `fix` walkthrough.
-
-### Optional integrations
-
-Both off by default; opt in only if you use them.
-
-- **Last.fm scrobbling** — submit iPod listens to Last.fm. See [`docs/lastfm.md`](docs/lastfm.md).
-- **Plex / Plexamp** — mirror playlists into a Plex music library so Plexamp picks them up. See [`docs/plex.md`](docs/plex.md).
-- **Apple Music** — authorize with your Apple Music account; push/pull playlists land in follow-up PRs. See [`docs/applemusic.md`](docs/applemusic.md).
+Environment variables (`MUSIC_DIR`, `AUTO_SCAN`, etc.) override config values. See [`docs/configuration.md`](docs/configuration.md) for the full schema and `fix` walkthrough. Integrations (Plex, Apple Music, Last.fm) are all off by default — opt in via the per-integration docs linked above.
 
 ## MCP server
 
