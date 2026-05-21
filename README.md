@@ -56,6 +56,8 @@ clickwheel sync      # push to the iPod
 | `clickwheel plex list`   | List audio playlists on your Plex server (manual vs smart, track counts)                          |
 | `clickwheel plex pull`   | Recover a Plex playlist into clickwheel's local store (read-back direction)                       |
 | `clickwheel plex doctor` | Diagnose Plex configuration — one-shot setup check                                                |
+| `clickwheel apple auth`  | Authorize clickwheel with your Apple Music account (browser-based one-time flow)                  |
+| `clickwheel apple doctor`| Diagnose Apple Music configuration — config, .p8, dev token, user token, iCloud Music Library     |
 | `clickwheel ls`          | Show what's on the iPod                                                                           |
 | `clickwheel eject`       | Safely unmount the iPod                                                                           |
 | `clickwheel scrobble`    | Submit recent iPod listens to Last.fm                                                             |
@@ -77,6 +79,7 @@ Both off by default; opt in only if you use them.
 
 - **Last.fm scrobbling** — submit iPod listens to Last.fm. See [`docs/lastfm.md`](docs/lastfm.md).
 - **Plex / Plexamp** — mirror playlists into a Plex music library so Plexamp picks them up. See [`docs/plex.md`](docs/plex.md).
+- **Apple Music** — authorize with your Apple Music account; push/pull playlists land in follow-up PRs. See [`docs/applemusic.md`](docs/applemusic.md).
 
 ## MCP server
 
@@ -95,7 +98,7 @@ pipx inject clickwheel 'clickwheel[mcp]'
 claude mcp add clickwheel clickwheel-mcp --scope user
 ```
 
-The server exposes 32 tools across library, playlist, iPod, Plex, and Last.fm domains, plus a `build_playlist` prompt with anti-hallucination rules. Destructive operations (`delete_playlist`, `sync_playlist_to_ipod`) are gated by client confirmation.
+The server exposes 33 tools across library, playlist, iPod, Plex, Apple Music, and Last.fm domains, plus a `build_playlist` prompt with anti-hallucination rules. Destructive operations (`delete_playlist`, `sync_playlist_to_ipod`) are gated by client confirmation.
 
 For Claude Desktop config, the full tool reference, and other clients (Cursor, Continue, Cline, Zed), see [`docs/mcp/`](docs/mcp/).
 

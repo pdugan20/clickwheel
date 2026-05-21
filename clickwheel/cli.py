@@ -9,6 +9,11 @@ from tqdm import tqdm
 
 from clickwheel import __version__, actions
 from clickwheel.actions import (
+    AppleMusicAuthError,
+    AppleMusicExtraNotInstalledError,
+    AppleMusicKeyFileError,
+    AppleMusicNotConfiguredError,
+    AppleMusicUnreachableError,
     EjectFailedError,
     InsufficientSpaceError,
     IpodNotFoundError,
@@ -1534,3 +1539,75 @@ match:
 """
     )
     dim(f"Generated beets config at {config_path}")
+
+
+# ---------------------------------------------------------------------------
+# Apple Music subcommand group
+# ---------------------------------------------------------------------------
+
+
+apple_app = typer.Typer(
+    name="apple",
+    help="Apple Music integration commands.",
+    no_args_is_help=True,
+)
+app.add_typer(apple_app, name="apple")
+
+
+@apple_app.command(name="auth")
+def apple_auth_cmd() -> None:
+    """Run the Music User Token authorization flow.
+
+    Opens your browser to a tiny local page that loads MusicKit JS,
+    asks you to sign in with your Apple ID, and posts the resulting
+    user token back to clickwheel. The token is saved to
+    ~/.clickwheel/.env as APPLE_MUSIC_USER_TOKEN. One-time per Mac
+    per Apple ID (the token is long-lived but can be revoked).
+    """
+    cfg = load_config()
+    status("Apple Music auth")
+    info("  Opening your browser to a local auth page...")
+    info("  Click 'Authorize with Apple Music', sign in, then return here.")
+    try:
+        with spinner("Waiting for browser authorization..."):
+            token = actions.apple_music_auth(cfg)
+    except AppleMusicExtraNotInstalledError as exc:
+        error(str(exc))
+        raise typer.Exit(1) from exc
+    except (
+        AppleMusicNotConfiguredError,
+        AppleMusicKeyFileError,
+        AppleMusicAuthError,
+        AppleMusicUnreachableError,
+    ) as exc:
+        error(str(exc))
+        raise typer.Exit(1) from exc
+
+    success(f"Authorized. User token saved ({len(token)} chars).")
+    dim("Try: clickwheel apple doctor")
+
+
+@apple_app.command(name="doctor")
+def apple_doctor_cmd() -> None:
+    """Probe Apple Music end-to-end (config, .p8, dev token, user token,
+    storefront, iCloud Music Library state). Mirrors `plex doctor`.
+    """
+    cfg = load_config()
+    try:
+        result = actions.apple_music_doctor(cfg)
+    except Exception as exc:  # noqa: BLE001
+        error(f"Apple Music doctor crashed: {exc}")
+        raise typer.Exit(1) from exc
+
+    status("Apple Music doctor")
+    for stage in result.stages:
+        prefix = f"  {stage.name}:"
+        if stage.ok:
+            success(f"{prefix} {stage.detail}")
+        else:
+            error(f"{prefix} {stage.detail}")
+
+    if not result.ok:
+        raise typer.Exit(1)
+    info("")
+    dim("All checks passed. Ready for playlist push/pull in a follow-up PR.")

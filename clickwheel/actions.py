@@ -156,6 +156,26 @@ class PlexSectionNotFoundError(ClickwheelError):
     """The configured Plex music section name doesn't exist on the server."""
 
 
+class AppleMusicNotConfiguredError(ClickwheelError):
+    """Raised when apple_music_enabled is off, or required keys are missing."""
+
+
+class AppleMusicExtraNotInstalledError(ClickwheelError):
+    """Raised when the `[applemusic]` extra (pyjwt[crypto]) isn't installed."""
+
+
+class AppleMusicKeyFileError(ClickwheelError):
+    """Raised when the .p8 path is missing/unreadable or not a PEM key."""
+
+
+class AppleMusicAuthError(ClickwheelError):
+    """Raised when the user-token auth dance failed or was cancelled."""
+
+
+class AppleMusicUnreachableError(ClickwheelError):
+    """Raised when Apple Music's REST API is unreachable or rejects auth."""
+
+
 class PlexPlaylistNotFoundError(ClickwheelError):
     """Raised when a named Plex playlist doesn't exist on the server."""
 
@@ -2027,4 +2047,329 @@ def plex_doctor(cfg: Config, db: Database) -> PlexDoctorResult:
                 "Check plex_path_remap_local / plex_path_remap_plex."
             ),
         )
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Apple Music
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class AppleMusicDoctorStage:
+    """One step of `apple_music_doctor`'s probe chain."""
+
+    name: str
+    ok: bool
+    detail: str
+
+
+@dataclass
+class AppleMusicDoctorResult:
+    """Ordered list of stages + a roll-up `ok`. Mirrors PlexDoctorResult."""
+
+    stages: list[AppleMusicDoctorStage] = field(default_factory=list)
+
+    @property
+    def ok(self) -> bool:
+        return bool(self.stages) and all(s.ok for s in self.stages)
+
+    def _add(self, name: str, ok: bool, detail: str) -> None:
+        self.stages.append(AppleMusicDoctorStage(name=name, ok=ok, detail=detail))
+
+
+def _require_apple_music_config(cfg: Config) -> None:
+    """Validate that apple_music is enabled and the minimum keys are set."""
+    if not cfg.apple_music_enabled:
+        raise AppleMusicNotConfiguredError(
+            "Apple Music is disabled. Set `apple_music_enabled: true` in "
+            "~/.clickwheel/config.yaml or CLICKWHEEL_APPLE_MUSIC_ENABLED=true."
+        )
+    missing = []
+    if not cfg.apple_music_team_id:
+        missing.append("apple_music_team_id")
+    if not cfg.apple_music_key_id and not cfg.apple_music_developer_token:
+        # Need either a key id (to sign tokens) or a pre-signed dev token.
+        missing.append("apple_music_key_id (or APPLE_MUSIC_DEVELOPER_TOKEN)")
+    if not cfg.apple_music_key_file and not cfg.apple_music_developer_token:
+        missing.append("apple_music_key_file (or APPLE_MUSIC_DEVELOPER_TOKEN)")
+    if missing:
+        raise AppleMusicNotConfiguredError(
+            f"Apple Music is enabled but {', '.join(missing)} is not set."
+        )
+
+
+def _resolve_developer_token(cfg: Config) -> str:
+    """Return a usable developer token.
+
+    Priority: if `APPLE_MUSIC_DEVELOPER_TOKEN` is set in env, use it
+    verbatim (caller-supplied; we don't validate signature). Otherwise
+    sign one on demand from the configured .p8 + key id + team id.
+
+    Translates pyjwt/file errors into typed ClickwheelError variants.
+    """
+    if cfg.apple_music_developer_token:
+        return cfg.apple_music_developer_token
+
+    from clickwheel import applemusic as _am
+
+    try:
+        key_pem = _am.read_private_key(cfg.apple_music_key_file)
+    except FileNotFoundError as exc:
+        raise AppleMusicKeyFileError(str(exc)) from exc
+    except _am.AppleMusicConfigInvalidError as exc:
+        raise AppleMusicKeyFileError(str(exc)) from exc
+
+    try:
+        return _am.generate_developer_token(
+            key_pem, cfg.apple_music_key_id, cfg.apple_music_team_id
+        )
+    except _am.AppleMusicExtraMissingError as exc:
+        raise AppleMusicExtraNotInstalledError(str(exc)) from exc
+
+
+def _save_apple_music_user_token(user_token: str) -> None:
+    """Persist the Music User Token to ~/.clickwheel/.env.
+
+    Updates the line if present, appends it otherwise. Keeps the file
+    at mode 600 (we created it that way; chmod is idempotent).
+    """
+    from clickwheel.config import CONFIG_DIR
+
+    env_path = CONFIG_DIR / ".env"
+    line = f"APPLE_MUSIC_USER_TOKEN={user_token}\n"
+
+    if env_path.exists():
+        existing = env_path.read_text().splitlines(keepends=True)
+        out: list[str] = []
+        replaced = False
+        for ln in existing:
+            if ln.startswith("APPLE_MUSIC_USER_TOKEN="):
+                out.append(line)
+                replaced = True
+            else:
+                out.append(ln)
+        if not replaced:
+            if out and not out[-1].endswith("\n"):
+                out[-1] = out[-1] + "\n"
+            out.append(line)
+        env_path.write_text("".join(out))
+    else:
+        env_path.write_text(line)
+
+    try:
+        env_path.chmod(0o600)
+    except OSError:
+        # Best-effort — if chmod fails, the file is still written.
+        pass
+
+
+def apple_music_auth(cfg: Config, *, build: str | None = None) -> str:
+    """Run the Music User Token auth dance.
+
+    Opens the user's browser to a local MusicKit-JS page, captures the
+    token they get from Apple's auth popup, persists it to
+    ~/.clickwheel/.env as APPLE_MUSIC_USER_TOKEN. Returns the token.
+
+    Raises: AppleMusicNotConfiguredError, AppleMusicExtraNotInstalledError,
+    AppleMusicKeyFileError, AppleMusicAuthError.
+    """
+    from clickwheel import __version__
+    from clickwheel import applemusic as _am
+
+    _require_apple_music_config(cfg)
+    dev_token = _resolve_developer_token(cfg)
+
+    try:
+        result = _am.run_user_token_auth(dev_token, build=build or __version__)
+    except _am.AppleMusicAuthFailedError as exc:
+        raise AppleMusicAuthError(str(exc)) from exc
+
+    if result.error or not result.user_token:
+        raise AppleMusicAuthError(result.error or "Auth dance ended without a token.")
+
+    _save_apple_music_user_token(result.user_token)
+    return result.user_token
+
+
+def apple_music_doctor(cfg: Config) -> AppleMusicDoctorResult:
+    """Probe the Apple Music integration end-to-end.
+
+    Stages run in order; a failing stage halts the chain but earlier
+    successes are still reported so the user sees how far they got.
+    Mirrors plex_doctor's shape.
+    """
+    from clickwheel import applemusic as _am
+
+    result = AppleMusicDoctorResult()
+
+    # 1. config
+    try:
+        _require_apple_music_config(cfg)
+    except AppleMusicNotConfiguredError as exc:
+        result._add("config", False, str(exc))
+        return result
+    result._add(
+        "config",
+        True,
+        f"enabled, storefront={cfg.apple_music_storefront}, "
+        f"team_id={cfg.apple_music_team_id}",
+    )
+
+    # 2. applemusic extra (pyjwt + cryptography)
+    try:
+        _am._import_jwt()
+    except _am.AppleMusicExtraMissingError as exc:
+        result._add("applemusic extra", False, str(exc))
+        return result
+    result._add("applemusic extra", True, "installed")
+
+    # 3. .p8 readable (only relevant if signing locally)
+    if cfg.apple_music_developer_token:
+        result._add(
+            "p8 readable",
+            True,
+            "skipped — APPLE_MUSIC_DEVELOPER_TOKEN provided directly.",
+        )
+    else:
+        try:
+            _am.read_private_key(cfg.apple_music_key_file)
+        except FileNotFoundError as exc:
+            result._add("p8 readable", False, str(exc))
+            return result
+        except _am.AppleMusicConfigInvalidError as exc:
+            result._add("p8 readable", False, str(exc))
+            return result
+        result._add(
+            "p8 readable",
+            True,
+            f"{cfg.apple_music_key_file} parses as a PEM private key.",
+        )
+
+    # 4. developer token signs
+    try:
+        dev_token = _resolve_developer_token(cfg)
+    except (
+        AppleMusicKeyFileError,
+        AppleMusicExtraNotInstalledError,
+    ) as exc:
+        result._add("developer token", False, str(exc))
+        return result
+    result._add(
+        "developer token",
+        True,
+        f"signed ({len(dev_token)} chars) with kid={cfg.apple_music_key_id or '?'}.",
+    )
+
+    # 5. developer token verifies against catalog
+    try:
+        hit = _am.verify_developer_token(dev_token, cfg.apple_music_storefront)
+    except _am.AppleMusicHTTPError as exc:
+        result._add(
+            "catalog reachable",
+            False,
+            (
+                f"HTTP {exc.status} from Apple Music. Token may be signed "
+                "by a revoked key, or the key isn't authorized for MusicKit. "
+                f"Body: {exc.body[:200] or '(empty)'}"
+            ),
+        )
+        return result
+    label = (
+        f"{hit['attributes']['artistName']} — {hit['attributes']['name']}"
+        if hit
+        else "(no songs returned)"
+    )
+    result._add(
+        "catalog reachable",
+        True,
+        f"search returned {label}.",
+    )
+
+    # 6. user token present
+    if not cfg.apple_music_user_token:
+        result._add(
+            "user token",
+            False,
+            "no APPLE_MUSIC_USER_TOKEN in ~/.clickwheel/.env yet. "
+            "Run `clickwheel apple auth` to mint one.",
+        )
+        return result
+    result._add(
+        "user token",
+        True,
+        f"present ({len(cfg.apple_music_user_token)} chars).",
+    )
+
+    # 7. user token verified
+    try:
+        storefront_resp = _am.verify_user_token(
+            dev_token, cfg.apple_music_user_token, cfg.apple_music_storefront
+        )
+    except _am.AppleMusicHTTPError as exc:
+        result._add(
+            "user token verified",
+            False,
+            (
+                f"HTTP {exc.status} for /v1/me/storefront. User token may have "
+                "expired or been revoked. Re-run `clickwheel apple auth`."
+            ),
+        )
+        return result
+    sf_data = storefront_resp.get("data", [])
+    storefront_id = sf_data[0]["id"] if sf_data else "?"
+    result._add(
+        "user token verified",
+        True,
+        f"user's storefront resolves to {storefront_id!r}.",
+    )
+
+    # 8. iCloud Music Library state
+    try:
+        icml = _am.detect_icloud_music_library(
+            dev_token, cfg.apple_music_user_token, cfg.apple_music_storefront
+        )
+    except _am.AppleMusicHTTPError as exc:
+        result._add(
+            "iCloud Music Library",
+            False,
+            f"HTTP {exc.status} probing /v1/me/library/songs: {exc.body[:200]}",
+        )
+        return result
+    if icml:
+        result._add(
+            "iCloud Music Library",
+            True,
+            "ON — user library is accessible (uploaded tracks become "
+            "playlist-eligible).",
+        )
+    else:
+        result._add(
+            "iCloud Music Library",
+            True,
+            (
+                "OFF — only Apple Music catalog tracks can be added to "
+                "playlists. Enable in Music.app or iPhone Settings → Music "
+                "to broaden the matching pool."
+            ),
+        )
+
+    # 9. storefront matches config
+    if storefront_id and storefront_id != cfg.apple_music_storefront:
+        result._add(
+            "storefront match",
+            False,
+            (
+                f"Config says storefront={cfg.apple_music_storefront!r} but "
+                f"the user is in {storefront_id!r}. Catalog lookups will use "
+                "the configured value; matching may miss region-locked tracks."
+            ),
+        )
+    else:
+        result._add(
+            "storefront match",
+            True,
+            f"config and user agree on storefront={storefront_id!r}.",
+        )
+
     return result

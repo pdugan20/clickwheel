@@ -398,6 +398,16 @@ class PlexHealth(BaseModel):
     stages: list[HealthStage] = Field(description="Per-stage probe results.")
 
 
+class AppleMusicHealth(BaseModel):
+    """Result of `apple_music_health` — same shape as PlexHealth, separate
+    model so the schemas stay independent and one can evolve without the
+    other.
+    """
+
+    ok: bool = Field(description="Whether every probe stage passed.")
+    stages: list[HealthStage] = Field(description="Per-stage probe results.")
+
+
 class PlexSyncResult(BaseModel):
     """Result of `sync_playlist_to_plex` — success or a configuration error."""
 

@@ -60,7 +60,7 @@ The server includes a built-in `build_playlist` prompt that walks the model thro
 
 ## Tool reference
 
-32 tools + 1 prompt, grouped by domain.
+33 tools + 1 prompt, grouped by domain.
 
 ### Library (read)
 
@@ -111,6 +111,14 @@ The server includes a built-in `build_playlist` prompt that walks the model thro
 | `list_plex_playlists`     | List every audio playlist on the Plex server (manual vs smart, track counts)                            |
 | `sync_playlist_to_plex`   | Push a saved playlist to the Plex music library (destructive)                                           |
 | `pull_playlist_from_plex` | Recover a Plex playlist into clickwheel's local store (destructive — writes to SQLite). Read-back path. |
+
+### Apple Music
+
+| Tool                  | What it does                                                                              |
+| --------------------- | ----------------------------------------------------------------------------------------- |
+| `apple_music_health`  | Probe Apple Music end-to-end (config, .p8, dev token, user token, iCloud Music Library) |
+
+Push/pull tools (`sync_playlist_to_apple_music`, `pull_playlist_from_apple_music`, `list_apple_music_playlists`) land in follow-up PRs.
 
 ### Last.fm scrobbling
 
