@@ -34,6 +34,11 @@ _YAML_TO_ENV = {
     "plex_playlist_dir": "CLICKWHEEL_PLEX_PLAYLIST_DIR",
     "plex_path_remap_local": "CLICKWHEEL_PLEX_PATH_REMAP_LOCAL",
     "plex_path_remap_plex": "CLICKWHEEL_PLEX_PATH_REMAP_PLEX",
+    "apple_music_enabled": "CLICKWHEEL_APPLE_MUSIC_ENABLED",
+    "apple_music_storefront": "CLICKWHEEL_APPLE_MUSIC_STOREFRONT",
+    "apple_music_key_id": "APPLE_MUSIC_KEY_ID",
+    "apple_music_team_id": "APPLE_MUSIC_TEAM_ID",
+    "apple_music_key_file": "APPLE_MUSIC_KEY_FILE",
 }
 
 
@@ -56,6 +61,13 @@ class Config:
     plex_playlist_dir: str = ""
     plex_path_remap_local: str = ""
     plex_path_remap_plex: str = ""
+    apple_music_enabled: bool = False
+    apple_music_storefront: str = "us"
+    apple_music_key_id: str = ""
+    apple_music_team_id: str = ""
+    apple_music_key_file: str = ""
+    apple_music_developer_token: str = ""
+    apple_music_user_token: str = ""
     db_path: Path = field(init=False)
 
     @property
@@ -115,6 +127,16 @@ def load_config() -> Config:
         plex_playlist_dir=os.environ.get("CLICKWHEEL_PLEX_PLAYLIST_DIR", ""),
         plex_path_remap_local=os.environ.get("CLICKWHEEL_PLEX_PATH_REMAP_LOCAL", ""),
         plex_path_remap_plex=os.environ.get("CLICKWHEEL_PLEX_PATH_REMAP_PLEX", ""),
+        apple_music_enabled=os.environ.get("CLICKWHEEL_APPLE_MUSIC_ENABLED", "").lower()
+        in ("1", "true", "yes"),
+        apple_music_storefront=os.environ.get(
+            "CLICKWHEEL_APPLE_MUSIC_STOREFRONT", "us"
+        ),
+        apple_music_key_id=os.environ.get("APPLE_MUSIC_KEY_ID", ""),
+        apple_music_team_id=os.environ.get("APPLE_MUSIC_TEAM_ID", ""),
+        apple_music_key_file=os.environ.get("APPLE_MUSIC_KEY_FILE", ""),
+        apple_music_developer_token=os.environ.get("APPLE_MUSIC_DEVELOPER_TOKEN", ""),
+        apple_music_user_token=os.environ.get("APPLE_MUSIC_USER_TOKEN", ""),
     )
 
 

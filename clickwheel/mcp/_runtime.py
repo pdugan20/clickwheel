@@ -63,6 +63,15 @@ PLEX → CLICKWHEEL (recovery direction):
   playlists need `include_smart=true` (snapshots the current query).
   Existing local playlists with the same name need `overwrite=true`.
 
+APPLE MUSIC (currently auth + doctor only):
+- `apple_music_health` is a read-only probe — config, .p8 readable,
+  developer-token signing, catalog reachability, user token validity,
+  iCloud Music Library state, storefront agreement. Mirrors
+  `plex_health`. Use it when the user asks about Apple Music status,
+  or before any future push/pull tool ships. Push/pull tools are not
+  yet implemented; if the user asks to "sync a playlist to Apple Music",
+  say it's coming in a follow-up PR and don't fabricate a tool call.
+
 When in doubt, ask the user: do they want it as a playlist they can
 browse on the iPod, or just want the songs added to the library? Don't
 auto-default to creating throwaway playlists — that pollutes their
