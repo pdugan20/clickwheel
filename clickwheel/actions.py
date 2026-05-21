@@ -2695,12 +2695,16 @@ def sync_playlist_to_apple_music(
 
 @dataclass
 class AppleMusicPlaylistEntry:
-    """One playlist in `list_apple_music_playlists` output."""
+    """One playlist in `list_apple_music_playlists` output.
+
+    `track_count` is None when Apple's listing endpoint didn't populate
+    the field — that's the typical case for `/v1/me/library/playlists`.
+    """
 
     playlist_id: str
     name: str
     description: str = ""
-    track_count: int = 0
+    track_count: int | None = None
     can_edit: bool = True
 
 

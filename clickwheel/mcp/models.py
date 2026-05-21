@@ -418,8 +418,12 @@ class AppleMusicPlaylistEntry(BaseModel):
     description: str = Field(
         default="", description="Playlist description (may be empty)."
     )
-    track_count: int = Field(
-        description="Number of tracks Apple Music reports for this playlist."
+    track_count: int | None = Field(
+        default=None,
+        description=(
+            "Track count if Apple's listing endpoint reported one (null is "
+            "common — the per-playlist endpoint is the authoritative source)."
+        ),
     )
     can_edit: bool = Field(
         description="True if Apple permits POST/PATCH to this playlist's tracks."

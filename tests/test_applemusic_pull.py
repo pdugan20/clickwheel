@@ -283,6 +283,26 @@ def test_list_user_playlists_pages(monkeypatch):
     assert [p.name for p in out] == ["A", "B", "C"]
     assert out[1].description == "desc"
     assert out[1].can_edit is False
+    # When `trackCount` is in the payload, we surface the int (even 0).
+    assert out[0].track_count == 5
+    assert out[1].track_count == 0
+    assert out[2].track_count == 1
+
+
+def test_list_user_playlists_track_count_absent(monkeypatch):
+    """Apple's listing endpoint commonly omits `trackCount` entirely —
+    we surface that as None rather than a misleading 0. (The per-
+    playlist endpoint is the authoritative source for the count.)"""
+
+    def _fake(url, headers, **kw):
+        return {
+            "data": [{"id": "p.x", "attributes": {"name": "no count", "canEdit": True}}]
+        }
+
+    monkeypatch.setattr(_am, "_request_json", _fake)
+    out = _am.list_user_playlists("dev", "user")
+    assert len(out) == 1
+    assert out[0].track_count is None
 
 
 def test_read_user_playlist_tracks_prefers_catalog_id(monkeypatch):
