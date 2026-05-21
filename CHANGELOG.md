@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/) and
 [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [0.14.0](https://github.com/pdugan20/clickwheel/compare/v0.13.0...v0.14.0) (2026-05-21)
+
+
+### Features
+
+* **applemusic:** clickwheel apple delete via AppleScript ([#36](https://github.com/pdugan20/clickwheel/issues/36)) ([9114f78](https://github.com/pdugan20/clickwheel/commit/9114f78560418b8775a679bace5cb982cb867929))
+
 ## [0.13.0](https://github.com/pdugan20/clickwheel/compare/v0.12.0...v0.13.0) (2026-05-21)
 
 
