@@ -408,6 +408,42 @@ class AppleMusicHealth(BaseModel):
     stages: list[HealthStage] = Field(description="Per-stage probe results.")
 
 
+class AppleMusicPushResult(BaseModel):
+    """Result of `sync_playlist_to_apple_music`."""
+
+    playlist: str | None = Field(
+        default=None, description="The clickwheel playlist name pushed."
+    )
+    apple_music_playlist_id: str | None = Field(
+        default=None,
+        description="ID of the new playlist in the user's Apple Music account.",
+    )
+    pushed: int | None = Field(
+        default=None,
+        description="Tracks that landed in the Apple Music playlist.",
+    )
+    unmatched: int | None = Field(
+        default=None,
+        description="Tracks Apple Music couldn't resolve at all.",
+    )
+    low_confidence_skipped: int | None = Field(
+        default=None,
+        description=(
+            "Tracks matched only at low confidence and skipped (unless the "
+            "caller passed include_low_confidence=True)."
+        ),
+    )
+    storefront: str | None = Field(
+        default=None, description="Catalog storefront used for matching."
+    )
+    error: str | None = Field(
+        default=None, description="Machine-readable error code, on failure."
+    )
+    message: str | None = Field(
+        default=None, description="Human-readable error message, on failure."
+    )
+
+
 class PlexSyncResult(BaseModel):
     """Result of `sync_playlist_to_plex` — success or a configuration error."""
 

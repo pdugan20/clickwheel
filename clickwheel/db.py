@@ -62,11 +62,21 @@ CREATE TABLE IF NOT EXISTS scan_meta (
     value TEXT
 );
 
+CREATE TABLE IF NOT EXISTS apple_music_song_map (
+    track_path TEXT PRIMARY KEY,
+    song_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    confidence REAL NOT NULL,
+    storefront TEXT NOT NULL,
+    matched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks(artist);
 CREATE INDEX IF NOT EXISTS idx_tracks_album ON tracks(album);
 CREATE INDEX IF NOT EXISTS idx_tracks_album_artist ON tracks(album_artist);
 CREATE INDEX IF NOT EXISTS idx_tracks_genre ON tracks(genre);
 CREATE INDEX IF NOT EXISTS idx_tracks_format ON tracks(format);
+CREATE INDEX IF NOT EXISTS idx_am_song_map_kind ON apple_music_song_map(kind);
 """
 
 
@@ -544,6 +554,56 @@ class Database:
             "UPDATE tracks SET missing_since = NULL WHERE path = ?",
             (path,),
         )
+
+    # ------------------------------------------------------------------
+    # Apple Music song-id cache (path → catalog/library song ID)
+    # ------------------------------------------------------------------
+
+    def get_apple_music_song(self, track_path: str) -> dict | None:
+        """Return the cached Apple Music song mapping for a track path,
+        or None if not yet matched. Result has keys: song_id, kind,
+        confidence, storefront, matched_at."""
+        row = self.conn.execute(
+            "SELECT song_id, kind, confidence, storefront, matched_at "
+            "FROM apple_music_song_map WHERE track_path = ?",
+            (track_path,),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def upsert_apple_music_song(
+        self,
+        track_path: str,
+        song_id: str,
+        kind: str,
+        confidence: float,
+        storefront: str,
+    ) -> None:
+        """Insert or replace the song mapping for a track. Updates
+        matched_at to CURRENT_TIMESTAMP on every call so the cache age
+        is meaningful."""
+        self.conn.execute(
+            """
+            INSERT INTO apple_music_song_map
+                (track_path, song_id, kind, confidence, storefront, matched_at)
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(track_path) DO UPDATE SET
+                song_id = excluded.song_id,
+                kind = excluded.kind,
+                confidence = excluded.confidence,
+                storefront = excluded.storefront,
+                matched_at = CURRENT_TIMESTAMP
+            """,
+            (track_path, song_id, kind, confidence, storefront),
+        )
+        self.conn.commit()
+
+    def clear_apple_music_song(self, track_path: str) -> None:
+        """Drop the cached mapping for a track (e.g. user wants to
+        force a re-match because tags changed)."""
+        self.conn.execute(
+            "DELETE FROM apple_music_song_map WHERE track_path = ?", (track_path,)
+        )
+        self.conn.commit()
 
     def close(self) -> None:
         self.conn.close()

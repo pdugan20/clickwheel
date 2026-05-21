@@ -15,6 +15,7 @@ only the JWT helpers actually touch pyjwt.
 
 from __future__ import annotations
 
+import gzip
 import json
 import logging
 import socket
@@ -24,6 +25,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import webbrowser
+import zlib
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -82,6 +84,61 @@ def _import_jwt() -> Any:
         ) from exc
 
 
+def read_isrc(file_path: str | Path) -> str | None:
+    """Extract the ISRC code from an audio file's tags via mutagen.
+
+    Supports MP3 (ID3 TSRC frame), M4A (©ISR atom / "----:com.apple.iTunes:ISRC"),
+    and FLAC (Vorbis comment 'ISRC' field). Returns the normalized ISRC
+    string (uppercase, no hyphens) or None if the file has no ISRC tag
+    or the file can't be read.
+
+    ISRC tagging is inconsistent — many MP3s from older sources lack
+    it. The matcher uses ISRC as the fast path and falls back to fuzzy
+    search when it's missing.
+    """
+    from mutagen import File as MutagenFile  # lazy: avoids cycle with library.py
+
+    try:
+        audio = MutagenFile(str(file_path))
+    except Exception:  # noqa: BLE001  — mutagen raises a zoo of exceptions
+        return None
+    if audio is None:
+        return None
+
+    # MP3 (ID3) — TSRC frame; mutagen exposes via tags.getall("TSRC")
+    tsrc = audio.tags.getall("TSRC") if getattr(audio, "tags", None) else []
+    if tsrc:
+        return _normalize_isrc(str(tsrc[0]))
+
+    # M4A — atoms come back as a dict-like; iTunes-specific atoms live
+    # under "----:com.apple.iTunes:ISRC" and the value is a list of
+    # MP4FreeForm bytes objects.
+    if hasattr(audio, "tags") and audio.tags is not None:
+        m4a_value = audio.tags.get("----:com.apple.iTunes:ISRC")
+        if m4a_value:
+            try:
+                raw = bytes(m4a_value[0]).decode("utf-8")
+            except Exception:  # noqa: BLE001
+                raw = ""
+            if raw:
+                return _normalize_isrc(raw)
+
+    # FLAC / Vorbis comments — flat dict with uppercase keys.
+    vorbis = audio.get("ISRC") or audio.get("isrc") if hasattr(audio, "get") else None
+    if vorbis:
+        return _normalize_isrc(str(vorbis[0]))
+
+    return None
+
+
+def _normalize_isrc(raw: str) -> str:
+    """Strip whitespace and hyphens; uppercase. ISRC is 12 chars
+    (2-char country + 3-char registrant + 2-digit year + 5-digit
+    designation), case-insensitive but Apple's filter expects the
+    canonical form."""
+    return raw.strip().replace("-", "").upper()
+
+
 def read_private_key(path: str | Path) -> str:
     """Read a MusicKit .p8 private key, expanding ~ in the path.
 
@@ -119,6 +176,21 @@ def generate_developer_token(
     return jwt.encode(payload, key_pem, algorithm="ES256", headers={"kid": key_id})
 
 
+def _decode_body(raw: bytes, encoding: str | None) -> str:
+    """Decompress (if needed) and decode an HTTP body to text.
+
+    Apple Music's REST API sometimes returns gzip-compressed responses
+    even when the client doesn't send `Accept-Encoding: gzip` — the
+    library/playlists POST endpoint is the most consistent offender.
+    Detecting and unwrapping here keeps callers naive.
+    """
+    if encoding == "gzip":
+        raw = gzip.decompress(raw)
+    elif encoding == "deflate":
+        raw = zlib.decompress(raw)
+    return raw.decode("utf-8") if raw else ""
+
+
 def _request_json(
     url: str,
     *,
@@ -132,12 +204,12 @@ def _request_json(
     req = urllib.request.Request(url, method=method, data=data, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw = resp.read().decode("utf-8") or "{}"
-            return json.loads(raw)
+            text = _decode_body(resp.read(), resp.headers.get("Content-Encoding"))
+            return json.loads(text) if text else {}
     except urllib.error.HTTPError as exc:
         body = ""
         try:
-            body = exc.read().decode("utf-8")
+            body = _decode_body(exc.read(), exc.headers.get("Content-Encoding"))
         except Exception:
             pass
         raise AppleMusicHTTPError(exc.code, body, url) from exc
@@ -201,6 +273,294 @@ def detect_icloud_music_library(
         if exc.status == 403:
             return False
         raise
+
+
+# ---------------------------------------------------------------------------
+# Catalog + library matching
+# ---------------------------------------------------------------------------
+
+# Confidence floor below which we refuse to claim a match. The matcher
+# returns the candidate anyway so callers can show "low confidence"
+# rows; the floor only controls whether the doctor/push treats it as
+# a usable hit. Adjusted empirically; raise if you see false positives.
+MATCH_MIN_CONFIDENCE = 0.60
+
+
+@dataclass
+class CatalogMatch:
+    """One catalog/library hit for a clickwheel track. `kind` is
+    `'catalog'` for `/v1/catalog/...` results (public catalog, works
+    without subscription for reading) or `'library'` for
+    `/v1/me/library/...` results (user-uploaded tracks via iCloud
+    Music Library; need an active subscription).
+    """
+
+    song_id: str
+    kind: str  # 'catalog' | 'library'
+    confidence: float  # 0.0-1.0
+    matched_artist: str = ""
+    matched_title: str = ""
+    matched_album: str = ""
+    isrc: str | None = None
+
+
+def catalog_by_isrc(
+    dev_token: str, isrc: str, storefront: str = "us"
+) -> CatalogMatch | None:
+    """Look up a song in the public catalog by ISRC. ISRC is the
+    canonical identifier for a recording, so a hit here is high-
+    confidence — we return confidence 1.0.
+
+    Returns None if Apple has no catalog entry for the ISRC. Other
+    errors (auth, network) propagate as AppleMusicHTTPError.
+    """
+    url = (
+        f"{API_ROOT}/v1/catalog/{storefront}/songs"
+        f"?filter%5Bisrc%5D={urllib.parse.quote(isrc)}&limit=1"
+    )
+    body = _request_json(url, headers={"Authorization": f"Bearer {dev_token}"})
+    data = body.get("data", [])
+    if not data:
+        return None
+    item = data[0]
+    attrs = item.get("attributes", {})
+    return CatalogMatch(
+        song_id=item["id"],
+        kind="catalog",
+        confidence=1.0,
+        matched_artist=attrs.get("artistName", ""),
+        matched_title=attrs.get("name", ""),
+        matched_album=attrs.get("albumName", ""),
+        isrc=attrs.get("isrc"),
+    )
+
+
+def _score(want: str, got: str) -> float:
+    """SequenceMatcher ratio between two normalized strings. Treats
+    None / empty inputs as zero, so missing tags don't score as 1.0."""
+    from difflib import SequenceMatcher
+
+    if not want or not got:
+        return 0.0
+    return SequenceMatcher(None, want.strip().lower(), got.strip().lower()).ratio()
+
+
+def _composite_confidence(
+    want_artist: str,
+    want_title: str,
+    want_album: str,
+    got_artist: str,
+    got_title: str,
+    got_album: str,
+) -> float:
+    """Combine per-field similarity into a single confidence score.
+
+    Title is the strongest signal (artists routinely have many
+    different track titles, but title collisions across artists are
+    rare), so it gets the highest weight. Album is the noisiest
+    (deluxe / remaster suffixes wreck similarity) so it gets the
+    lowest. Tuned on the user's clickwheel library — adjust if
+    fielded false-positive rate is bad.
+    """
+    title_score = _score(want_title, got_title)
+    artist_score = _score(want_artist, got_artist)
+    album_score = _score(want_album, got_album)
+    return 0.55 * title_score + 0.35 * artist_score + 0.10 * album_score
+
+
+def catalog_fuzzy_search(
+    dev_token: str,
+    artist: str,
+    title: str,
+    album: str = "",
+    storefront: str = "us",
+    limit: int = 10,
+) -> CatalogMatch | None:
+    """Catalog search by artist + title (album as tiebreaker).
+
+    Returns the highest-scoring candidate, or None if no candidate
+    scores above MATCH_MIN_CONFIDENCE. The confidence comes from
+    `_composite_confidence`; weighted toward title.
+    """
+    if not title and not artist:
+        return None
+    term = f"{artist} {title}".strip()
+    url = (
+        f"{API_ROOT}/v1/catalog/{storefront}/search"
+        f"?term={urllib.parse.quote(term)}"
+        f"&types=songs&limit={limit}"
+    )
+    body = _request_json(url, headers={"Authorization": f"Bearer {dev_token}"})
+    songs = body.get("results", {}).get("songs", {}).get("data", [])
+    if not songs:
+        return None
+
+    best: CatalogMatch | None = None
+    for item in songs:
+        attrs = item.get("attributes", {})
+        score = _composite_confidence(
+            artist,
+            title,
+            album,
+            attrs.get("artistName", ""),
+            attrs.get("name", ""),
+            attrs.get("albumName", ""),
+        )
+        if best is None or score > best.confidence:
+            best = CatalogMatch(
+                song_id=item["id"],
+                kind="catalog",
+                confidence=score,
+                matched_artist=attrs.get("artistName", ""),
+                matched_title=attrs.get("name", ""),
+                matched_album=attrs.get("albumName", ""),
+                isrc=attrs.get("isrc"),
+            )
+    if best is None or best.confidence < MATCH_MIN_CONFIDENCE:
+        return None
+    return best
+
+
+def library_search(
+    dev_token: str,
+    user_token: str,
+    artist: str,
+    title: str,
+    album: str = "",
+    limit: int = 10,
+) -> CatalogMatch | None:
+    """Same shape as catalog_fuzzy_search but against the user's
+    library (iCloud Music Library). Returns library-songs IDs (prefixed
+    with `i.`) that are playlist-eligible when iCML is on. Useful for
+    matching tracks the user uploaded that aren't in the public catalog.
+    """
+    if not title and not artist:
+        return None
+    term = f"{artist} {title}".strip()
+    url = (
+        f"{API_ROOT}/v1/me/library/search"
+        f"?term={urllib.parse.quote(term)}"
+        f"&types=library-songs&limit={limit}"
+    )
+    body = _request_json(
+        url,
+        headers={
+            "Authorization": f"Bearer {dev_token}",
+            "Music-User-Token": user_token,
+        },
+    )
+    songs = body.get("results", {}).get("library-songs", {}).get("data", [])
+    if not songs:
+        return None
+    best: CatalogMatch | None = None
+    for item in songs:
+        attrs = item.get("attributes", {})
+        score = _composite_confidence(
+            artist,
+            title,
+            album,
+            attrs.get("artistName", ""),
+            attrs.get("name", ""),
+            attrs.get("albumName", ""),
+        )
+        if best is None or score > best.confidence:
+            best = CatalogMatch(
+                song_id=item["id"],
+                kind="library",
+                confidence=score,
+                matched_artist=attrs.get("artistName", ""),
+                matched_title=attrs.get("name", ""),
+                matched_album=attrs.get("albumName", ""),
+            )
+    if best is None or best.confidence < MATCH_MIN_CONFIDENCE:
+        return None
+    return best
+
+
+def match_track(
+    *,
+    dev_token: str,
+    user_token: str | None,
+    storefront: str,
+    artist: str,
+    title: str,
+    album: str = "",
+    isrc: str | None = None,
+    icml: bool = False,
+) -> CatalogMatch | None:
+    """Top-level matcher: tries ISRC → catalog fuzzy → library fuzzy
+    (last only when iCloud Music Library is on AND a user token is
+    available). Returns the first usable hit.
+
+    Order matters: ISRC is exact, so even a low-confidence fuzzy hit
+    shouldn't override it. Library only gets a vote if the catalog
+    couldn't satisfy the request.
+    """
+    if isrc:
+        try:
+            isrc_hit = catalog_by_isrc(dev_token, isrc, storefront)
+        except AppleMusicHTTPError as exc:
+            logger.debug("ISRC lookup %s failed: %s", isrc, exc)
+            isrc_hit = None
+        if isrc_hit is not None:
+            return isrc_hit
+
+    try:
+        fuzzy_hit = catalog_fuzzy_search(dev_token, artist, title, album, storefront)
+    except AppleMusicHTTPError as exc:
+        logger.debug("catalog fuzzy %s/%s failed: %s", artist, title, exc)
+        fuzzy_hit = None
+    if fuzzy_hit is not None:
+        return fuzzy_hit
+
+    if icml and user_token:
+        try:
+            lib_hit = library_search(dev_token, user_token, artist, title, album)
+        except AppleMusicHTTPError as exc:
+            logger.debug("library search %s/%s failed: %s", artist, title, exc)
+            lib_hit = None
+        if lib_hit is not None:
+            return lib_hit
+
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Library playlist mutation
+# ---------------------------------------------------------------------------
+
+
+def create_library_playlist(
+    dev_token: str,
+    user_token: str,
+    name: str,
+    description: str,
+    song_ids: list[dict],
+) -> dict:
+    """POST a new library playlist. `song_ids` is a list of
+    `{"id": ..., "type": "songs"|"library-songs"}` records — catalog
+    hits use type `songs`, library hits use type `library-songs`.
+
+    Returns Apple's playlist record (carrying the new library
+    playlist's ID, which has the `p.` prefix for cross-references).
+    Raises AppleMusicHTTPError on failure.
+    """
+    payload = {
+        "attributes": {"name": name, "description": description},
+        "relationships": {
+            "tracks": {"data": song_ids},
+        },
+    }
+    return _request_json(
+        f"{API_ROOT}/v1/me/library/playlists",
+        method="POST",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {dev_token}",
+            "Music-User-Token": user_token,
+            "Content-Type": "application/json",
+        },
+    )
 
 
 # ---------------------------------------------------------------------------

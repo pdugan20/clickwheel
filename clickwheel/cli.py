@@ -12,6 +12,7 @@ from clickwheel.actions import (
     AppleMusicAuthError,
     AppleMusicExtraNotInstalledError,
     AppleMusicKeyFileError,
+    AppleMusicNoMatchesError,
     AppleMusicNotConfiguredError,
     AppleMusicUnreachableError,
     EjectFailedError,
@@ -1610,4 +1611,183 @@ def apple_doctor_cmd() -> None:
     if not result.ok:
         raise typer.Exit(1)
     info("")
-    dim("All checks passed. Ready for playlist push/pull in a follow-up PR.")
+    dim("All checks passed. Try: clickwheel apple match <playlist>")
+
+
+@apple_app.command(name="match")
+def apple_match_cmd(
+    name: str = typer.Argument(..., help="clickwheel playlist to match."),
+    refresh: bool = typer.Option(
+        False, "--refresh", help="Ignore the cache and re-match every track."
+    ),
+    min_confidence: float = typer.Option(
+        0.85, "--min-confidence", help="Threshold between matched and low-confidence."
+    ),
+) -> None:
+    """Preview how a playlist's tracks resolve to Apple Music song IDs.
+
+    Read-only against your Apple Music account (no playlist is created)
+    but populates the local match cache so a subsequent `apple push`
+    is fast. Tracks below `--min-confidence` are surfaced as
+    'low-confidence' so you can eyeball them before pushing.
+    """
+    cfg = load_config()
+    db = Database(cfg.db_path)
+    try:
+        with spinner(f"Matching '{name}' against Apple Music..."):
+            result = actions.match_playlist_to_apple_music(
+                cfg, db, name, refresh=refresh, min_confidence=min_confidence
+            )
+    except AppleMusicExtraNotInstalledError as exc:
+        error(str(exc))
+        raise typer.Exit(1) from exc
+    except (
+        AppleMusicNotConfiguredError,
+        AppleMusicKeyFileError,
+        AppleMusicUnreachableError,
+        PlaylistNotFoundError,
+    ) as exc:
+        error(str(exc))
+        raise typer.Exit(1) from exc
+    finally:
+        db.close()
+
+    status(f"Match preview for '{name}'")
+    info(
+        f"  storefront={result.storefront}  iCloud Music Library="
+        f"{'ON' if result.icml else 'OFF'}"
+    )
+    success(f"  matched ({result.matched}/{result.total})")
+    if result.low_confidence:
+        warn(f"  low confidence ({result.low_confidence})")
+    if result.unmatched:
+        warn(f"  unmatched ({result.unmatched})")
+    info("")
+
+    t = table(title="Tracks")
+    t.add_column("Status", width=10)
+    t.add_column("Artist")
+    t.add_column("Title")
+    t.add_column("Conf", justify="right")
+    t.add_column("Why", style="dim")
+    for row in result.tracks[:50]:
+        if row.song_id is None:
+            statuslbl = "[red]miss[/red]"
+        elif row.confidence >= min_confidence:
+            statuslbl = "[green]ok[/green]"
+        else:
+            statuslbl = "[yellow]low[/yellow]"
+        t.add_row(
+            statuslbl,
+            row.artist or "?",
+            row.title or "?",
+            f"{row.confidence:.2f}" if row.song_id else "—",
+            row.reason,
+        )
+    print_table(t)
+    if len(result.tracks) > 50:
+        dim(f"  ... and {len(result.tracks) - 50} more rows.")
+
+
+@apple_app.command(name="push")
+def apple_push_cmd(
+    name: str = typer.Argument(..., help="clickwheel playlist to push to Apple Music."),
+    refresh: bool = typer.Option(
+        False, "--refresh", help="Ignore the cache and re-match every track."
+    ),
+    min_confidence: float = typer.Option(
+        0.85, "--min-confidence", help="Reject matches below this confidence."
+    ),
+    include_low: bool = typer.Option(
+        False,
+        "--include-low",
+        help="Push low-confidence matches too (use after reviewing).",
+    ),
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="Skip the confirmation prompt."
+    ),
+) -> None:
+    """Create a playlist in your Apple Music account from a clickwheel playlist.
+
+    Runs the matcher first, then pushes the matched tracks via
+    `POST /v1/me/library/playlists`. Iclupow-confidence matches are skipped
+    by default; pass --include-low after a `clickwheel apple match` review
+    if you want them in.
+    """
+    cfg = load_config()
+    db = Database(cfg.db_path)
+    try:
+        with spinner(f"Matching '{name}'..."):
+            preview = actions.match_playlist_to_apple_music(
+                cfg, db, name, refresh=refresh, min_confidence=min_confidence
+            )
+    except AppleMusicExtraNotInstalledError as exc:
+        error(str(exc))
+        db.close()
+        raise typer.Exit(1) from exc
+    except (
+        AppleMusicNotConfiguredError,
+        AppleMusicKeyFileError,
+        AppleMusicUnreachableError,
+        PlaylistNotFoundError,
+    ) as exc:
+        error(str(exc))
+        db.close()
+        raise typer.Exit(1) from exc
+
+    will_push = preview.matched + (preview.low_confidence if include_low else 0)
+    status(f"About to push '{name}' to Apple Music")
+    info(
+        f"  matched={preview.matched}  low_confidence="
+        f"{preview.low_confidence}  unmatched={preview.unmatched}"
+    )
+    info(f"  pushing {will_push}/{preview.total} tracks")
+    if not yes and not typer.confirm("Proceed?", default=True):
+        db.close()
+        raise typer.Exit(0)
+
+    try:
+        with spinner("Creating Apple Music playlist..."):
+            result = actions.sync_playlist_to_apple_music(
+                cfg,
+                db,
+                name,
+                refresh=False,  # we already ran the match above
+                min_confidence=min_confidence,
+                include_low_confidence=include_low,
+            )
+    except AppleMusicNoMatchesError as exc:
+        error(str(exc))
+        if exc.matched_low_confidence > 0:
+            dim(
+                "  Re-run with `--include-low` to push the low-confidence "
+                "candidates anyway, or `clickwheel apple match` to inspect."
+            )
+        db.close()
+        raise typer.Exit(1) from exc
+    except (
+        AppleMusicNotConfiguredError,
+        AppleMusicKeyFileError,
+        AppleMusicUnreachableError,
+        PlaylistNotFoundError,
+    ) as exc:
+        error(str(exc))
+        db.close()
+        raise typer.Exit(1) from exc
+    finally:
+        db.close()
+
+    success(
+        f"Pushed '{result.playlist_name}' to Apple Music — "
+        f"{result.pushed} tracks (id {result.apple_music_playlist_id})"
+    )
+    if result.unmatched:
+        warn(
+            f"  {result.unmatched} track(s) had no Apple Music match. "
+            "Check `clickwheel apple match` output."
+        )
+    if result.low_confidence_skipped:
+        dim(
+            f"  Skipped {result.low_confidence_skipped} low-confidence row(s). "
+            "Re-run with `--include-low` to include them."
+        )

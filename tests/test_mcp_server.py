@@ -919,7 +919,7 @@ def test_all_tools_emit_output_schema():
     from clickwheel.mcp._runtime import mcp
 
     tools = asyncio.run(mcp.list_tools())
-    assert len(tools) == 33
+    assert len(tools) == 34
     for t in tools:
         assert t.outputSchema, f"{t.name}: no outputSchema"
         assert t.outputSchema.get("properties"), f"{t.name}: schema has no properties"
