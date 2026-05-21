@@ -1827,12 +1827,10 @@ def apple_list_cmd() -> None:
     t.add_column("Editable", width=8)
     t.add_column("ID", style="dim")
     for p in sorted(playlists, key=lambda x: x.name.lower()):
-        t.add_row(
-            p.name,
-            f"{p.track_count:,}",
-            "yes" if p.can_edit else "no",
-            p.playlist_id,
-        )
+        # Apple's listing endpoint doesn't include trackCount; render
+        # None as `?` rather than misleading `0`.
+        tracks = f"{p.track_count:,}" if p.track_count is not None else "?"
+        t.add_row(p.name, tracks, "yes" if p.can_edit else "no", p.playlist_id)
     print_table(t)
 
 

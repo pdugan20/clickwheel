@@ -546,12 +546,18 @@ def match_track(
 
 @dataclass
 class UserPlaylistSummary:
-    """One entry in `list_user_playlists`."""
+    """One entry in `list_user_playlists`.
+
+    `track_count` is None when Apple's listing endpoint didn't include
+    `trackCount` (which is the common case — that field is only reliably
+    populated on the per-playlist endpoint, not on `/v1/me/library/playlists`).
+    Display layers should render None as 'unknown', not '0'.
+    """
 
     playlist_id: str  # 'p.xxxxx'
     name: str
     description: str = ""
-    track_count: int = 0
+    track_count: int | None = None
     can_edit: bool = True
 
 
@@ -588,7 +594,9 @@ def list_user_playlists(dev_token: str, user_token: str) -> list[UserPlaylistSum
                     playlist_id=item["id"],
                     name=attrs.get("name", ""),
                     description=desc_text,
-                    track_count=int(attrs.get("trackCount", 0) or 0),
+                    track_count=(
+                        int(attrs["trackCount"]) if "trackCount" in attrs else None
+                    ),
                     can_edit=bool(attrs.get("canEdit", True)),
                 )
             )
