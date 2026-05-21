@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/) and
 [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [0.11.0](https://github.com/pdugan20/clickwheel/compare/v0.10.0...v0.11.0) (2026-05-21)
+
+
+### Features
+
+* **applemusic:** add auth + doctor for Apple Music API ([#29](https://github.com/pdugan20/clickwheel/issues/29)) ([2ef84d4](https://github.com/pdugan20/clickwheel/commit/2ef84d4fd0629fd3a56425bf11b54304c0e8bd62))
+
 ## [0.10.0](https://github.com/pdugan20/clickwheel/compare/v0.9.0...v0.10.0) (2026-05-20)
 
 
