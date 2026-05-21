@@ -57,11 +57,11 @@ The iPod workflow:
 | `clickwheel ls`       | Show what's on the iPod                         |
 | `clickwheel eject`    | Safely unmount the iPod                         |
 
-Each optional integration ships its own subcommand group — full reference lives in that integration's doc:
+Each optional integration has its own doc:
 
-- **Plex / Plexamp** — `clickwheel sync-plex`, `clickwheel plex {list,pull,doctor}` — see [`docs/plex.md`](docs/plex.md).
-- **Apple Music** — `clickwheel apple {auth,doctor,list,match,push,pull,delete}` — see [`docs/applemusic.md`](docs/applemusic.md).
-- **Last.fm** — `clickwheel scrobble` — see [`docs/lastfm.md`](docs/lastfm.md).
+- **Plex / Plexamp** — push/pull playlists between clickwheel and a Plex music library. See [`docs/plex.md`](docs/plex.md).
+- **Apple Music** — push/pull/delete playlists in your Apple Music account; syncs across Apple devices via iCloud Music Library. See [`docs/applemusic.md`](docs/applemusic.md).
+- **Last.fm** — submit iPod listens. See [`docs/lastfm.md`](docs/lastfm.md).
 
 ## Configuration
 
