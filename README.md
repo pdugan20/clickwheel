@@ -43,19 +43,19 @@ clickwheel sync      # push to the iPod
 
 The iPod workflow:
 
-| Command               | Description                                                                                       |
-| --------------------- | ------------------------------------------------------------------------------------------------- |
-| `clickwheel scan`     | Index your music library and report on metadata quality                                           |
-| `clickwheel fix`      | Clean up metadata, fetch album art, fill genres via beets                                         |
-| `clickwheel select`   | Interactive picker — checkbox artist selection                                                    |
-| `clickwheel playlist` | List saved playlists or show details for one                                                      |
-| `clickwheel edit`     | Add/remove artists or set a description (interactive menus or `--add`/`--remove`/`--description`) |
-| `clickwheel heal`     | Drop playlist references to tracks no longer on disk                                              |
-| `clickwheel delete`   | Delete a saved playlist (with confirmation)                                                       |
-| `clickwheel diff`     | Preview what would be added or removed on the iPod                                                |
-| `clickwheel sync`     | Push your playlist to the iPod (with live progress table)                                         |
-| `clickwheel ls`       | Show what's on the iPod                                                                           |
-| `clickwheel eject`    | Safely unmount the iPod                                                                           |
+| Command               | Description                                     |
+| --------------------- | ----------------------------------------------- |
+| `clickwheel scan`     | Index your library; report metadata gaps        |
+| `clickwheel fix`      | Clean up metadata via beets — art, genres, tags |
+| `clickwheel select`   | Interactive checkbox picker for the iPod        |
+| `clickwheel playlist` | List saved playlists or show one's tracks       |
+| `clickwheel edit`     | Add/remove artists or set a description         |
+| `clickwheel heal`     | Drop playlist refs to files no longer on disk   |
+| `clickwheel delete`   | Delete a saved playlist                         |
+| `clickwheel diff`     | Preview what would change on the iPod           |
+| `clickwheel sync`     | Push your playlist to the iPod                  |
+| `clickwheel ls`       | Show what's on the iPod                         |
+| `clickwheel eject`    | Safely unmount the iPod                         |
 
 Each optional integration ships its own subcommand group — full reference lives in that integration's doc:
 
