@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/) and
 [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [0.12.0](https://github.com/pdugan20/clickwheel/compare/v0.11.0...v0.12.0) (2026-05-21)
+
+
+### Features
+
+* **applemusic:** match + push playlists to Apple Music account ([#32](https://github.com/pdugan20/clickwheel/issues/32)) ([da34621](https://github.com/pdugan20/clickwheel/commit/da346215aa20bc807c50862b0f4077c326e8668d))
+
 ## [0.11.0](https://github.com/pdugan20/clickwheel/compare/v0.10.0...v0.11.0) (2026-05-21)
 
 
