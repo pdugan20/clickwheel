@@ -14,6 +14,7 @@ from clickwheel.actions import (
     AppleMusicKeyFileError,
     AppleMusicNoMatchesError,
     AppleMusicNotConfiguredError,
+    AppleMusicPlaylistNotFoundError,
     AppleMusicUnreachableError,
     EjectFailedError,
     InsufficientSpaceError,
@@ -1791,3 +1792,114 @@ def apple_push_cmd(
             f"  Skipped {result.low_confidence_skipped} low-confidence row(s). "
             "Re-run with `--include-low` to include them."
         )
+
+
+@apple_app.command(name="list")
+def apple_list_cmd() -> None:
+    """List every library playlist in your Apple Music account.
+
+    Read-only. Use before `apple pull` to find the playlist you want.
+    Manual and smart playlists both appear; smart ones come back with
+    `canEdit=false` (we can pull them but you can't push back).
+    """
+    cfg = load_config()
+    try:
+        with spinner("Reading Apple Music playlists..."):
+            playlists = actions.list_apple_music_playlists(cfg)
+    except AppleMusicExtraNotInstalledError as exc:
+        error(str(exc))
+        raise typer.Exit(1) from exc
+    except (
+        AppleMusicNotConfiguredError,
+        AppleMusicKeyFileError,
+        AppleMusicUnreachableError,
+    ) as exc:
+        error(str(exc))
+        raise typer.Exit(1) from exc
+
+    if not playlists:
+        warn("No library playlists on Apple Music.")
+        return
+    t = table(title="Apple Music library playlists")
+    t.add_column("Name")
+    t.add_column("Tracks", justify="right")
+    t.add_column("Editable", width=8)
+    t.add_column("ID", style="dim")
+    for p in sorted(playlists, key=lambda x: x.name.lower()):
+        t.add_row(
+            p.name,
+            f"{p.track_count:,}",
+            "yes" if p.can_edit else "no",
+            p.playlist_id,
+        )
+    print_table(t)
+
+
+@apple_app.command(name="pull")
+def apple_pull_cmd(
+    name: str = typer.Argument(..., help="Apple Music playlist to import."),
+    overwrite: bool = typer.Option(
+        False,
+        "--overwrite",
+        help="Replace an existing clickwheel playlist with the same name.",
+    ),
+    min_fuzzy_confidence: float = typer.Option(
+        0.85, "--min-fuzzy", help="Fuzzy-match threshold for unmatched cache entries."
+    ),
+) -> None:
+    """Import an Apple Music library playlist into clickwheel's local store.
+
+    Each Apple track is resolved to a local file in this order: the
+    song_map cache from prior pushes → exact metadata match against
+    your SQLite index → fuzzy composite score. Unmatched rows are
+    surfaced so you know what to chase (typically files Apple has
+    that clickwheel hasn't scanned).
+    """
+    cfg = load_config()
+    db = Database(cfg.db_path)
+    try:
+        with spinner(f"Pulling '{name}' from Apple Music..."):
+            result = actions.pull_playlist_from_apple_music(
+                cfg,
+                db,
+                name,
+                overwrite=overwrite,
+                min_fuzzy_confidence=min_fuzzy_confidence,
+            )
+    except AppleMusicExtraNotInstalledError as exc:
+        error(str(exc))
+        raise typer.Exit(1) from exc
+    except (
+        AppleMusicNotConfiguredError,
+        AppleMusicKeyFileError,
+        AppleMusicUnreachableError,
+        AppleMusicPlaylistNotFoundError,
+        PlaylistAlreadyExistsError,
+    ) as exc:
+        error(str(exc))
+        raise typer.Exit(1) from exc
+    finally:
+        db.close()
+
+    verb = "Replaced" if result.replaced else "Created"
+    success(
+        f"{verb} '{result.playlist_name}': "
+        f"{result.matched}/{result.total} tracks matched locally"
+    )
+    if result.description:
+        dim(f"  Description: {result.description}")
+    if result.unmatched:
+        warn(
+            f"  {result.unmatched} track(s) on Apple Music had no local match. "
+            "Run `clickwheel scan` if your library has changed, or accept the gap."
+        )
+        t = table(title="Unmatched")
+        t.add_column("Artist")
+        t.add_column("Title")
+        t.add_column("Album", style="dim")
+        unmatched_rows = [r for r in result.tracks if r.local_path is None]
+        for r in unmatched_rows[:20]:
+            t.add_row(r.artist or "?", r.title or "?", r.album or "?")
+        print_table(t)
+        if len(unmatched_rows) > 20:
+            dim(f"  ... and {len(unmatched_rows) - 20} more.")

@@ -605,5 +605,117 @@ class Database:
         )
         self.conn.commit()
 
+    def get_track_path_by_apple_song_id(
+        self, song_id: str, storefront: str | None = None
+    ) -> str | None:
+        """Reverse the song_map: given an Apple Music song id, find the
+        local track path that previously matched to it. Pass
+        `storefront` to scope to a single region; omit to accept any.
+
+        When multiple paths map to the same song_id (rare but possible
+        — duplicates across albums, re-tagged files), the highest-
+        confidence row wins, breaking ties by most-recent match.
+        """
+        if storefront:
+            row = self.conn.execute(
+                "SELECT track_path FROM apple_music_song_map "
+                "WHERE song_id = ? AND storefront = ? "
+                "ORDER BY confidence DESC, matched_at DESC LIMIT 1",
+                (song_id, storefront),
+            ).fetchone()
+        else:
+            row = self.conn.execute(
+                "SELECT track_path FROM apple_music_song_map WHERE song_id = ? "
+                "ORDER BY confidence DESC, matched_at DESC LIMIT 1",
+                (song_id,),
+            ).fetchone()
+        return row["track_path"] if row else None
+
+    def find_track_by_artist_title(
+        self, artist: str, title: str, album: str = ""
+    ) -> str | None:
+        """Look up a local track path by metadata, case-insensitive.
+
+        Exact-match-first: artist + title match (and album if given).
+        Returns the first hit; callers wanting fuzzy fallback should
+        check None and fall through to their own scorer. Used by the
+        Apple Music pull to resolve catalog hits to local files when
+        the song_map cache doesn't have the mapping yet.
+        """
+        norm_artist = (artist or "").strip().lower()
+        norm_title = (title or "").strip().lower()
+        if not norm_artist or not norm_title:
+            return None
+        if album:
+            norm_album = album.strip().lower()
+            row = self.conn.execute(
+                "SELECT path FROM tracks "
+                "WHERE lower(artist) = ? AND lower(title) = ? "
+                "AND lower(album) = ? LIMIT 1",
+                (norm_artist, norm_title, norm_album),
+            ).fetchone()
+            if row:
+                return row["path"]
+        row = self.conn.execute(
+            "SELECT path FROM tracks WHERE lower(artist) = ? AND lower(title) = ? "
+            "LIMIT 1",
+            (norm_artist, norm_title),
+        ).fetchone()
+        return row["path"] if row else None
+
+    def fuzzy_find_track(
+        self,
+        artist: str,
+        title: str,
+        album: str = "",
+        min_confidence: float = 0.85,
+    ) -> tuple[str | None, float]:
+        """Fuzzy-match an Apple Music track against the local index.
+
+        Filters candidates by lowercase artist substring overlap, then
+        scores each by the same composite-confidence formula used in
+        the catalog push (title 55%, artist 35%, album 10%). Returns
+        (path, confidence) for the best candidate above the threshold,
+        or (None, 0.0).
+        """
+        from difflib import SequenceMatcher
+
+        if not title:
+            return (None, 0.0)
+        norm_artist = (artist or "").strip().lower()
+        norm_title = (title or "").strip().lower()
+        norm_album = (album or "").strip().lower()
+        # Restrict candidate pool to rows whose lowercase artist contains
+        # any 4+ char run from the target artist (or title if no artist).
+        # This keeps the in-memory candidate set small for big libraries.
+        key = norm_artist or norm_title
+        if len(key) < 3:
+            return (None, 0.0)
+        like = f"%{key[:6]}%"
+        rows = self.conn.execute(
+            "SELECT path, artist, title, album FROM tracks "
+            "WHERE lower(artist) LIKE ? OR lower(title) LIKE ?",
+            (like, like),
+        ).fetchall()
+        best_path: str | None = None
+        best_score = 0.0
+
+        def _r(a: str, b: str) -> float:
+            if not a or not b:
+                return 0.0
+            return SequenceMatcher(None, a, b).ratio()
+
+        for r in rows:
+            t_score = _r(norm_title, (r["title"] or "").strip().lower())
+            a_score = _r(norm_artist, (r["artist"] or "").strip().lower())
+            al_score = _r(norm_album, (r["album"] or "").strip().lower())
+            score = 0.55 * t_score + 0.35 * a_score + 0.10 * al_score
+            if score > best_score:
+                best_score = score
+                best_path = r["path"]
+        if best_score < min_confidence:
+            return (None, 0.0)
+        return (best_path, best_score)
+
     def close(self) -> None:
         self.conn.close()

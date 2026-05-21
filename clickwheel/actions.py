@@ -188,6 +188,10 @@ class AppleMusicNoMatchesError(ClickwheelError):
         self.matched_low_confidence = matched_low_confidence
 
 
+class AppleMusicPlaylistNotFoundError(ClickwheelError):
+    """Raised when a named Apple Music library playlist isn't found."""
+
+
 class PlexPlaylistNotFoundError(ClickwheelError):
     """Raised when a named Plex playlist doesn't exist on the server."""
 
@@ -2675,4 +2679,216 @@ def sync_playlist_to_apple_music(
         unmatched=match.unmatched,
         low_confidence_skipped=(0 if include_low_confidence else match.low_confidence),
         storefront=cfg.apple_music_storefront,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Apple Music: read-back (list + pull)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class AppleMusicPlaylistEntry:
+    """One playlist in `list_apple_music_playlists` output."""
+
+    playlist_id: str
+    name: str
+    description: str = ""
+    track_count: int = 0
+    can_edit: bool = True
+
+
+@dataclass
+class AppleMusicPullTrack:
+    """One track row in an Apple Music pull preview/result."""
+
+    apple_song_id: str
+    kind: str  # 'catalog' | 'library'
+    artist: str
+    title: str
+    album: str
+    # Filled when a usable local match was found:
+    local_path: str | None = None
+    reason: str = ""  # 'cache' | 'exact' | 'fuzzy' | 'unmatched'
+    confidence: float = 0.0
+
+
+@dataclass
+class AppleMusicPullResult:
+    """Outcome of `pull_playlist_from_apple_music`."""
+
+    playlist_name: str
+    apple_music_playlist_id: str
+    total: int
+    matched: int
+    unmatched: int
+    replaced: bool
+    description: str
+    tracks: list[AppleMusicPullTrack] = field(default_factory=list)
+
+
+def list_apple_music_playlists(cfg: Config) -> list[AppleMusicPlaylistEntry]:
+    """Return every library playlist in the user's Apple Music account.
+
+    Read-only. Requires a user token (run `clickwheel apple auth`
+    first).
+
+    Raises: AppleMusicNotConfiguredError, AppleMusicExtraNotInstalledError,
+    AppleMusicKeyFileError, AppleMusicUnreachableError.
+    """
+    from clickwheel import applemusic as _am
+
+    _require_apple_music_config(cfg)
+    if not cfg.apple_music_user_token:
+        raise AppleMusicNotConfiguredError(
+            "No APPLE_MUSIC_USER_TOKEN. Run `clickwheel apple auth` first."
+        )
+    dev_token = _resolve_developer_token(cfg)
+    try:
+        playlists = _am.list_user_playlists(dev_token, cfg.apple_music_user_token)
+    except _am.AppleMusicHTTPError as exc:
+        raise AppleMusicUnreachableError(str(exc)) from exc
+    return [
+        AppleMusicPlaylistEntry(
+            playlist_id=p.playlist_id,
+            name=p.name,
+            description=p.description,
+            track_count=p.track_count,
+            can_edit=p.can_edit,
+        )
+        for p in playlists
+    ]
+
+
+def _resolve_apple_track_to_local(
+    db: Database,
+    apple_song_id: str,
+    artist: str,
+    title: str,
+    album: str,
+    storefront: str,
+    min_fuzzy_confidence: float,
+) -> tuple[str | None, str, float]:
+    """Map one Apple Music track to a local clickwheel track path.
+
+    Strategy ladder: cache (highest fidelity) → exact artist+title
+    (very high) → fuzzy composite (best-effort). Returns
+    `(local_path, reason, confidence)` where `local_path` is None
+    when no acceptable match was found.
+    """
+    cached = db.get_track_path_by_apple_song_id(apple_song_id, storefront)
+    if cached:
+        return (cached, "cache", 1.0)
+    exact = db.find_track_by_artist_title(artist, title, album)
+    if exact:
+        return (exact, "exact", 0.99)
+    fuzzy_path, fuzzy_score = db.fuzzy_find_track(
+        artist, title, album, min_confidence=min_fuzzy_confidence
+    )
+    if fuzzy_path:
+        return (fuzzy_path, "fuzzy", fuzzy_score)
+    return (None, "unmatched", 0.0)
+
+
+def pull_playlist_from_apple_music(
+    cfg: Config,
+    db: Database,
+    name: str,
+    *,
+    overwrite: bool = False,
+    min_fuzzy_confidence: float = 0.85,
+) -> AppleMusicPullResult:
+    """Import an Apple Music library playlist into clickwheel's local store.
+
+    Each Apple track is mapped to a local file path via the song_map
+    cache, then an exact metadata match, then a fuzzy composite score.
+    Tracks Apple has but clickwheel doesn't are reported in
+    `unmatched_details`.
+
+    Raises: AppleMusicNotConfiguredError, AppleMusicExtraNotInstalledError,
+    AppleMusicKeyFileError, AppleMusicUnreachableError,
+    AppleMusicPlaylistNotFoundError, PlaylistAlreadyExistsError.
+    """
+    from clickwheel import applemusic as _am
+
+    _require_apple_music_config(cfg)
+    if not cfg.apple_music_user_token:
+        raise AppleMusicNotConfiguredError(
+            "No APPLE_MUSIC_USER_TOKEN. Run `clickwheel apple auth` first."
+        )
+    dev_token = _resolve_developer_token(cfg)
+
+    try:
+        playlists = _am.list_user_playlists(dev_token, cfg.apple_music_user_token)
+    except _am.AppleMusicHTTPError as exc:
+        raise AppleMusicUnreachableError(str(exc)) from exc
+
+    target = next((p for p in playlists if p.name == name), None)
+    if target is None:
+        raise AppleMusicPlaylistNotFoundError(
+            f"No Apple Music library playlist named {name!r}. "
+            "Use `list_apple_music_playlists` to see what's available."
+        )
+
+    already_exists = playlist_exists(db, name)
+    if already_exists and not overwrite:
+        raise PlaylistAlreadyExistsError(
+            f"Playlist '{name}' already exists locally. "
+            "Pass overwrite=True to replace its contents."
+        )
+
+    try:
+        apple_tracks = _am.read_user_playlist_tracks(
+            dev_token, cfg.apple_music_user_token, target.playlist_id
+        )
+    except _am.AppleMusicHTTPError as exc:
+        raise AppleMusicUnreachableError(str(exc)) from exc
+
+    results: list[AppleMusicPullTrack] = []
+    matched_paths: list[str] = []
+    matched = unmatched = 0
+    for t in apple_tracks:
+        path, reason, conf = _resolve_apple_track_to_local(
+            db,
+            t["song_id"],
+            t["artist"],
+            t["title"],
+            t["album"],
+            cfg.apple_music_storefront,
+            min_fuzzy_confidence,
+        )
+        row = AppleMusicPullTrack(
+            apple_song_id=t["song_id"],
+            kind=t["kind"],
+            artist=t["artist"],
+            title=t["title"],
+            album=t["album"],
+            local_path=path,
+            reason=reason,
+            confidence=conf,
+        )
+        if path is not None:
+            matched_paths.append(path)
+            matched += 1
+            # Backfill the song_map cache so subsequent push round-trips
+            # for the same track don't re-do the work.
+            if reason != "cache":
+                db.upsert_apple_music_song(
+                    path, t["song_id"], t["kind"], conf, cfg.apple_music_storefront
+                )
+        else:
+            unmatched += 1
+        results.append(row)
+
+    db.save_playlist(name, matched_paths, target.description or None)
+
+    return AppleMusicPullResult(
+        playlist_name=name,
+        apple_music_playlist_id=target.playlist_id,
+        total=len(apple_tracks),
+        matched=matched,
+        unmatched=unmatched,
+        replaced=already_exists,
+        description=target.description,
+        tracks=results,
     )

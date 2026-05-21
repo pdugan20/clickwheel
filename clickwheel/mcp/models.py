@@ -408,6 +408,87 @@ class AppleMusicHealth(BaseModel):
     stages: list[HealthStage] = Field(description="Per-stage probe results.")
 
 
+class AppleMusicPlaylistEntry(BaseModel):
+    """One library playlist in `list_apple_music_playlists` output."""
+
+    playlist_id: str = Field(
+        description="Apple Music's id for the playlist (`p.xxxx`)."
+    )
+    name: str = Field(description="Playlist title in the user's Apple Music library.")
+    description: str = Field(
+        default="", description="Playlist description (may be empty)."
+    )
+    track_count: int = Field(
+        description="Number of tracks Apple Music reports for this playlist."
+    )
+    can_edit: bool = Field(
+        description="True if Apple permits POST/PATCH to this playlist's tracks."
+    )
+
+
+class AppleMusicPlaylistListResult(BaseModel):
+    """Result of `list_apple_music_playlists`."""
+
+    playlists: list[AppleMusicPlaylistEntry] = Field(
+        description="All library playlists in the user's Apple Music account."
+    )
+    error: str | None = Field(
+        default=None, description="Machine-readable error code, on failure."
+    )
+    message: str | None = Field(
+        default=None, description="Human-readable error message, on failure."
+    )
+
+
+class AppleMusicPullUnmatched(BaseModel):
+    """One Apple Music track that didn't map to a local file."""
+
+    apple_song_id: str = Field(description="Apple Music song id for the track.")
+    kind: str = Field(description="'catalog' or 'library'.")
+    artist: str = Field(default="", description="Artist as Apple Music reports it.")
+    title: str = Field(default="", description="Title as Apple Music reports it.")
+    album: str = Field(default="", description="Album as Apple Music reports it.")
+
+
+class AppleMusicPullResult(BaseModel):
+    """Result of `pull_playlist_from_apple_music`."""
+
+    playlist: str | None = Field(
+        default=None, description="Name of the playlist that was pulled."
+    )
+    apple_music_playlist_id: str | None = Field(
+        default=None, description="The Apple Music playlist's id (`p.xxxx`)."
+    )
+    total: int | None = Field(
+        default=None, description="Tracks the Apple Music playlist contained."
+    )
+    matched: int | None = Field(
+        default=None,
+        description="Tracks resolved to a local clickwheel path (any strategy).",
+    )
+    unmatched: int | None = Field(
+        default=None,
+        description="Tracks Apple Music had that clickwheel couldn't resolve.",
+    )
+    replaced: bool | None = Field(
+        default=None,
+        description="True if a clickwheel playlist with this name already existed.",
+    )
+    description: str | None = Field(
+        default=None, description="Playlist description carried over from Apple Music."
+    )
+    unmatched_details: list[AppleMusicPullUnmatched] | None = Field(
+        default=None,
+        description="Per-track records for the unmatched count, for triage.",
+    )
+    error: str | None = Field(
+        default=None, description="Machine-readable error code, on failure."
+    )
+    message: str | None = Field(
+        default=None, description="Human-readable error message, on failure."
+    )
+
+
 class AppleMusicPushResult(BaseModel):
     """Result of `sync_playlist_to_apple_music`."""
 

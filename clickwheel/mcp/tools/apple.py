@@ -21,11 +21,18 @@ from clickwheel.actions import (
     AppleMusicKeyFileError,
     AppleMusicNoMatchesError,
     AppleMusicNotConfiguredError,
+    AppleMusicPlaylistNotFoundError,
     AppleMusicUnreachableError,
+    PlaylistAlreadyExistsError,
     PlaylistNotFoundError,
 )
 from clickwheel.mcp._runtime import DESTRUCTIVE, READ_ONLY, mcp, open_session, render
-from clickwheel.mcp.models import AppleMusicHealth, AppleMusicPushResult
+from clickwheel.mcp.models import (
+    AppleMusicHealth,
+    AppleMusicPlaylistListResult,
+    AppleMusicPullResult,
+    AppleMusicPushResult,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -199,5 +206,190 @@ def sync_playlist_to_apple_music(
             "unmatched": result.unmatched,
             "low_confidence_skipped": result.low_confidence_skipped,
             "storefront": result.storefront,
+        },
+    )
+
+
+@mcp.tool(title="List Apple Music playlists", annotations=READ_ONLY)
+def list_apple_music_playlists() -> AppleMusicPlaylistListResult:
+    """List every library playlist in the user's Apple Music account.
+
+    Use before `pull_playlist_from_apple_music` so the user (or agent)
+    can pick which one to import. `can_edit=False` rows are
+    Apple-managed smart playlists; we can pull them but you can't push
+    to them.
+
+    Errors mirror `apple_music_health` — see that tool's docstring for
+    triage guidance.
+    """
+    with open_session() as (cfg, _db):
+        try:
+            playlists = actions.list_apple_music_playlists(cfg)
+        except AppleMusicExtraNotInstalledError as exc:
+            return render(
+                f"List Apple Music playlists failed: {exc}",
+                {"error": "apple_music_extra_not_installed", "message": str(exc)},
+            )
+        except AppleMusicNotConfiguredError as exc:
+            return render(
+                f"List Apple Music playlists failed: {exc}",
+                {"error": "apple_music_not_configured", "message": str(exc)},
+            )
+        except AppleMusicKeyFileError as exc:
+            return render(
+                f"List Apple Music playlists failed: {exc}",
+                {"error": "apple_music_key_file", "message": str(exc)},
+            )
+        except AppleMusicUnreachableError as exc:
+            return render(
+                f"List Apple Music playlists failed: {exc}",
+                {"error": "apple_music_unreachable", "message": str(exc)},
+            )
+
+    entries = [
+        {
+            "playlist_id": p.playlist_id,
+            "name": p.name,
+            "description": p.description,
+            "track_count": p.track_count,
+            "can_edit": p.can_edit,
+        }
+        for p in playlists
+    ]
+    text = f"{len(entries)} library playlist(s) on Apple Music."
+    return render(text, {"playlists": entries})
+
+
+@mcp.tool(title="Pull playlist from Apple Music", annotations=DESTRUCTIVE)
+def pull_playlist_from_apple_music(
+    name: Annotated[
+        str,
+        Field(
+            description="Apple Music library playlist name to import into clickwheel."
+        ),
+    ],
+    overwrite: Annotated[
+        bool,
+        Field(
+            description=(
+                "Replace an existing clickwheel playlist with the same name. "
+                "Without this, the operation refuses to clobber."
+            )
+        ),
+    ] = False,
+    min_fuzzy_confidence: Annotated[
+        float,
+        Field(
+            description=(
+                "Threshold for the fuzzy-fallback match against the local "
+                "library. Tracks below this score are reported as unmatched."
+            ),
+            ge=0.0,
+            le=1.0,
+        ),
+    ] = 0.85,
+) -> AppleMusicPullResult:
+    """Import a library playlist from Apple Music into clickwheel.
+
+    Each Apple Music track is resolved to a local file in three steps:
+    (1) the song_map cache from prior pushes, (2) exact lowercase
+    artist+title (and album, if available) match against clickwheel's
+    SQLite index, (3) fuzzy composite-confidence scoring (title 55% +
+    artist 35% + album 10%). Tracks that don't match at any stage are
+    reported in `unmatched_details`.
+
+    Use case: curate a playlist on iPhone via the Music app, then pull
+    it into clickwheel for sync to the iPod.
+
+    Flagged destructive — clients gate with native Allow/Deny prompts.
+    Before invoking, summarize: "About to import '<name>' (<N>
+    tracks) from Apple Music into clickwheel; existing local playlist
+    with this name will be overwritten."
+
+    Errors
+    ------
+    - AppleMusicNotConfiguredError, AppleMusicExtraNotInstalledError,
+      AppleMusicUnreachableError: see `apple_music_health` to triage.
+    - AppleMusicPlaylistNotFoundError: no library playlist by that
+      name. Call `list_apple_music_playlists` to see what's available.
+    - PlaylistAlreadyExistsError: a clickwheel playlist already uses
+      this name. Confirm with the user, then retry with `overwrite=true`.
+    """
+    with open_session() as (cfg, db):
+        try:
+            result = actions.pull_playlist_from_apple_music(
+                cfg,
+                db,
+                name,
+                overwrite=overwrite,
+                min_fuzzy_confidence=min_fuzzy_confidence,
+            )
+        except AppleMusicExtraNotInstalledError as exc:
+            return render(
+                f"Apple Music pull failed: {exc}",
+                {"error": "apple_music_extra_not_installed", "message": str(exc)},
+            )
+        except AppleMusicNotConfiguredError as exc:
+            return render(
+                f"Apple Music pull failed: {exc}",
+                {"error": "apple_music_not_configured", "message": str(exc)},
+            )
+        except AppleMusicKeyFileError as exc:
+            return render(
+                f"Apple Music pull failed: {exc}",
+                {"error": "apple_music_key_file", "message": str(exc)},
+            )
+        except AppleMusicUnreachableError as exc:
+            return render(
+                f"Apple Music pull failed: {exc}",
+                {"error": "apple_music_unreachable", "message": str(exc)},
+            )
+        except AppleMusicPlaylistNotFoundError as exc:
+            return render(
+                f"Apple Music pull failed: {exc}",
+                {"error": "apple_music_playlist_not_found", "message": str(exc)},
+            )
+        except PlaylistAlreadyExistsError as exc:
+            return render(
+                f"Apple Music pull failed: {exc}",
+                {"error": "playlist_already_exists", "message": str(exc)},
+            )
+
+    verb = "Replaced" if result.replaced else "Created"
+    text = (
+        f"{verb} clickwheel playlist '{result.playlist_name}': "
+        f"{result.matched}/{result.total} matched"
+    )
+    if result.unmatched:
+        text += f" ({result.unmatched} unmatched)"
+    unmatched_details = [
+        {
+            "apple_song_id": t.apple_song_id,
+            "kind": t.kind,
+            "artist": t.artist,
+            "title": t.title,
+            "album": t.album,
+        }
+        for t in result.tracks
+        if t.local_path is None
+    ]
+    logger.info(
+        "pull_playlist_from_apple_music name=%r matched=%d unmatched=%d replaced=%s",
+        name,
+        result.matched,
+        result.unmatched,
+        result.replaced,
+    )
+    return render(
+        text,
+        {
+            "playlist": result.playlist_name,
+            "apple_music_playlist_id": result.apple_music_playlist_id,
+            "total": result.total,
+            "matched": result.matched,
+            "unmatched": result.unmatched,
+            "replaced": result.replaced,
+            "description": result.description,
+            "unmatched_details": unmatched_details,
         },
     )

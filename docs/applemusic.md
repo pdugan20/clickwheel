@@ -143,18 +143,39 @@ Flags:
 
 If you see zero matches at all, run `clickwheel apple doctor` first — usually the user token has expired or the storefront is mismatched.
 
+## List + pull (read-back symmetry)
+
+```bash
+clickwheel apple list
+```
+
+Shows every library playlist in your Apple Music account (manual + smart). Use it to discover names before pulling. `Editable=no` indicates Apple-managed smart playlists; you can still pull them, but you can't push to them.
+
+```bash
+clickwheel apple pull "Road Trip"
+```
+
+Imports a library playlist from Apple Music into clickwheel's local store, mirroring `clickwheel plex pull`. Each Apple Music track resolves to a local file in a three-step ladder:
+
+1. **Cache** — if the song_id was previously matched in either direction, hit the `apple_music_song_map` table.
+2. **Exact** — case-insensitive `lower(artist) = lower(artist) AND lower(title) = lower(title)` lookup against clickwheel's SQLite index (and album, when available).
+3. **Fuzzy** — same composite-confidence scoring as push, but against local rows. Threshold via `--min-fuzzy` (default 0.85).
+
+Unmatched tracks are surfaced in a separate table so you know what to chase — typically files that Apple Music has but your local scan doesn't.
+
+`clickwheel apple pull` refuses to clobber an existing clickwheel playlist of the same name unless you pass `--overwrite`. Pulls also backfill the song_map cache, so a subsequent `apple push` of the same playlist round-trips without re-matching.
+
+## Deleting playlists
+
+Apple Music's REST API **does not support deleting library playlists**. The endpoint returns HTTP 401 even with valid auth — it's a deliberate API limitation, [confirmed by Apple developers on their forum](https://developer.apple.com/forums/thread/107807). clickwheel deliberately doesn't try; if you want to delete an Apple Music playlist, do it via Music.app on macOS (right-click → Delete from Library) or the iPhone Music app. iCloud Music Library propagates the deletion across your devices.
+
 ## MCP tools
 
-When using clickwheel through its MCP server, two Apple Music tools are exposed (with `pull_playlist_from_apple_music` + `list_apple_music_playlists` landing in Phase 3):
+When using clickwheel through its MCP server, four Apple Music tools are exposed:
 
 - `apple_music_health` — read-only, mirrors the CLI doctor.
-- `sync_playlist_to_apple_music(playlist=..., refresh=False, min_confidence=0.85, include_low_confidence=False)` — destructive, gated by a native Allow/Deny prompt in the client. After `create_playlist` or `update_playlist`, the agent should ask which destination(s) you want — iPod, Plex, Apple Music, all of them, or none — rather than assuming.
+- `list_apple_music_playlists` — read-only listing of every library playlist in your Apple Music account.
+- `sync_playlist_to_apple_music(playlist=..., refresh=False, min_confidence=0.85, include_low_confidence=False)` — destructive, gated by a native Allow/Deny prompt in the client.
+- `pull_playlist_from_apple_music(name=..., overwrite=False, min_fuzzy_confidence=0.85)` — destructive (writes to local SQLite); imports an Apple Music playlist into clickwheel.
 
-## What's not here yet
-
-Phase 3 lands in a follow-up PR:
-
-- **Pull** (`clickwheel apple pull <name>` / `clickwheel apple list`) — read-back symmetry mirroring the Plex pull command.
-- **MCP tools** — `pull_playlist_from_apple_music`, `list_apple_music_playlists`.
-
-Track the follow-ups on [GitHub](https://github.com/pdugan20/clickwheel/issues).
+After `create_playlist` or `update_playlist`, the agent should ask which destination(s) you want — iPod, Plex, Apple Music, all of them, or none — rather than assuming.
