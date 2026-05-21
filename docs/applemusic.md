@@ -165,9 +165,20 @@ Unmatched tracks are surfaced in a separate table so you know what to chase — 
 
 `clickwheel apple pull` refuses to clobber an existing clickwheel playlist of the same name unless you pass `--overwrite`. Pulls also backfill the song_map cache, so a subsequent `apple push` of the same playlist round-trips without re-matching.
 
-## Deleting playlists
+## Delete a playlist
 
-Apple Music's REST API **does not support deleting library playlists**. The endpoint returns HTTP 401 even with valid auth — it's a deliberate API limitation, [confirmed by Apple developers on their forum](https://developer.apple.com/forums/thread/107807). clickwheel deliberately doesn't try; if you want to delete an Apple Music playlist, do it via Music.app on macOS (right-click → Delete from Library) or the iPhone Music app. iCloud Music Library propagates the deletion across your devices.
+```bash
+clickwheel apple delete "Old Playlist"
+```
+
+Apple Music's REST API **doesn't support deleting library playlists** — `DELETE /v1/me/library/playlists/{id}` returns HTTP 401 with valid auth ([confirmed by Apple developers](https://developer.apple.com/forums/thread/107807)). As a workaround, `clickwheel apple delete` drives Music.app on macOS via AppleScript, which Music.app's iCloud Music Library sync then propagates to your iPhone, iPad, and Apple Music account.
+
+Caveats:
+
+- **macOS-only.** Linux / Windows can't use this command (and Music.app isn't there to drive anyway).
+- Music.app must be launchable and signed into the same Apple ID that holds the playlist.
+- Deletes **every** playlist matching the name — handy for cleaning up duplicates from earlier failed pushes (the 0.10.0 era gzip bug created some).
+- Asks for confirmation by default; pass `--yes` for scripts.
 
 ## MCP tools
 
@@ -177,5 +188,6 @@ When using clickwheel through its MCP server, four Apple Music tools are exposed
 - `list_apple_music_playlists` — read-only listing of every library playlist in your Apple Music account.
 - `sync_playlist_to_apple_music(playlist=..., refresh=False, min_confidence=0.85, include_low_confidence=False)` — destructive, gated by a native Allow/Deny prompt in the client.
 - `pull_playlist_from_apple_music(name=..., overwrite=False, min_fuzzy_confidence=0.85)` — destructive (writes to local SQLite); imports an Apple Music playlist into clickwheel.
+- `delete_apple_music_playlist(name=...)` — destructive, macOS-only. AppleScript-driven; deletes every Music.app playlist matching `name` and propagates the deletion via iCloud Music Library.
 
 After `create_playlist` or `update_playlist`, the agent should ask which destination(s) you want — iPod, Plex, Apple Music, all of them, or none — rather than assuming.

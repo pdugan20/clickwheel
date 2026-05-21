@@ -192,6 +192,12 @@ class AppleMusicPlaylistNotFoundError(ClickwheelError):
     """Raised when a named Apple Music library playlist isn't found."""
 
 
+class AppleMusicAppleScriptError(ClickwheelError):
+    """Raised when the AppleScript-based delete fails — osascript
+    error, Music.app missing, or non-macOS platform.
+    """
+
+
 class PlexPlaylistNotFoundError(ClickwheelError):
     """Raised when a named Plex playlist doesn't exist on the server."""
 
@@ -2892,3 +2898,42 @@ def pull_playlist_from_apple_music(
         description=target.description,
         tracks=results,
     )
+
+
+# ---------------------------------------------------------------------------
+# Apple Music: AppleScript-driven delete (works around Apple's REST API gap)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class AppleMusicDeleteResult:
+    """Result of `delete_apple_music_playlist`. `deleted` is the count
+    of playlists Music.app removed (0 when nothing matched the name).
+    """
+
+    name: str
+    deleted: int
+
+
+def delete_apple_music_playlist(name: str) -> AppleMusicDeleteResult:
+    """Delete every Music.app playlist matching `name` via AppleScript.
+
+    Apple's REST API doesn't expose DELETE on library playlists
+    (confirmed via 401 with empty body — see Apple Developer Forums).
+    This drives Music.app via osascript instead; the deletion
+    propagates through iCloud Music Library to all signed-in devices.
+
+    Raises: AppleMusicAppleScriptError on any osascript failure,
+    Music.app missing, or non-macOS platform. No Apple Music config
+    is required (it's a purely local operation).
+    """
+    from clickwheel import applemusic as _am
+
+    try:
+        deleted = _am.delete_local_music_playlist(name)
+    except (
+        _am.AppleScriptUnavailableError,
+        _am.AppleScriptError,
+    ) as exc:
+        raise AppleMusicAppleScriptError(str(exc)) from exc
+    return AppleMusicDeleteResult(name=name, deleted=deleted)

@@ -17,6 +17,7 @@ from pydantic import Field
 
 from clickwheel import actions
 from clickwheel.actions import (
+    AppleMusicAppleScriptError,
     AppleMusicExtraNotInstalledError,
     AppleMusicKeyFileError,
     AppleMusicNoMatchesError,
@@ -28,6 +29,7 @@ from clickwheel.actions import (
 )
 from clickwheel.mcp._runtime import DESTRUCTIVE, READ_ONLY, mcp, open_session, render
 from clickwheel.mcp.models import (
+    AppleMusicDeleteResult,
     AppleMusicHealth,
     AppleMusicPlaylistListResult,
     AppleMusicPullResult,
@@ -393,3 +395,54 @@ def pull_playlist_from_apple_music(
             "unmatched_details": unmatched_details,
         },
     )
+
+
+@mcp.tool(title="Delete Apple Music playlist", annotations=DESTRUCTIVE)
+def delete_apple_music_playlist(
+    name: Annotated[
+        str, Field(description="Library playlist name to delete from Apple Music.")
+    ],
+) -> AppleMusicDeleteResult:
+    """Delete a library playlist from the user's Apple Music account.
+
+    Apple's REST API doesn't expose DELETE on library playlists, so
+    this tool drives Music.app on macOS via AppleScript instead.
+    Music.app's iCloud Music Library sync propagates the deletion to
+    the user's iPhone/iPad and Apple Music account.
+
+    macOS-only. Music.app must be launchable, and the user must be
+    signed into the same Apple ID that holds the playlist. Deletes
+    EVERY playlist matching the name — useful for cleaning up
+    duplicates left by earlier failed pushes.
+
+    Flagged destructive — clients gate with native Allow/Deny prompts.
+    Before invoking, summarize the impact in chat: "About to delete
+    '<name>' from your Apple Music library via Music.app on this Mac.
+    This will sync to your iPhone and Apple Music account via iCloud."
+
+    Errors
+    ------
+    - AppleMusicAppleScriptError: osascript failed, Music.app missing,
+      or non-macOS platform. Surface the message verbatim.
+    """
+    with open_session() as (_cfg, _db):
+        try:
+            result = actions.delete_apple_music_playlist(name)
+        except AppleMusicAppleScriptError as exc:
+            return render(
+                f"Apple Music delete failed: {exc}",
+                {"error": "apple_music_applescript", "message": str(exc)},
+            )
+
+    if result.deleted == 0:
+        text = (
+            f"No Music.app playlist named '{name}' found. "
+            "It may have already been deleted or the name is misspelled."
+        )
+    else:
+        text = (
+            f"Deleted {result.deleted} playlist(s) named '{name}' from Music.app. "
+            "iCloud Music Library will propagate to other devices."
+        )
+    logger.info("delete_apple_music_playlist name=%r deleted=%d", name, result.deleted)
+    return render(text, {"name": result.name, "deleted": result.deleted})
