@@ -9,6 +9,7 @@ from tqdm import tqdm
 
 from clickwheel import __version__, actions
 from clickwheel.actions import (
+    AppleMusicAppleScriptError,
     AppleMusicAuthError,
     AppleMusicExtraNotInstalledError,
     AppleMusicKeyFileError,
@@ -1903,3 +1904,49 @@ def apple_pull_cmd(
         print_table(t)
         if len(unmatched_rows) > 20:
             dim(f"  ... and {len(unmatched_rows) - 20} more.")
+
+
+@apple_app.command(name="delete")
+def apple_delete_cmd(
+    name: str = typer.Argument(
+        ..., help="Apple Music library playlist name to delete."
+    ),
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="Skip the confirmation prompt."
+    ),
+) -> None:
+    """Delete a library playlist from your Apple Music account.
+
+    Apple's REST API doesn't expose DELETE on library playlists, so
+    clickwheel drives Music.app via AppleScript instead. Music.app's
+    iCloud Music Library sync propagates the deletion to all your
+    signed-in Apple devices.
+
+    macOS-only. Music.app must be launchable (it is on every recent
+    Mac, but the user must be signed in to the same Apple ID as the
+    playlist). Deletes EVERY playlist matching the name — useful for
+    cleaning up duplicates from earlier failed pushes.
+    """
+    _check_macos()
+    status(f"About to delete '{name}' from Apple Music via Music.app")
+    info("  This drives Music.app and propagates via iCloud Music Library.")
+    if not yes and not typer.confirm("Proceed?", default=False):
+        raise typer.Exit(0)
+
+    try:
+        with spinner("Deleting via AppleScript..."):
+            result = actions.delete_apple_music_playlist(name)
+    except AppleMusicAppleScriptError as exc:
+        error(str(exc))
+        raise typer.Exit(1) from exc
+
+    if result.deleted == 0:
+        warn(
+            f"No Music.app playlist named '{name}' found. "
+            "It may have already been deleted, or the name is misspelled."
+        )
+        raise typer.Exit(1)
+    success(
+        f"Deleted {result.deleted} playlist(s) named '{name}'. "
+        "iCloud Music Library will propagate to your other devices."
+    )

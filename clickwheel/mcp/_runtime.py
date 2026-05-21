@@ -81,12 +81,13 @@ APPLE MUSIC:
   Apple track is resolved to a local file via cache → exact metadata
   match → fuzzy composite score. Useful when the user curated on
   iPhone and wants the playlist on the iPod.
-- DELETE: Apple's REST API doesn't support deleting library playlists
-  (confirmed via 401 with empty body on `DELETE /v1/me/library/
-  playlists/{id}`). If the user asks to delete a playlist from their
-  Apple Music account, tell them to do it via Music.app on macOS or
-  the iPhone Music app; iCloud Music Library propagates the delete.
-  Don't try to build a workaround via the REST API.
+- `delete_apple_music_playlist` — destructive, macOS-only. Drives
+  Music.app via AppleScript to delete every library playlist matching
+  the name (Apple's REST API doesn't expose DELETE on library
+  playlists, so this is the documented workaround). Deletion
+  propagates to iPhone/iPad via iCloud Music Library. Use after a
+  failed push that left duplicates, or whenever the user wants to
+  remove an Apple Music playlist programmatically.
 
 When in doubt, ask the user: do they want it as a playlist they can
 browse on the iPod, or just want the songs added to the library? Don't
@@ -176,9 +177,9 @@ SAFETY:
 - `delete_playlist`, `add_tracks_to_ipod`, `add_artist_to_ipod`,
   `sync_playlist_to_ipod`, `sync_playlist_to_plex`,
   `pull_playlist_from_plex`, `sync_playlist_to_apple_music`,
-  `pull_playlist_from_apple_music`, `remove_tracks_from_ipod`,
-  `remove_artist_from_ipod`, and `remove_ipod_playlist` are flagged
-  destructive. Claude Code (and
+  `pull_playlist_from_apple_music`, `delete_apple_music_playlist`,
+  `remove_tracks_from_ipod`, `remove_artist_from_ipod`, and
+  `remove_ipod_playlist` are flagged destructive. Claude Code (and
   other compliant clients) surface a native Allow/Deny prompt before
   invoking them — that is the user's confirmation moment. Before
   calling, summarize the impact in your reply (track count, size,

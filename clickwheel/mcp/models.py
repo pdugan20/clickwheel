@@ -489,6 +489,22 @@ class AppleMusicPullResult(BaseModel):
     )
 
 
+class AppleMusicDeleteResult(BaseModel):
+    """Result of `delete_apple_music_playlist`."""
+
+    name: str | None = Field(default=None, description="The playlist name targeted.")
+    deleted: int | None = Field(
+        default=None,
+        description="Count of Music.app playlists deleted (0 if name didn't match).",
+    )
+    error: str | None = Field(
+        default=None, description="Machine-readable error code, on failure."
+    )
+    message: str | None = Field(
+        default=None, description="Human-readable error message, on failure."
+    )
+
+
 class AppleMusicPushResult(BaseModel):
     """Result of `sync_playlist_to_apple_music`."""
 

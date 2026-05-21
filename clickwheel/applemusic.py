@@ -19,6 +19,8 @@ import gzip
 import json
 import logging
 import socket
+import subprocess
+import sys
 import threading
 import time
 import urllib.error
@@ -49,6 +51,18 @@ class AppleMusicConfigInvalidError(ValueError):
 
 class AppleMusicAuthFailedError(RuntimeError):
     """Raised when the user-token auth dance didn't yield a token."""
+
+
+class AppleScriptError(RuntimeError):
+    """Raised when an osascript subprocess returns non-zero or the
+    output can't be parsed. Used by `delete_local_music_playlist`.
+    """
+
+
+class AppleScriptUnavailableError(RuntimeError):
+    """Raised when AppleScript can't be used — non-macOS platform, or
+    `osascript` not on PATH (vanishingly rare on a normal Mac).
+    """
 
 
 class AppleMusicHTTPError(RuntimeError):
@@ -886,3 +900,86 @@ def run_user_token_auth(
         server.server_close()
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# AppleScript-based delete (the workaround for Apple's REST API gap)
+# ---------------------------------------------------------------------------
+
+
+def _escape_applescript_string(value: str) -> str:
+    """AppleScript double-quoted strings escape `\\` and `"`. Returns
+    the contents (no surrounding quotes) ready to be interpolated
+    inside `"..."`.
+    """
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _run_osascript(script: str, *, timeout: float = 30.0) -> str:
+    """Run an AppleScript snippet and return its stdout.
+
+    Raises AppleScriptUnavailableError on non-macOS (or if osascript
+    is missing — vanishingly rare on a real Mac). Raises
+    AppleScriptError on a non-zero exit, carrying stderr.
+    """
+    if sys.platform != "darwin":
+        raise AppleScriptUnavailableError(
+            "AppleScript delete only works on macOS — Music.app isn't "
+            "available on this platform."
+        )
+    try:
+        proc = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except FileNotFoundError as exc:
+        raise AppleScriptUnavailableError(
+            "osascript binary not found on PATH. Is this really a Mac?"
+        ) from exc
+    if proc.returncode != 0:
+        stderr = proc.stderr.strip() or "(no stderr)"
+        raise AppleScriptError(f"osascript exited {proc.returncode}: {stderr}")
+    return proc.stdout.strip()
+
+
+def delete_local_music_playlist(name: str) -> int:
+    """Delete every Music.app playlist matching `name`.
+
+    Drives Music.app via AppleScript — Apple's REST API doesn't
+    support library playlist deletion, so this is the documented
+    workaround. Music.app's iCloud Music Library sync propagates the
+    deletion to the user's iPhone/iPad/Apple Music account.
+
+    Returns the count of playlists actually deleted (matches by exact
+    case-sensitive name; 0 if no match). Raises AppleScriptError on
+    any osascript-level failure or AppleScriptUnavailableError on
+    non-macOS.
+
+    Caveats:
+    - Music.app must be launchable (it is on every recent Mac).
+    - The user must be signed into the same Apple ID that holds the
+      playlist for the iCML propagation to reach other devices.
+    - Smart playlists can be deleted too — AppleScript bypasses the
+      `canEdit=false` restriction the REST API enforces.
+    """
+    safe_name = _escape_applescript_string(name)
+    script = f'''
+        tell application "Music"
+            set _matches to (every playlist whose name is "{safe_name}")
+            set _count to (count of _matches)
+            repeat with _p in _matches
+                delete _p
+            end repeat
+            return _count
+        end tell
+    '''
+    output = _run_osascript(script)
+    try:
+        return int(output)
+    except ValueError as exc:
+        raise AppleScriptError(
+            f"osascript returned non-integer count: {output!r}"
+        ) from exc
