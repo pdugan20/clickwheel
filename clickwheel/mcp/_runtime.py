@@ -63,14 +63,20 @@ PLEX → CLICKWHEEL (recovery direction):
   playlists need `include_smart=true` (snapshots the current query).
   Existing local playlists with the same name need `overwrite=true`.
 
-APPLE MUSIC (currently auth + doctor only):
-- `apple_music_health` is a read-only probe — config, .p8 readable,
-  developer-token signing, catalog reachability, user token validity,
-  iCloud Music Library state, storefront agreement. Mirrors
-  `plex_health`. Use it when the user asks about Apple Music status,
-  or before any future push/pull tool ships. Push/pull tools are not
-  yet implemented; if the user asks to "sync a playlist to Apple Music",
-  say it's coming in a follow-up PR and don't fabricate a tool call.
+APPLE MUSIC:
+- `apple_music_health` — read-only probe (config, .p8, dev token,
+  user token, iCloud Music Library state, storefront). Mirrors
+  `plex_health`. Run before push to catch config issues early.
+- `sync_playlist_to_apple_music` — destructive, creates a playlist
+  in the user's Apple Music account from a clickwheel playlist. The
+  matcher (ISRC → catalog fuzzy → user library if iCML is on) runs
+  first; low-confidence matches are skipped by default unless the
+  caller passes `include_low_confidence=true`. The new playlist syncs
+  to the user's other Apple devices via iCloud Music Library.
+- Pull/list tools (`pull_playlist_from_apple_music`,
+  `list_apple_music_playlists`) are not yet implemented. If the user
+  asks to "import a playlist from Apple Music," say it's coming in
+  Phase 3 and don't fabricate a tool call.
 
 When in doubt, ask the user: do they want it as a playlist they can
 browse on the iPod, or just want the songs added to the library? Don't
@@ -159,9 +165,9 @@ WORKFLOWS:
 SAFETY:
 - `delete_playlist`, `add_tracks_to_ipod`, `add_artist_to_ipod`,
   `sync_playlist_to_ipod`, `sync_playlist_to_plex`,
-  `pull_playlist_from_plex`, `remove_tracks_from_ipod`,
-  `remove_artist_from_ipod`, and `remove_ipod_playlist` are flagged
-  destructive. Claude Code (and
+  `pull_playlist_from_plex`, `sync_playlist_to_apple_music`,
+  `remove_tracks_from_ipod`, `remove_artist_from_ipod`, and
+  `remove_ipod_playlist` are flagged destructive. Claude Code (and
   other compliant clients) surface a native Allow/Deny prompt before
   invoking them — that is the user's confirmation moment. Before
   calling, summarize the impact in your reply (track count, size,

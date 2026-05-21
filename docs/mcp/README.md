@@ -60,7 +60,7 @@ The server includes a built-in `build_playlist` prompt that walks the model thro
 
 ## Tool reference
 
-33 tools + 1 prompt, grouped by domain.
+34 tools + 1 prompt, grouped by domain.
 
 ### Library (read)
 
@@ -114,11 +114,12 @@ The server includes a built-in `build_playlist` prompt that walks the model thro
 
 ### Apple Music
 
-| Tool                 | What it does                                                                            |
-| -------------------- | --------------------------------------------------------------------------------------- |
-| `apple_music_health` | Probe Apple Music end-to-end (config, .p8, dev token, user token, iCloud Music Library) |
+| Tool                           | What it does                                                                                           |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `apple_music_health`           | Probe Apple Music end-to-end (config, .p8, dev token, user token, iCloud Music Library)                |
+| `sync_playlist_to_apple_music` | Push a saved playlist to the user's Apple Music account (destructive — creates a new library playlist) |
 
-Push/pull tools (`sync_playlist_to_apple_music`, `pull_playlist_from_apple_music`, `list_apple_music_playlists`) land in follow-up PRs.
+Pull/list tools (`pull_playlist_from_apple_music`, `list_apple_music_playlists`) land in follow-up PRs.
 
 ### Last.fm scrobbling
 
@@ -129,7 +130,7 @@ Push/pull tools (`sync_playlist_to_apple_music`, `pull_playlist_from_apple_music
 
 ## Destructive-tool gating
 
-Nine tools carry the MCP `destructiveHint=true` annotation: `delete_playlist`, `sync_playlist_to_ipod`, `sync_playlist_to_plex`, `pull_playlist_from_plex`, `add_tracks_to_ipod`, `add_artist_to_ipod`, `remove_tracks_from_ipod`, `remove_artist_from_ipod`, `remove_ipod_playlist`. Different clients honor the flag differently:
+Ten tools carry the MCP `destructiveHint=true` annotation: `delete_playlist`, `sync_playlist_to_ipod`, `sync_playlist_to_plex`, `pull_playlist_from_plex`, `sync_playlist_to_apple_music`, `add_tracks_to_ipod`, `add_artist_to_ipod`, `remove_tracks_from_ipod`, `remove_artist_from_ipod`, `remove_ipod_playlist`. Different clients honor the flag differently:
 
 - **Claude Code** shows a per-call Allow/Deny prompt before each invocation.
 - **Claude Desktop** asks once when the tool is first used in a conversation, then runs freely thereafter.

@@ -104,12 +104,57 @@ If any stage fails, the detail line points at the specific config key, install c
 | `iCloud Music Library` | If OFF and you want broader matching, enable on Mac (Music.app → Settings → General → Sync Library) or iPhone (Settings → Music → Sync Library).                                    |
 | `storefront match`     | Update `apple_music_storefront` to match the value the doctor reports for your account, or accept the discrepancy if you're intentionally targeting a different region's catalog.   |
 
+## Match a playlist
+
+```bash
+clickwheel apple match "Seattle Sound"
+```
+
+Reads every track in the named clickwheel playlist and tries to resolve it to an Apple Music song ID. The matcher walks three strategies in order:
+
+1. **ISRC** — read the file's TSRC tag (MP3) / `----:com.apple.iTunes:ISRC` atom (M4A) / Vorbis ISRC field (FLAC) and ask `GET /v1/catalog/<storefront>/songs?filter[isrc]=...`. A hit here is exact (confidence `1.0`).
+2. **Catalog fuzzy** — `GET /v1/catalog/<storefront>/search?term=<artist> <title>&types=songs`, then composite-score every candidate by title (55%) + artist (35%) + album (10%) similarity. The highest scoring candidate above `MATCH_MIN_CONFIDENCE` (`0.60`) wins.
+3. **Library fuzzy** — if iCloud Music Library is ON and the catalog came back empty, same query against `/v1/me/library/search`. Lets tracks the user has uploaded to iCML match even when they're not in the public catalog.
+
+Each resolved track gets cached in SQLite (`apple_music_song_map` table, keyed by absolute path). Subsequent runs hit the cache instead of the network. Pass `--refresh` to force a re-match (useful after retagging).
+
+`--min-confidence` (default `0.85`) buckets candidates into _matched_ vs _low-confidence_ in the output table. Low-confidence rows are surfaced for review; they aren't pushed by default.
+
+## Push a playlist to Apple Music
+
+```bash
+clickwheel apple push "Seattle Sound"
+```
+
+Runs the matcher, shows you the breakdown, asks for confirmation, then `POST /v1/me/library/playlists` to create the playlist in your Apple Music account. The new playlist syncs across your Apple devices via iCloud Music Library (assuming it's on).
+
+Flags:
+
+- `--refresh` — bypass the cache.
+- `--min-confidence X` — adjust the threshold between matched and low-confidence.
+- `--include-low` — push low-confidence matches too. Use after reviewing `apple match` output.
+- `--yes` / `-y` — skip the confirmation prompt (for scripts).
+
+## What gets matched, what doesn't
+
+- **Catalog hits** (most cases) use Apple's song ID like `1440783625`. Tracks anyone subscribed to Apple Music can play, by the same artist/title/album.
+- **Library hits** use `i.<long-id>` IDs. Only the user's own uploaded copies; only work when iCML is on.
+- **Unmatched** — typically because (a) the track's artist/title/album are too different from the catalog edition (live versions, mistagged files), (b) the recording isn't in Apple's catalog and isn't uploaded to iCML, or (c) the file's ISRC tag points at a different recording than its filename implies. `clickwheel apple match` surfaces all three categories so you can fix tags or re-curate.
+
+If you see zero matches at all, run `clickwheel apple doctor` first — usually the user token has expired or the storefront is mismatched.
+
+## MCP tools
+
+When using clickwheel through its MCP server, two Apple Music tools are exposed (with `pull_playlist_from_apple_music` + `list_apple_music_playlists` landing in Phase 3):
+
+- `apple_music_health` — read-only, mirrors the CLI doctor.
+- `sync_playlist_to_apple_music(playlist=..., refresh=False, min_confidence=0.85, include_low_confidence=False)` — destructive, gated by a native Allow/Deny prompt in the client. After `create_playlist` or `update_playlist`, the agent should ask which destination(s) you want — iPod, Plex, Apple Music, all of them, or none — rather than assuming.
+
 ## What's not here yet
 
-This PR is the foundation. The actual playoff lands in follow-ups:
+Phase 3 lands in a follow-up PR:
 
-- **Push** (`clickwheel apple push <playlist>`) — match clickwheel tracks against Apple Music catalog (ISRC → fuzzy → user library), create a playlist in the user's Apple Music account, populate it.
 - **Pull** (`clickwheel apple pull <name>` / `clickwheel apple list`) — read-back symmetry mirroring the Plex pull command.
-- **MCP tools** — `sync_playlist_to_apple_music`, `pull_playlist_from_apple_music`, `list_apple_music_playlists`.
+- **MCP tools** — `pull_playlist_from_apple_music`, `list_apple_music_playlists`.
 
-These all hang off the auth + doctor surface this PR ships. Track the follow-ups on [GitHub](https://github.com/pdugan20/clickwheel/issues).
+Track the follow-ups on [GitHub](https://github.com/pdugan20/clickwheel/issues).

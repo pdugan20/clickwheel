@@ -176,6 +176,18 @@ class AppleMusicUnreachableError(ClickwheelError):
     """Raised when Apple Music's REST API is unreachable or rejects auth."""
 
 
+class AppleMusicNoMatchesError(ClickwheelError):
+    """Raised when a playlist push has zero usable matches.
+
+    Carries `matched_low_confidence` so the CLI can offer to lower the
+    threshold instead of giving up.
+    """
+
+    def __init__(self, message: str, *, matched_low_confidence: int = 0) -> None:
+        super().__init__(message)
+        self.matched_low_confidence = matched_low_confidence
+
+
 class PlexPlaylistNotFoundError(ClickwheelError):
     """Raised when a named Plex playlist doesn't exist on the server."""
 
@@ -2373,3 +2385,294 @@ def apple_music_doctor(cfg: Config) -> AppleMusicDoctorResult:
         )
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Apple Music: catalog matching + playlist push
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class AppleMusicTrackMatch:
+    """Outcome for one clickwheel track in a match/push operation."""
+
+    track_path: str
+    title: str
+    artist: str
+    album: str
+    isrc: str | None = None
+    # Filled when a usable match was found:
+    song_id: str | None = None
+    kind: str | None = None  # 'catalog' | 'library'
+    confidence: float = 0.0
+    matched_artist: str = ""
+    matched_title: str = ""
+    matched_album: str = ""
+    # Why this row landed where it did:
+    cached: bool = False
+    reason: str = ""  # 'isrc' | 'fuzzy' | 'library' | 'cache' | 'unmatched'
+
+
+@dataclass
+class AppleMusicMatchResult:
+    """Outcome of `match_playlist_to_apple_music` (a dry-run preview).
+
+    `low_confidence` is the count of tracks whose best match scored
+    below the configured threshold — they're surfaced for triage but
+    not used by `sync_playlist_to_apple_music` unless the caller
+    lowers the threshold.
+    """
+
+    playlist_name: str
+    total: int
+    matched: int  # at or above the confidence threshold
+    low_confidence: int
+    unmatched: int
+    storefront: str
+    icml: bool
+    tracks: list[AppleMusicTrackMatch] = field(default_factory=list)
+
+
+@dataclass
+class AppleMusicPushResult:
+    """Outcome of a successful `sync_playlist_to_apple_music` call."""
+
+    playlist_name: str
+    apple_music_playlist_id: str
+    pushed: int
+    unmatched: int
+    low_confidence_skipped: int
+    storefront: str
+
+
+def _read_track_metadata(db: Database, name: str) -> list[dict]:
+    """Pull artist/title/album/path/isrc tuples for every track in a
+    clickwheel playlist. ISRC isn't in the SQLite index yet (we don't
+    re-scan to backfill old rows), so we read it from disk on demand.
+    """
+    rows = db.get_playlist(name)
+    if not rows:
+        raise PlaylistNotFoundError(f"Playlist '{name}' not found.")
+
+    from clickwheel import applemusic as _am
+
+    out: list[dict] = []
+    for r in rows:
+        path = r["path"]
+        try:
+            isrc = _am.read_isrc(path) if Path(path).exists() else None
+        except Exception:  # noqa: BLE001
+            isrc = None
+        out.append(
+            {
+                "path": path,
+                "artist": r.get("artist") or "",
+                "title": r.get("title") or "",
+                "album": r.get("album") or "",
+                "isrc": isrc,
+            }
+        )
+    return out
+
+
+def _detect_icml(cfg: Config, dev_token: str) -> bool:
+    """Best-effort iCloud Music Library probe. Returns False on any
+    failure (matching still works against the public catalog)."""
+    from clickwheel import applemusic as _am
+
+    if not cfg.apple_music_user_token:
+        return False
+    try:
+        return _am.detect_icloud_music_library(
+            dev_token, cfg.apple_music_user_token, cfg.apple_music_storefront
+        )
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def match_playlist_to_apple_music(
+    cfg: Config,
+    db: Database,
+    name: str,
+    *,
+    refresh: bool = False,
+    min_confidence: float = 0.85,
+) -> AppleMusicMatchResult:
+    """Match every track in a clickwheel playlist against Apple Music.
+
+    Read-only: doesn't create or modify the user's Apple Music library.
+    Populates the `apple_music_song_map` cache as a side effect so
+    subsequent calls (and `sync_playlist_to_apple_music`) skip the
+    network for already-matched paths. Pass `refresh=True` to ignore
+    the cache and re-match every track.
+
+    `min_confidence` controls the threshold between `matched` and
+    `low_confidence` in the result — the matcher itself surfaces every
+    candidate it finds; this just bucketizes them.
+
+    Raises: AppleMusicNotConfiguredError, AppleMusicExtraNotInstalledError,
+    AppleMusicKeyFileError, AppleMusicUnreachableError,
+    PlaylistNotFoundError.
+    """
+    from clickwheel import applemusic as _am
+
+    _require_apple_music_config(cfg)
+    dev_token = _resolve_developer_token(cfg)
+    icml = _detect_icml(cfg, dev_token)
+
+    tracks = _read_track_metadata(db, name)
+
+    results: list[AppleMusicTrackMatch] = []
+    matched = low_confidence = unmatched = 0
+
+    for t in tracks:
+        row = AppleMusicTrackMatch(
+            track_path=t["path"],
+            title=t["title"],
+            artist=t["artist"],
+            album=t["album"],
+            isrc=t["isrc"],
+        )
+
+        cached = None if refresh else db.get_apple_music_song(t["path"])
+        if cached and cached.get("storefront") == cfg.apple_music_storefront:
+            row.song_id = cached["song_id"]
+            row.kind = cached["kind"]
+            row.confidence = cached["confidence"]
+            row.cached = True
+            row.reason = "cache"
+        else:
+            try:
+                hit = _am.match_track(
+                    dev_token=dev_token,
+                    user_token=cfg.apple_music_user_token or None,
+                    storefront=cfg.apple_music_storefront,
+                    artist=t["artist"],
+                    title=t["title"],
+                    album=t["album"],
+                    isrc=t["isrc"],
+                    icml=icml,
+                )
+            except _am.AppleMusicHTTPError as exc:
+                raise AppleMusicUnreachableError(str(exc)) from exc
+
+            if hit is not None:
+                row.song_id = hit.song_id
+                row.kind = hit.kind
+                row.confidence = hit.confidence
+                row.matched_artist = hit.matched_artist
+                row.matched_title = hit.matched_title
+                row.matched_album = hit.matched_album
+                row.reason = (
+                    "isrc"
+                    if hit.confidence == 1.0 and hit.kind == "catalog"
+                    else hit.kind
+                )
+                db.upsert_apple_music_song(
+                    t["path"],
+                    hit.song_id,
+                    hit.kind,
+                    hit.confidence,
+                    cfg.apple_music_storefront,
+                )
+
+        if row.song_id is None:
+            row.reason = row.reason or "unmatched"
+            unmatched += 1
+        elif row.confidence >= min_confidence:
+            matched += 1
+        else:
+            low_confidence += 1
+
+        results.append(row)
+
+    return AppleMusicMatchResult(
+        playlist_name=name,
+        total=len(tracks),
+        matched=matched,
+        low_confidence=low_confidence,
+        unmatched=unmatched,
+        storefront=cfg.apple_music_storefront,
+        icml=icml,
+        tracks=results,
+    )
+
+
+def sync_playlist_to_apple_music(
+    cfg: Config,
+    db: Database,
+    name: str,
+    *,
+    refresh: bool = False,
+    min_confidence: float = 0.85,
+    include_low_confidence: bool = False,
+) -> AppleMusicPushResult:
+    """Create a playlist in the user's Apple Music account from a
+    clickwheel playlist.
+
+    Calls `match_playlist_to_apple_music` first to bucket every track
+    into matched / low-confidence / unmatched. Only `matched` tracks
+    (and optionally `low_confidence` if the caller passes
+    `include_low_confidence=True`) are pushed. The playlist's name and
+    description come from the clickwheel-side playlist.
+
+    Raises: AppleMusicNotConfiguredError, AppleMusicExtraNotInstalledError,
+    AppleMusicKeyFileError, AppleMusicUnreachableError,
+    AppleMusicNoMatchesError, PlaylistNotFoundError. The user token
+    must be present and valid — `apple_music_doctor` is the way to
+    confirm before calling this.
+    """
+    from clickwheel import applemusic as _am
+
+    _require_apple_music_config(cfg)
+    if not cfg.apple_music_user_token:
+        raise AppleMusicNotConfiguredError(
+            "No APPLE_MUSIC_USER_TOKEN. Run `clickwheel apple auth` first."
+        )
+
+    match = match_playlist_to_apple_music(
+        cfg, db, name, refresh=refresh, min_confidence=min_confidence
+    )
+
+    pushable = [
+        t
+        for t in match.tracks
+        if t.song_id is not None
+        and (t.confidence >= min_confidence or include_low_confidence)
+    ]
+    if not pushable:
+        raise AppleMusicNoMatchesError(
+            (
+                f"No tracks in '{name}' matched Apple Music at confidence "
+                f">= {min_confidence:.2f}. {match.low_confidence} low-"
+                "confidence and {match.unmatched} unmatched."
+            ).format(match=match),
+            matched_low_confidence=match.low_confidence,
+        )
+
+    song_refs = [
+        {
+            "id": t.song_id,
+            "type": "library-songs" if t.kind == "library" else "songs",
+        }
+        for t in pushable
+    ]
+    description = db.get_playlist_description(name) or ""
+    dev_token = _resolve_developer_token(cfg)
+
+    try:
+        body = _am.create_library_playlist(
+            dev_token, cfg.apple_music_user_token, name, description, song_refs
+        )
+    except _am.AppleMusicHTTPError as exc:
+        raise AppleMusicUnreachableError(str(exc)) from exc
+
+    playlist_data = body.get("data", [{}])[0]
+    return AppleMusicPushResult(
+        playlist_name=name,
+        apple_music_playlist_id=playlist_data.get("id", ""),
+        pushed=len(pushable),
+        unmatched=match.unmatched,
+        low_confidence_skipped=(0 if include_low_confidence else match.low_confidence),
+        storefront=cfg.apple_music_storefront,
+    )

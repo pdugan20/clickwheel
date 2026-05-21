@@ -57,6 +57,8 @@ clickwheel sync      # push to the iPod
 | `clickwheel plex pull`    | Recover a Plex playlist into clickwheel's local store (read-back direction)                       |
 | `clickwheel plex doctor`  | Diagnose Plex configuration — one-shot setup check                                                |
 | `clickwheel apple auth`   | Authorize clickwheel with your Apple Music account (browser-based one-time flow)                  |
+| `clickwheel apple match`  | Preview how a playlist's tracks resolve to Apple Music catalog/library song IDs                   |
+| `clickwheel apple push`   | Create a playlist in your Apple Music account from a clickwheel playlist                          |
 | `clickwheel apple doctor` | Diagnose Apple Music configuration — config, .p8, dev token, user token, iCloud Music Library     |
 | `clickwheel ls`           | Show what's on the iPod                                                                           |
 | `clickwheel eject`        | Safely unmount the iPod                                                                           |
@@ -98,7 +100,7 @@ pipx inject clickwheel 'clickwheel[mcp]'
 claude mcp add clickwheel clickwheel-mcp --scope user
 ```
 
-The server exposes 33 tools across library, playlist, iPod, Plex, Apple Music, and Last.fm domains, plus a `build_playlist` prompt with anti-hallucination rules. Destructive operations (`delete_playlist`, `sync_playlist_to_ipod`) are gated by client confirmation.
+The server exposes 34 tools across library, playlist, iPod, Plex, Apple Music, and Last.fm domains, plus a `build_playlist` prompt with anti-hallucination rules. Destructive operations (`delete_playlist`, `sync_playlist_to_ipod`) are gated by client confirmation.
 
 For Claude Desktop config, the full tool reference, and other clients (Cursor, Continue, Cline, Zed), see [`docs/mcp/`](docs/mcp/).
 
