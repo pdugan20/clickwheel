@@ -41,26 +41,26 @@ clickwheel sync      # push to the iPod
 
 ## Commands
 
-| Command                  | Description                                                                                       |
-| ------------------------ | ------------------------------------------------------------------------------------------------- |
-| `clickwheel scan`        | Index your music library and report on metadata quality                                           |
-| `clickwheel fix`         | Clean up metadata, fetch album art, fill genres via beets                                         |
-| `clickwheel select`      | Interactive picker — checkbox artist selection                                                    |
-| `clickwheel playlist`    | List saved playlists or show details for one                                                      |
-| `clickwheel edit`        | Add/remove artists or set a description (interactive menus or `--add`/`--remove`/`--description`) |
-| `clickwheel heal`        | Drop playlist references to tracks no longer on disk                                              |
-| `clickwheel delete`      | Delete a saved playlist (with confirmation)                                                       |
-| `clickwheel diff`        | Preview what would be added or removed on the iPod                                                |
-| `clickwheel sync`        | Push your playlist to the iPod (with live progress table)                                         |
-| `clickwheel sync-plex`   | Push playlist(s) to your Plex music library (Plexamp picks them up)                               |
-| `clickwheel plex list`   | List audio playlists on your Plex server (manual vs smart, track counts)                          |
-| `clickwheel plex pull`   | Recover a Plex playlist into clickwheel's local store (read-back direction)                       |
-| `clickwheel plex doctor` | Diagnose Plex configuration — one-shot setup check                                                |
-| `clickwheel apple auth`  | Authorize clickwheel with your Apple Music account (browser-based one-time flow)                  |
-| `clickwheel apple doctor`| Diagnose Apple Music configuration — config, .p8, dev token, user token, iCloud Music Library     |
-| `clickwheel ls`          | Show what's on the iPod                                                                           |
-| `clickwheel eject`       | Safely unmount the iPod                                                                           |
-| `clickwheel scrobble`    | Submit recent iPod listens to Last.fm                                                             |
+| Command                   | Description                                                                                       |
+| ------------------------- | ------------------------------------------------------------------------------------------------- |
+| `clickwheel scan`         | Index your music library and report on metadata quality                                           |
+| `clickwheel fix`          | Clean up metadata, fetch album art, fill genres via beets                                         |
+| `clickwheel select`       | Interactive picker — checkbox artist selection                                                    |
+| `clickwheel playlist`     | List saved playlists or show details for one                                                      |
+| `clickwheel edit`         | Add/remove artists or set a description (interactive menus or `--add`/`--remove`/`--description`) |
+| `clickwheel heal`         | Drop playlist references to tracks no longer on disk                                              |
+| `clickwheel delete`       | Delete a saved playlist (with confirmation)                                                       |
+| `clickwheel diff`         | Preview what would be added or removed on the iPod                                                |
+| `clickwheel sync`         | Push your playlist to the iPod (with live progress table)                                         |
+| `clickwheel sync-plex`    | Push playlist(s) to your Plex music library (Plexamp picks them up)                               |
+| `clickwheel plex list`    | List audio playlists on your Plex server (manual vs smart, track counts)                          |
+| `clickwheel plex pull`    | Recover a Plex playlist into clickwheel's local store (read-back direction)                       |
+| `clickwheel plex doctor`  | Diagnose Plex configuration — one-shot setup check                                                |
+| `clickwheel apple auth`   | Authorize clickwheel with your Apple Music account (browser-based one-time flow)                  |
+| `clickwheel apple doctor` | Diagnose Apple Music configuration — config, .p8, dev token, user token, iCloud Music Library     |
+| `clickwheel ls`           | Show what's on the iPod                                                                           |
+| `clickwheel eject`        | Safely unmount the iPod                                                                           |
+| `clickwheel scrobble`     | Submit recent iPod listens to Last.fm                                                             |
 
 ## Configuration
 

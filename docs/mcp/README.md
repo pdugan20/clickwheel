@@ -114,9 +114,9 @@ The server includes a built-in `build_playlist` prompt that walks the model thro
 
 ### Apple Music
 
-| Tool                  | What it does                                                                              |
-| --------------------- | ----------------------------------------------------------------------------------------- |
-| `apple_music_health`  | Probe Apple Music end-to-end (config, .p8, dev token, user token, iCloud Music Library) |
+| Tool                 | What it does                                                                            |
+| -------------------- | --------------------------------------------------------------------------------------- |
+| `apple_music_health` | Probe Apple Music end-to-end (config, .p8, dev token, user token, iCloud Music Library) |
 
 Push/pull tools (`sync_playlist_to_apple_music`, `pull_playlist_from_apple_music`, `list_apple_music_playlists`) land in follow-up PRs.
 

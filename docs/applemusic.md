@@ -92,17 +92,17 @@ If any stage fails, the detail line points at the specific config key, install c
 
 ## Troubleshooting
 
-| Doctor stage fails       | What to check                                                                                                                                                                       |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `config`                 | `apple_music_enabled: true` in YAML, Team ID set, and either `APPLE_MUSIC_DEVELOPER_TOKEN` in `.env` _or_ Key ID + `.p8` path configured.                                           |
-| `applemusic extra`       | Run `pipx inject clickwheel 'clickwheel[applemusic]'` (or the `pip install` variant). The detail line has the exact command.                                                        |
-| `p8 readable`            | Path doesn't exist or the file isn't a PEM private key. The `.p8` only downloads once at creation — if you've lost it, regen on developer.apple.com.                                |
-| `developer token`        | Signing failed. Almost always means the `.p8` is malformed or the Key ID is wrong. Re-download.                                                                                     |
-| `catalog reachable`      | Apple returned 401. Either the key behind `kid` was revoked on developer.apple.com (regen), or the Team ID is wrong, or the key isn't authorized for MusicKit (Media Services off). |
-| `user token`             | Run `clickwheel apple auth`.                                                                                                                                                        |
-| `user token verified`    | User token expired or was revoked. Re-run `clickwheel apple auth`.                                                                                                                  |
-| `iCloud Music Library`   | If OFF and you want broader matching, enable on Mac (Music.app → Settings → General → Sync Library) or iPhone (Settings → Music → Sync Library).                                    |
-| `storefront match`       | Update `apple_music_storefront` to match the value the doctor reports for your account, or accept the discrepancy if you're intentionally targeting a different region's catalog.   |
+| Doctor stage fails     | What to check                                                                                                                                                                       |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `config`               | `apple_music_enabled: true` in YAML, Team ID set, and either `APPLE_MUSIC_DEVELOPER_TOKEN` in `.env` _or_ Key ID + `.p8` path configured.                                           |
+| `applemusic extra`     | Run `pipx inject clickwheel 'clickwheel[applemusic]'` (or the `pip install` variant). The detail line has the exact command.                                                        |
+| `p8 readable`          | Path doesn't exist or the file isn't a PEM private key. The `.p8` only downloads once at creation — if you've lost it, regen on developer.apple.com.                                |
+| `developer token`      | Signing failed. Almost always means the `.p8` is malformed or the Key ID is wrong. Re-download.                                                                                     |
+| `catalog reachable`    | Apple returned 401. Either the key behind `kid` was revoked on developer.apple.com (regen), or the Team ID is wrong, or the key isn't authorized for MusicKit (Media Services off). |
+| `user token`           | Run `clickwheel apple auth`.                                                                                                                                                        |
+| `user token verified`  | User token expired or was revoked. Re-run `clickwheel apple auth`.                                                                                                                  |
+| `iCloud Music Library` | If OFF and you want broader matching, enable on Mac (Music.app → Settings → General → Sync Library) or iPhone (Settings → Music → Sync Library).                                    |
+| `storefront match`     | Update `apple_music_storefront` to match the value the doctor reports for your account, or accept the discrepancy if you're intentionally targeting a different region's catalog.   |
 
 ## What's not here yet
 
