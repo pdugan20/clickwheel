@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/) and
 [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [0.14.1](https://github.com/pdugan20/clickwheel/compare/v0.14.0...v0.14.1) (2026-05-21)
+
+
+### Bug Fixes
+
+* **applemusic:** leave track_count unknown in apple list view ([#38](https://github.com/pdugan20/clickwheel/issues/38)) ([be61289](https://github.com/pdugan20/clickwheel/commit/be612896028e846b2d8397439ccce06e9f39e4b8))
+
 ## [0.14.0](https://github.com/pdugan20/clickwheel/compare/v0.13.0...v0.14.0) (2026-05-21)
 
 
