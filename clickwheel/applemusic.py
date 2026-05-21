@@ -530,6 +530,118 @@ def match_track(
 # ---------------------------------------------------------------------------
 
 
+@dataclass
+class UserPlaylistSummary:
+    """One entry in `list_user_playlists`."""
+
+    playlist_id: str  # 'p.xxxxx'
+    name: str
+    description: str = ""
+    track_count: int = 0
+    can_edit: bool = True
+
+
+def list_user_playlists(dev_token: str, user_token: str) -> list[UserPlaylistSummary]:
+    """List every library playlist in the user's Apple Music account.
+
+    Pages through `/v1/me/library/playlists` (default 100 per page)
+    until the server stops returning a `next` cursor. Returns a flat
+    list of summaries.
+    """
+    out: list[UserPlaylistSummary] = []
+    offset = 0
+    while True:
+        body = _request_json(
+            f"{API_ROOT}/v1/me/library/playlists?limit=100&offset={offset}",
+            headers={
+                "Authorization": f"Bearer {dev_token}",
+                "Music-User-Token": user_token,
+            },
+        )
+        data = body.get("data", [])
+        if not data:
+            break
+        for item in data:
+            attrs = item.get("attributes", {})
+            desc = attrs.get("description", {})
+            # description can be either a dict {standard: ..., short: ...}
+            # or absent. Be defensive.
+            desc_text = (
+                desc.get("standard", "") if isinstance(desc, dict) else str(desc or "")
+            )
+            out.append(
+                UserPlaylistSummary(
+                    playlist_id=item["id"],
+                    name=attrs.get("name", ""),
+                    description=desc_text,
+                    track_count=int(attrs.get("trackCount", 0) or 0),
+                    can_edit=bool(attrs.get("canEdit", True)),
+                )
+            )
+        if "next" not in body:
+            break
+        offset += len(data)
+    return out
+
+
+def read_user_playlist_tracks(
+    dev_token: str, user_token: str, playlist_id: str
+) -> list[dict]:
+    """Return the track records inside a single library playlist.
+
+    Each entry has `song_id` (the catalog `songs` id or library
+    `library-songs` id), `kind` (`'catalog' | 'library'`), and
+    `artist`/`title`/`album`/`isrc`/`duration_seconds` extracted from
+    Apple's response. Pages until exhausted.
+    """
+    out: list[dict] = []
+    offset = 0
+    while True:
+        body = _request_json(
+            f"{API_ROOT}/v1/me/library/playlists/{playlist_id}/tracks"
+            f"?limit=100&offset={offset}",
+            headers={
+                "Authorization": f"Bearer {dev_token}",
+                "Music-User-Token": user_token,
+            },
+        )
+        data = body.get("data", [])
+        if not data:
+            break
+        for item in data:
+            attrs = item.get("attributes", {})
+            duration_ms = attrs.get("durationInMillis")
+            # Track records from the user's library carry catalog
+            # IDs in `playParams.catalogId` (when the track is the
+            # catalog edition) and library IDs in `playParams.id`
+            # (always). Apple's `id` field on the row itself is the
+            # library id. We prefer catalog id when available so the
+            # push direction round-trips cleanly.
+            play_params = attrs.get("playParams", {}) or {}
+            catalog_id = play_params.get("catalogId")
+            song_id = catalog_id or item["id"]
+            kind = "catalog" if catalog_id else "library"
+            out.append(
+                {
+                    "song_id": str(song_id),
+                    "kind": kind,
+                    "artist": attrs.get("artistName", ""),
+                    "title": attrs.get("name", ""),
+                    "album": attrs.get("albumName", ""),
+                    "isrc": attrs.get("isrc"),
+                    "duration_seconds": (
+                        duration_ms / 1000.0
+                        if isinstance(duration_ms, (int, float))
+                        else None
+                    ),
+                }
+            )
+        if "next" not in body:
+            break
+        offset += len(data)
+    return out
+
+
 def create_library_playlist(
     dev_token: str,
     user_token: str,

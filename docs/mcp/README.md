@@ -60,7 +60,7 @@ The server includes a built-in `build_playlist` prompt that walks the model thro
 
 ## Tool reference
 
-34 tools + 1 prompt, grouped by domain.
+36 tools + 1 prompt, grouped by domain.
 
 ### Library (read)
 
@@ -114,12 +114,14 @@ The server includes a built-in `build_playlist` prompt that walks the model thro
 
 ### Apple Music
 
-| Tool                           | What it does                                                                                           |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| `apple_music_health`           | Probe Apple Music end-to-end (config, .p8, dev token, user token, iCloud Music Library)                |
-| `sync_playlist_to_apple_music` | Push a saved playlist to the user's Apple Music account (destructive — creates a new library playlist) |
+| Tool                             | What it does                                                                                                   |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `apple_music_health`             | Probe Apple Music end-to-end (config, .p8, dev token, user token, iCloud Music Library)                        |
+| `list_apple_music_playlists`     | List every library playlist in the user's Apple Music account                                                  |
+| `sync_playlist_to_apple_music`   | Push a saved playlist to the user's Apple Music account (destructive — creates a new library playlist)         |
+| `pull_playlist_from_apple_music` | Import an Apple Music playlist into clickwheel's local store (destructive — writes to SQLite). Read-back path. |
 
-Pull/list tools (`pull_playlist_from_apple_music`, `list_apple_music_playlists`) land in follow-up PRs.
+Apple's REST API doesn't support deleting library playlists — by design, [confirmed by Apple developers](https://developer.apple.com/forums/thread/107807). Delete from Music.app on macOS or the iPhone Music app instead; iCloud Music Library propagates.
 
 ### Last.fm scrobbling
 
@@ -130,7 +132,7 @@ Pull/list tools (`pull_playlist_from_apple_music`, `list_apple_music_playlists`)
 
 ## Destructive-tool gating
 
-Ten tools carry the MCP `destructiveHint=true` annotation: `delete_playlist`, `sync_playlist_to_ipod`, `sync_playlist_to_plex`, `pull_playlist_from_plex`, `sync_playlist_to_apple_music`, `add_tracks_to_ipod`, `add_artist_to_ipod`, `remove_tracks_from_ipod`, `remove_artist_from_ipod`, `remove_ipod_playlist`. Different clients honor the flag differently:
+Eleven tools carry the MCP `destructiveHint=true` annotation: `delete_playlist`, `sync_playlist_to_ipod`, `sync_playlist_to_plex`, `pull_playlist_from_plex`, `sync_playlist_to_apple_music`, `pull_playlist_from_apple_music`, `add_tracks_to_ipod`, `add_artist_to_ipod`, `remove_tracks_from_ipod`, `remove_artist_from_ipod`, `remove_ipod_playlist`. Different clients honor the flag differently:
 
 - **Claude Code** shows a per-call Allow/Deny prompt before each invocation.
 - **Claude Desktop** asks once when the tool is first used in a conversation, then runs freely thereafter.
