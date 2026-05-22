@@ -90,6 +90,82 @@ def test_fetch_front_cover_404_returns_none(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# artwork._get — transient-failure retry
+# ---------------------------------------------------------------------------
+
+
+class _FakeResp:
+    """Minimal stand-in for the object urllib.request.urlopen returns."""
+
+    def __init__(self, body: bytes) -> None:
+        self._body = body
+
+    def __enter__(self) -> _FakeResp:
+        return self
+
+    def __exit__(self, *_exc: object) -> bool:
+        return False
+
+    def read(self) -> bytes:
+        return self._body
+
+
+def test_get_retries_transient_failure_then_succeeds(monkeypatch):
+    """A connection error is retried; a later success is still returned."""
+    calls: list[int] = []
+
+    def flaky(req, timeout):
+        calls.append(1)
+        if len(calls) < 3:
+            raise urllib.error.URLError("connection reset")
+        return _FakeResp(b"ok")
+
+    monkeypatch.setattr("urllib.request.urlopen", flaky)
+    monkeypatch.setattr("clickwheel.artwork.time.sleep", lambda _s: None)
+
+    assert artwork._get("https://example/x", timeout=5) == b"ok"
+    assert len(calls) == 3
+
+
+def test_get_does_not_retry_404(monkeypatch):
+    """A 4xx is a definitive answer — raised at once, never retried."""
+    calls: list[int] = []
+
+    def not_found(req, timeout):
+        calls.append(1)
+        raise urllib.error.HTTPError("https://example/x", 404, "Not Found", {}, None)
+
+    monkeypatch.setattr("urllib.request.urlopen", not_found)
+    monkeypatch.setattr("clickwheel.artwork.time.sleep", lambda _s: None)
+
+    try:
+        artwork._get("https://example/x", timeout=5)
+        raise AssertionError("expected HTTPError")
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 404
+    assert len(calls) == 1
+
+
+def test_get_retries_5xx_then_raises_after_exhaustion(monkeypatch):
+    """A 5xx is retried, then surfaced once the attempt budget is spent."""
+    calls: list[int] = []
+
+    def server_error(req, timeout):
+        calls.append(1)
+        raise urllib.error.HTTPError("https://example/x", 503, "Down", {}, None)
+
+    monkeypatch.setattr("urllib.request.urlopen", server_error)
+    monkeypatch.setattr("clickwheel.artwork.time.sleep", lambda _s: None)
+
+    try:
+        artwork._get("https://example/x", timeout=5)
+        raise AssertionError("expected HTTPError")
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 503
+    assert len(calls) == artwork._MAX_ATTEMPTS
+
+
+# ---------------------------------------------------------------------------
 # library.write_album_metadata
 # ---------------------------------------------------------------------------
 
@@ -176,3 +252,46 @@ def test_apply_cloud_artwork_orchestration(tmp_path, monkeypatch):
     assert result.art_embedded == 2  # two tracks in the matched album
     assert result.years_set == 2
     assert result.unmatched == ["Artist — Unmatched Album"]
+    assert result.art_fetch_failed == []
+
+
+def test_apply_cloud_artwork_records_fetch_failure(tmp_path, monkeypatch):
+    """An album that matches MusicBrainz but whose art fetch fails lands in
+    art_fetch_failed — distinct from a genuine no-art result — and its
+    release year is still written."""
+    album = tmp_path / "Matched Album"
+    album.mkdir()
+    tracks = [album / "01.mp3", album / "02.mp3"]
+    for p in tracks:
+        p.write_bytes(b"")
+
+    monkeypatch.setattr("clickwheel.library.find_audio_files", lambda target: tracks)
+    monkeypatch.setattr("clickwheel.actions.time.sleep", lambda _s: None)
+
+    def fake_scan(path):
+        return {"artist": "Artist", "album_artist": "Artist", "album": "Matched Album"}
+
+    monkeypatch.setattr("clickwheel.actions.scan_file", fake_scan)
+
+    def fake_lookup(artist, album, **_kw):
+        return artwork.AlbumMatch(mbid="mbid-1", title=album, year=1985)
+
+    monkeypatch.setattr("clickwheel.artwork.lookup_release_group", fake_lookup)
+
+    def boom(mbid, **_kw):
+        raise artwork.ArtworkLookupError("Cover Art Archive error: HTTP 503")
+
+    monkeypatch.setattr("clickwheel.artwork.fetch_front_cover", boom)
+
+    def fake_write(path, *, art, year):
+        return (art is not None, year is not None)
+
+    monkeypatch.setattr("clickwheel.library.write_album_metadata", fake_write)
+
+    result = actions.apply_cloud_artwork(tmp_path)
+
+    assert result.albums_matched == 1
+    assert result.art_embedded == 0
+    assert result.years_set == 2  # year still written despite the art failure
+    assert result.art_fetch_failed == ["Artist — Matched Album"]
+    assert result.unmatched == []

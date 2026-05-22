@@ -1485,6 +1485,11 @@ def _run_beets_fix(cfg, target: str) -> None:
             )
             if art.unmatched:
                 warn("  No MusicBrainz match: " + ", ".join(art.unmatched))
+            if art.art_fetch_failed:
+                warn(
+                    "  Cover Art Archive unreachable — rerun `fix` to retry: "
+                    + ", ".join(art.art_fetch_failed)
+                )
         except Exception as exc:
             warn(f"  Artwork step failed: {exc}")
             failed += 1
