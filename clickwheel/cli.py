@@ -148,6 +148,7 @@ def scan(
     db.close()
 
     info("")
+    _print_scan_delta(result, full)
     _print_stats(stats, formats, result.errors)
     dim("Run `clickwheel select` to pick music for your iPod.")
 
@@ -1208,6 +1209,20 @@ def scrobble(
                 )
 
     db.close()
+
+
+def _print_scan_delta(result: actions.ScanResult, full: bool) -> None:
+    """Print a one-line summary of what the scan changed."""
+    if full:
+        info(f"Full scan complete — {result.added:,} tracks indexed.")
+    elif result.added or result.updated or result.missing:
+        line = f"Scan complete — {result.added:,} added, {result.updated:,} updated"
+        if result.missing:
+            line += f", {result.missing:,} now missing"
+        line += f" ({result.unchanged:,} unchanged)."
+        info(line)
+    else:
+        info("Scan complete — no changes; library already up to date.")
 
 
 def _print_stats(stats: dict, formats: list[dict], scan_errors: int) -> None:

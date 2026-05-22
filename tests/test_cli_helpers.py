@@ -171,3 +171,61 @@ def test_run_beets_fix_scopes_every_call_to_a_temp_library(tmp_path, monkeypatch
         assert c[:2] == ["beet", "-l"], f"call not scoped with -l: {c}"
         assert c[2] != persistent_db, "must not use the persistent library"
         assert "clickwheel-beets-" in c[2], f"not a temp library: {c[2]}"
+
+
+# ---------------------------------------------------------------------------
+# _print_scan_delta — per-scan change summary
+# ---------------------------------------------------------------------------
+
+
+def _capture_scan_delta(result, full):
+    """Run _print_scan_delta against a captured console and return the text."""
+    from clickwheel.cli import _print_scan_delta
+
+    buf = StringIO()
+    original = output.console
+    output.console = Console(file=buf, no_color=True)
+    try:
+        _print_scan_delta(result, full)
+        return buf.getvalue()
+    finally:
+        output.console = original
+
+
+def test_scan_delta_reports_added_updated_unchanged():
+    from clickwheel.actions import ScanResult
+
+    out = _capture_scan_delta(
+        ScanResult(total=100, added=28, updated=3, unchanged=69), full=False
+    )
+    assert "28 added" in out
+    assert "3 updated" in out
+    assert "69 unchanged" in out
+    assert "missing" not in out
+
+
+def test_scan_delta_reports_missing_when_present():
+    from clickwheel.actions import ScanResult
+
+    out = _capture_scan_delta(
+        ScanResult(total=98, added=0, updated=0, unchanged=96, missing=2),
+        full=False,
+    )
+    assert "2 now missing" in out
+
+
+def test_scan_delta_no_changes_is_called_out_explicitly():
+    from clickwheel.actions import ScanResult
+
+    out = _capture_scan_delta(
+        ScanResult(total=100, added=0, updated=0, unchanged=100), full=False
+    )
+    assert "no changes" in out.lower()
+
+
+def test_scan_delta_full_scan_reports_total_indexed():
+    from clickwheel.actions import ScanResult
+
+    out = _capture_scan_delta(ScanResult(total=12878, added=12878), full=True)
+    assert "Full scan" in out
+    assert "12,878" in out
