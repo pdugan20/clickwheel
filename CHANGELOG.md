@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/) and
 [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [0.15.0](https://github.com/pdugan20/clickwheel/compare/v0.14.1...v0.15.0) (2026-05-22)
+
+
+### Features
+
+* **scan:** summarise what each scan changed ([#45](https://github.com/pdugan20/clickwheel/issues/45)) ([274e037](https://github.com/pdugan20/clickwheel/commit/274e03706bb267939f145f4f2e2fb2809a041c65))
+
+
+### Bug Fixes
+
+* **artwork:** retry transient MusicBrainz/Cover Art Archive failures ([#46](https://github.com/pdugan20/clickwheel/issues/46)) ([6168b71](https://github.com/pdugan20/clickwheel/commit/6168b711e59f6b18ca96414c118b58667e776a33))
+* **beets:** resolve `beet` next to the interpreter, not via PATH ([#44](https://github.com/pdugan20/clickwheel/issues/44)) ([f93baa2](https://github.com/pdugan20/clickwheel/commit/f93baa2e194db21bcb997260024a67ded91ff6dc))
+
+
+### Documentation
+
+* slim README commands table; trust the per-integration docs ([#40](https://github.com/pdugan20/clickwheel/issues/40)) ([0f816e3](https://github.com/pdugan20/clickwheel/commit/0f816e3d046749ff783c65b3217e923fb16900ef))
+* stop enumerating tool names inline in README + MCP docs ([#43](https://github.com/pdugan20/clickwheel/issues/43)) ([6499161](https://github.com/pdugan20/clickwheel/commit/6499161da43570f546d0fbc68be2eff3ff04121e))
+* tighten integration docs and even out the README commands table ([#42](https://github.com/pdugan20/clickwheel/issues/42)) ([07c8df8](https://github.com/pdugan20/clickwheel/commit/07c8df803801536d9d9e92a81ebdb5b1956bd333))
+
 ## [0.14.1](https://github.com/pdugan20/clickwheel/compare/v0.14.0...v0.14.1) (2026-05-21)
 
 
