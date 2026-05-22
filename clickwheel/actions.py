@@ -343,6 +343,7 @@ class ArtworkResult:
     art_embedded: int = 0  # track count
     years_set: int = 0  # track count
     unmatched: list[str] = field(default_factory=list)
+    art_fetch_failed: list[str] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -540,7 +541,9 @@ def apply_cloud_artwork(
     for each album resolves it to a MusicBrainz release group — then embeds
     the Cover Art Archive front cover (only on tracks lacking art) and sets
     the release year. Albums MusicBrainz can't confidently match are left
-    untouched and reported in `unmatched`.
+    untouched and reported in `unmatched`; albums that match but whose art
+    can't be fetched (a transient Cover Art Archive failure) are reported
+    in `art_fetch_failed`.
 
     `on_album` is called with "Artist — Album" as each album is processed.
     """
@@ -585,7 +588,7 @@ def apply_cloud_artwork(
         try:
             art = artwork.fetch_front_cover(match.mbid)
         except artwork.ArtworkLookupError:
-            art = None
+            result.art_fetch_failed.append(f"{artist} — {album}")
 
         for p in paths:
             art_done, year_done = write_album_metadata(p, art=art, year=match.year)

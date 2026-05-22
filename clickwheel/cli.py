@@ -1381,6 +1381,7 @@ def _run_beets_fix(cfg, target: str) -> None:
     """
     import os
     import subprocess
+    import sys
     import tempfile
 
     beets_dir = cfg.project_dir / "beets"
@@ -1392,12 +1393,20 @@ def _run_beets_fix(cfg, target: str) -> None:
 
     env = {**os.environ, "BEETSDIR": str(beets_dir)}
 
-    # A missing `beet` on PATH makes subprocess raise FileNotFoundError
-    # rather than returning non-zero — catch it so the user gets the
-    # install hint instead of a traceback.
+    # The [fix] extra installs `beet` alongside the interpreter running
+    # clickwheel, so resolve it there rather than trusting PATH: a
+    # pipx-installed clickwheel does not put its venv bin on PATH, so a
+    # bare `beet` would not be found even with the extra installed.
+    beet_exe = Path(sys.executable).with_name("beet")
+    if not beet_exe.exists():
+        beet_exe = Path("beet")  # fall back to a PATH lookup
+
+    # A missing `beet` makes subprocess raise FileNotFoundError rather
+    # than returning non-zero — catch it so the user gets the install
+    # hint instead of a traceback.
     try:
         check = subprocess.run(
-            ["beet", "version"], env=env, capture_output=True, timeout=30
+            [str(beet_exe), "version"], env=env, capture_output=True, timeout=30
         )
         beets_available = check.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -1415,7 +1424,7 @@ def _run_beets_fix(cfg, target: str) -> None:
     with tempfile.TemporaryDirectory(prefix="clickwheel-beets-") as tmp:
         # Fresh library per run: `import` populates it with only `target`,
         # so the whole-library phases below cannot escape that scope.
-        beet = ["beet", "-l", str(Path(tmp) / "library.db")]
+        beet = [str(beet_exe), "-l", str(Path(tmp) / "library.db")]
 
         def _beet(args: list[str], phase: str) -> bool:
             with spinner(phase):
@@ -1491,6 +1500,11 @@ def _run_beets_fix(cfg, target: str) -> None:
             )
             if art.unmatched:
                 warn("  No MusicBrainz match: " + ", ".join(art.unmatched))
+            if art.art_fetch_failed:
+                warn(
+                    "  Cover Art Archive unreachable — rerun `fix` to retry: "
+                    + ", ".join(art.art_fetch_failed)
+                )
         except Exception as exc:
             warn(f"  Artwork step failed: {exc}")
             failed += 1

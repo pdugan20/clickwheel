@@ -151,6 +151,7 @@ def test_run_beets_fix_scopes_every_call_to_a_temp_library(tmp_path, monkeypatch
     to the target instead of the whole accumulated collection."""
     import subprocess
     import types
+    from pathlib import Path
 
     from clickwheel.cli import _run_beets_fix
 
@@ -159,7 +160,7 @@ def test_run_beets_fix_scopes_every_call_to_a_temp_library(tmp_path, monkeypatch
     calls: list[list[str]] = []
 
     def fake_run(cmd, **_kw):
-        calls.append(list(cmd))
+        calls.append([str(x) for x in cmd])
         return types.SimpleNamespace(returncode=0, stderr="")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -168,9 +169,44 @@ def test_run_beets_fix_scopes_every_call_to_a_temp_library(tmp_path, monkeypatch
     beet_calls = [c for c in calls if "version" not in c]
     assert beet_calls, "expected at least the import + four phase calls"
     for c in beet_calls:
-        assert c[:2] == ["beet", "-l"], f"call not scoped with -l: {c}"
+        assert Path(c[0]).name == "beet", f"not a beet call: {c}"
+        assert c[1] == "-l", f"call not scoped with -l: {c}"
         assert c[2] != persistent_db, "must not use the persistent library"
         assert "clickwheel-beets-" in c[2], f"not a temp library: {c[2]}"
+
+
+def test_run_beets_fix_resolves_beet_next_to_interpreter(tmp_path, monkeypatch):
+    """`beet` must be resolved alongside the running interpreter, not via a
+    bare PATH lookup — a pipx-installed clickwheel does not put its venv bin
+    on PATH, so a bare `beet` would not be found even with [fix] installed."""
+    import subprocess
+    import sys
+    import types
+
+    from clickwheel.cli import _run_beets_fix
+
+    cfg = _fix_cfg(tmp_path)
+
+    # Fake a venv bin dir holding the interpreter and its `beet` sibling.
+    fake_bin = tmp_path / "venvbin"
+    fake_bin.mkdir()
+    (fake_bin / "python").write_text("")
+    fake_beet = fake_bin / "beet"
+    fake_beet.write_text("")
+    monkeypatch.setattr(sys, "executable", str(fake_bin / "python"))
+
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, **_kw):
+        calls.append([str(x) for x in cmd])
+        return types.SimpleNamespace(returncode=0, stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    _run_beets_fix(cfg, str(cfg.music_dir / "SomeAlbum"))
+
+    assert calls, "expected at least the version check"
+    for c in calls:
+        assert c[0] == str(fake_beet), f"beet not resolved next to interpreter: {c}"
 
 
 # ---------------------------------------------------------------------------
