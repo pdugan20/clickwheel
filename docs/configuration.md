@@ -75,14 +75,6 @@ The Last.fm genre step needs an API key — uses the same one as scrobbling, so 
 
 Source files are never moved or renamed. Other apps (Plex, music players) reading from the same library see the corrected tags too.
 
-```bash
-# fix one folder
-clickwheel fix "Artist - Album Name"
-
-# fix the whole library
-clickwheel fix
-```
-
 ## Last.fm scrobbling
 
 See [`docs/lastfm.md`](lastfm.md) for the API-key signup, authorization flow, and troubleshooting. The `lastfm_*` keys above are the wire-up.

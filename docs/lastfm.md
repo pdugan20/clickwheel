@@ -29,6 +29,8 @@ clickwheel scrobble --auth
 
 A browser opens to Last.fm; approve, and clickwheel writes a session key into your config. Future runs use it without prompting.
 
+The same `lastfm_api_key` is also used by `clickwheel fix` to fetch album genres (read-only — no session key required). If you only want genre tagging and never plan to scrobble, you can stop after the API key is in place and skip `--auth`.
+
 ## Commands
 
 | Command                      | Description                                                             |

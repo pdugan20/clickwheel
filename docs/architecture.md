@@ -53,6 +53,14 @@ clickwheel never moves, copies, or renames source files. The music library is th
 
 `clickwheel scan` reads metadata from the library and stores it in a local SQLite database (WAL mode, so the CLI and MCP server can read concurrently). This avoids re-reading thousands of files over SMB every time you want to browse or select music. Scans are incremental by default — only files whose mtime or size changed are re-read.
 
+### Fix pipeline + metadata caches
+
+`clickwheel fix` runs three native passes: repair `albumartist` corruption, fetch art/year from MusicBrainz, fetch genres from Last.fm. All three are index-driven — they query SQLite for the work that needs doing instead of walking the filesystem, so a fix on an unchanged library does ~0 file I/O.
+
+The two network steps each have a SQLite-backed cache (`mb_matches`, `genre_matches`) that records both positive and negative outcomes. After the first full pass, subsequent runs make zero network calls unless new music is added or the user passes `--refresh-mb` / `--refresh-genres`. This drops a full-library fix on a stable library from ~70 minutes (with rate-limited MusicBrainz lookups) to seconds.
+
+The pipeline is intentionally pure-Python with no subprocess — earlier versions shelled out to beets, which added per-folder import overhead and a 30-min phase timeout that the SMB-mounted library frequently tripped.
+
 ### Two-tier auto-scan
 
 `select`, `edit`, `diff`, and `sync` check whether the index is stale before running. The check is two-tier: a cheap probe of top-level music folders catches new artist/album folders (~5s on SMB); a full re-scan runs at most once per `auto_scan_staleness_minutes` (default: 1440 = 24h). The cheap probe is ~40× faster than a full SMB walk, so the practical cost of running auto-scan on every command is minimal.
