@@ -725,7 +725,14 @@ def apply_cloud_artwork(
             result.art_fetch_failed.append(f"{artist} — {album}")
 
         for p in paths:
-            art_done, year_done = write_album_metadata(p, art=art, year=match_year)
+            # A file indexed at scan time may have vanished by now
+            # (download tools that move/delete temp files, manual
+            # library reorganization, SMB hiccups). Skip the write
+            # rather than aborting the whole pass.
+            try:
+                art_done, year_done = write_album_metadata(p, art=art, year=match_year)
+            except (FileNotFoundError, OSError):
+                continue
             result.art_embedded += int(art_done)
             result.years_set += int(year_done)
 

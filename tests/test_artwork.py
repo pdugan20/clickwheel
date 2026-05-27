@@ -305,6 +305,56 @@ def test_apply_cloud_artwork_records_fetch_failure(
     assert tmp_db.get_mb_match("Artist", "Matched Album")["status"] == "matched"
 
 
+def test_apply_cloud_artwork_survives_vanished_file(
+    tmp_path, tmp_db: Database, monkeypatch
+):
+    """A track indexed by an earlier scan but gone from disk by the time
+    we try to write to it must not abort the whole pass — the other
+    files in the same album still get their tags written."""
+    album = tmp_path / "Matched Album"
+    album.mkdir()
+    vanished = album / "01.mp3"
+    real = album / "02.mp3"
+    for p in (vanished, real):
+        p.write_bytes(b"")
+
+    monkeypatch.setattr(
+        "clickwheel.library.find_audio_files", lambda target: [vanished, real]
+    )
+    monkeypatch.setattr(
+        "clickwheel.actions.scan_file",
+        lambda path: {
+            "artist": "Artist",
+            "album_artist": "Artist",
+            "album": "Matched Album",
+        },
+    )
+    monkeypatch.setattr("clickwheel.actions.time.sleep", lambda _s: None)
+    monkeypatch.setattr(
+        "clickwheel.artwork.lookup_release_group",
+        lambda artist, album, **_kw: artwork.AlbumMatch(
+            mbid="mbid-1", title=album, year=1990
+        ),
+    )
+    monkeypatch.setattr(
+        "clickwheel.artwork.fetch_front_cover", lambda mbid, **_kw: _TINY_JPEG
+    )
+
+    def fake_write(path, *, art, year):
+        if path == vanished:
+            raise FileNotFoundError(2, "No such file or directory", str(path))
+        return (art is not None, year is not None)
+
+    monkeypatch.setattr("clickwheel.library.write_album_metadata", fake_write)
+
+    # Must not raise; result reflects only the surviving file.
+    result = actions.apply_cloud_artwork(tmp_db, tmp_path)
+
+    assert result.albums_matched == 1
+    assert result.art_embedded == 1
+    assert result.years_set == 1
+
+
 def test_apply_cloud_artwork_uses_mb_cache(tmp_path, tmp_db: Database, monkeypatch):
     """A cached match is reused without hitting MusicBrainz."""
     album = tmp_path / "Cached Album"
