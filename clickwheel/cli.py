@@ -158,6 +158,17 @@ def fix(
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Show what would be done without making changes"
     ),
+    refresh_mb: bool = typer.Option(
+        False,
+        "--refresh-mb",
+        help="Re-query MusicBrainz, ignoring the cache. "
+        "Use after a known-bad cached match.",
+    ),
+    refresh_genres: bool = typer.Option(
+        False,
+        "--refresh-genres",
+        help="Re-query Last.fm for genres, ignoring the cache.",
+    ),
     artist: str = typer.Argument(
         None, help="Artist folder name to target (default: entire library)"
     ),
@@ -170,10 +181,14 @@ def fix(
     if dry_run:
         status("Dry run — would clean up metadata:")
         info(f"  Target: {target}")
-        info("  Steps: catalog, fetch art, embed art, fill genres, write tags")
+        info("  Steps: repair albumartist, fetch art + year, fetch genres")
+        if refresh_mb:
+            info("  MusicBrainz cache: will be cleared before lookups")
+        if refresh_genres:
+            info("  Genre cache: will be cleared before lookups")
         return
 
-    _run_beets_fix(cfg, target)
+    _run_fix(cfg, target, refresh_mb=refresh_mb, refresh_genres=refresh_genres)
 
 
 @app.command()
@@ -1357,146 +1372,83 @@ def _get_path() -> str:
     return ":".join(extra + [path])
 
 
-# Per-phase timeout for beets subprocess calls. A correctly-scoped `fix`
-# finishes a phase in minutes; this only trips when an SMB/NAS operation
-# genuinely stalls, turning an indefinite hang into a reported failure.
-FIX_PHASE_TIMEOUT = 1800
-
-
-def _run_beets_fix(cfg, target: str) -> None:
+def _run_fix(
+    cfg,
+    target: str,
+    *,
+    refresh_mb: bool = False,
+    refresh_genres: bool = False,
+) -> None:
     """Run the metadata cleanup pipeline.
 
-    Four phases: catalog, cloud artwork + dates, fill genres, write tags.
-    Requires beets to be installed: pipx inject clickwheel 'clickwheel[fix]'
+    Three native phases — no subprocess, no beets:
 
-    Album art and release years come from a native MusicBrainz / Cover Art
-    Archive lookup (see `actions.apply_cloud_artwork`) rather than beets —
-    beets' import matcher stalls on multi-pressing ambiguity in batch mode.
-    Genres still come from beets `lastgenre`.
+    1. **Repair albumartist** (`actions.repair_albumartist`) — fixes the
+       legacy Zune/WMP corruption where the album title got written
+       into the `albumartist` slot. Index-driven: only opens files the
+       SQLite index has flagged as broken.
+    2. **Cloud artwork + release years** (`actions.apply_cloud_artwork`)
+       — MusicBrainz lookup + Cover Art Archive fetch, with a
+       `mb_matches` cache and a per-album skip when the index says
+       everything's already complete.
+    3. **Cloud genres** (`actions.apply_cloud_genres`) — Last.fm
+       top-tag lookup via pylast, with a `genre_matches` cache and a
+       per-album skip when every track already has a genre.
 
-    Each run uses a fresh, temporary beets library. The catalog phase
-    imports only `target` into it, so the whole-library beets phases that
-    follow stay scoped to `target` rather than grinding over the entire
-    collection — a single shared library would accumulate every album.
+    Both lookup steps cache positive and negative outcomes, so re-runs
+    on an unchanged library do zero network work. Pass `--refresh-mb`
+    or `--refresh-genres` to invalidate the respective cache.
     """
-    import os
-    import subprocess
-    import sys
-    import tempfile
+    target_path = Path(target)
+    failed = 0
 
-    beets_dir = cfg.project_dir / "beets"
-    beets_dir.mkdir(parents=True, exist_ok=True)
-
-    beets_config = beets_dir / "config.yaml"
-    if not beets_config.exists():
-        _generate_beets_config(beets_config, cfg)
-
-    env = {**os.environ, "BEETSDIR": str(beets_dir)}
-
-    # The [fix] extra installs `beet` alongside the interpreter running
-    # clickwheel, so resolve it there rather than trusting PATH: a
-    # pipx-installed clickwheel does not put its venv bin on PATH, so a
-    # bare `beet` would not be found even with the extra installed.
-    beet_exe = Path(sys.executable).with_name("beet")
-    if not beet_exe.exists():
-        beet_exe = Path("beet")  # fall back to a PATH lookup
-
-    # A missing `beet` makes subprocess raise FileNotFoundError rather
-    # than returning non-zero — catch it so the user gets the install
-    # hint instead of a traceback.
+    db = Database(cfg.db_path)
     try:
-        check = subprocess.run(
-            [str(beet_exe), "version"], env=env, capture_output=True, timeout=30
-        )
-        beets_available = check.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        beets_available = False
-    if not beets_available:
-        error(
-            "beets is not installed.\n"
-            "  If you installed clickwheel with pipx:\n"
-            "    pipx inject clickwheel 'clickwheel[fix]'\n"
-            "  If you installed with pip:\n"
-            "    pip install 'clickwheel[fix]'"
-        )
-        raise typer.Exit(1)
-
-    with tempfile.TemporaryDirectory(prefix="clickwheel-beets-") as tmp:
-        # Fresh library per run: `import` populates it with only `target`,
-        # so the whole-library phases below cannot escape that scope.
-        beet = [str(beet_exe), "-l", str(Path(tmp) / "library.db")]
-
-        def _beet(args: list[str], phase: str) -> bool:
-            with spinner(phase):
-                try:
-                    result = subprocess.run(
-                        [*beet, *args],
-                        env=env,
-                        capture_output=True,
-                        text=True,
-                        timeout=FIX_PHASE_TIMEOUT,
-                    )
-                except subprocess.TimeoutExpired:
-                    warn(
-                        f"  Timed out after {FIX_PHASE_TIMEOUT // 60} min — "
-                        "the music share may be slow or disconnected."
-                    )
-                    return False
-            if result.returncode != 0:
-                if result.stderr:
-                    warn(f"  Failed: {result.stderr.strip()}")
-                else:
-                    warn("  Failed (no error details)")
-                return False
-            confirm(f"  {phase} Done")
-            return True
-
-        target_path = Path(target)
-        if target_path.is_dir() and target == str(cfg.music_dir):
-            status("Step 1/4: Cataloging library...")
-            subdirs = sorted(
-                d
-                for d in target_path.iterdir()
-                if d.is_dir() and not d.name.startswith(".")
-            )
-            import_ok = 0
-            import_fail = 0
-            for d in subdirs:
-                try:
-                    result = subprocess.run(
-                        [*beet, "import", "-A", str(d)],
-                        env=env,
-                        capture_output=True,
-                        text=True,
-                        timeout=FIX_PHASE_TIMEOUT,
-                    )
-                    imported = result.returncode == 0
-                except subprocess.TimeoutExpired:
-                    imported = False
-                if imported:
-                    import_ok += 1
-                else:
-                    import_fail += 1
-                    dim(f"  Skipped: {d.name}")
-            if import_fail:
-                warn(f"  Cataloged {import_ok} folders, {import_fail} skipped")
-            else:
-                confirm(f"  Done ({import_ok} folders)")
-        else:
-            _beet(["import", "-A", target], "Step 1/4: Cataloging library...")
-
-        failed = 0
-
-        # Step 2: cloud artwork + release years (native — see the
-        # _run_beets_fix docstring for why this isn't a beets phase).
-        status("Step 2/4: Fetching album art + dates from MusicBrainz...")
+        # Step 1: repair albumartist. Has to come first so the artwork
+        # and genre steps read the corrected (artist, album) off disk
+        # when grouping files into albums.
+        #
+        # The repair queries the SQLite index for broken files rather
+        # than walking the filesystem, so the index needs to be fresh —
+        # `maybe_auto_scan` handles that.
+        status("Step 1/3: Repairing albumartist tags...")
         try:
-            art = actions.apply_cloud_artwork(
-                target_path, on_album=lambda a: dim(f"  {a}")
+            maybe_auto_scan(cfg, db)
+            repair = actions.repair_albumartist(
+                db,
+                target_path,
+                on_track=lambda p: dim(f"  {p.parent.name}/{p.name}"),
             )
             confirm(
-                f"  {art.albums_matched}/{art.albums_seen} albums matched — "
-                f"art on {art.art_embedded} tracks, years on {art.years_set}"
+                f"  Inspected {repair.scanned} candidate(s), repaired {repair.repaired}"
+            )
+            if repair.failed:
+                warn(f"  Could not repair {len(repair.failed)} file(s)")
+        except Exception as exc:
+            warn(f"  Repair step failed: {exc}")
+            failed += 1
+
+        # Step 2: artwork + year via MusicBrainz / Cover Art Archive.
+        if refresh_mb:
+            cleared = db.clear_mb_cache()
+            dim(f"  Cleared {cleared} cached MusicBrainz match(es).")
+        status("Step 2/3: Fetching album art + dates from MusicBrainz...")
+        try:
+            art = actions.apply_cloud_artwork(
+                db,
+                target_path,
+                refresh=refresh_mb,
+                on_album=lambda a: dim(f"  {a}"),
+            )
+            confirm(
+                f"  {art.albums_matched}/{art.albums_seen} albums matched "
+                f"— art on {art.art_embedded} tracks, "
+                f"years on {art.years_set}"
+            )
+            dim(
+                f"  Skipped {art.albums_skipped_complete} already-complete "
+                f"album(s) · {art.cache_hits} cache hit(s), "
+                f"{art.cache_misses} MB lookup(s)"
             )
             if art.unmatched:
                 warn("  No MusicBrainz match: " + ", ".join(art.unmatched))
@@ -1509,68 +1461,46 @@ def _run_beets_fix(cfg, target: str) -> None:
             warn(f"  Artwork step failed: {exc}")
             failed += 1
 
-        remaining = [
-            (["lastgenre"], "Step 3/4: Filling missing genres..."),
-            (["write"], "Step 4/4: Writing tags to files..."),
-        ]
-        for args, phase in remaining:
-            if not _beet(args, phase):
-                failed += 1
+        # Step 3: genres via Last.fm.
+        if refresh_genres:
+            cleared = db.clear_genre_cache()
+            dim(f"  Cleared {cleared} cached genre match(es).")
+        status("Step 3/3: Fetching genres from Last.fm...")
+        try:
+            genres = actions.apply_cloud_genres(
+                db,
+                target_path,
+                api_key=cfg.lastfm_api_key,
+                refresh=refresh_genres,
+                on_album=lambda a: dim(f"  {a}"),
+            )
+            if genres.skipped_no_credentials:
+                warn(
+                    "  Last.fm not configured — skipping genres. "
+                    "Set LASTFM_API_KEY or run `clickwheel scrobble --auth`."
+                )
+            else:
+                confirm(
+                    f"  {genres.albums_matched}/{genres.albums_seen} albums "
+                    f"tagged — genres on {genres.tracks_tagged} track(s)"
+                )
+                dim(
+                    f"  Skipped {genres.albums_skipped_complete} already-tagged "
+                    f"album(s) · {genres.cache_hits} cache hit(s), "
+                    f"{genres.cache_misses} Last.fm lookup(s)"
+                )
+                if genres.unmatched:
+                    warn("  No Last.fm tags: " + ", ".join(genres.unmatched))
+        except Exception as exc:
+            warn(f"  Genre step failed: {exc}")
+            failed += 1
+    finally:
+        db.close()
 
     if failed == 0:
         success("Metadata cleanup complete.")
     else:
         warn(f"Metadata cleanup finished with {failed} step(s) that had issues.")
-
-
-def _generate_beets_config(config_path: Path, cfg) -> None:
-    """Generate a beets config.yaml for metadata cleanup."""
-    from clickwheel.output import dim
-
-    config_path.write_text(
-        f"""\
-# Auto-generated by clickwheel. Edit to customize beets behavior.
-# Docs: https://beets.readthedocs.io/en/stable/reference/config.html
-
-directory: {cfg.music_dir}
-library: {config_path.parent / "library.db"}
-
-# Do not move or copy files — preserves paths for other apps (Plex, etc.)
-import:
-  move: no
-  copy: no
-  write: yes
-  timid: no
-  quiet_fallback: asis
-
-# Skip hidden files and common junk directories
-ignore: ['.*', 'System Volume Information', 'lost+found']
-ignore_hidden: yes
-
-paths:
-  default: $albumartist/$album%aunique{{}}/$track $title
-  singleton: Non-Album/$artist/$title
-  comp: Compilations/$album%aunique{{}}/$track $title
-
-# Album art and release years are handled natively by clickwheel
-# (MusicBrainz + Cover Art Archive); beets is used only for genres.
-plugins:
-  - lastgenre
-
-lastgenre:
-  auto: no
-  count: 1
-  fallback: ''
-  source: album
-
-match:
-  strong_rec_thresh: 0.10
-  preferred:
-    media: ['Digital Media|File', 'CD']
-  ignored: unmatched_tracks
-"""
-    )
-    dim(f"Generated beets config at {config_path}")
 
 
 # ---------------------------------------------------------------------------

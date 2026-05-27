@@ -344,6 +344,32 @@ class ArtworkResult:
     years_set: int = 0  # track count
     unmatched: list[str] = field(default_factory=list)
     art_fetch_failed: list[str] = field(default_factory=list)
+    albums_skipped_complete: int = 0  # already had art + year, no MB call
+    cache_hits: int = 0  # served from mb_matches, no MB call
+    cache_misses: int = 0  # actually hit MusicBrainz
+
+
+@dataclass
+class AlbumArtistRepairResult:
+    """Outcome of an albumartist repair pass."""
+
+    scanned: int = 0
+    repaired: int = 0
+    failed: list[str] = field(default_factory=list)
+
+
+@dataclass
+class GenreResult:
+    """Outcome of a Last.fm genre lookup pass."""
+
+    albums_seen: int = 0
+    albums_matched: int = 0
+    tracks_tagged: int = 0  # tracks where a genre was newly written
+    unmatched: list[str] = field(default_factory=list)
+    albums_skipped_complete: int = 0  # every track already had a genre
+    cache_hits: int = 0
+    cache_misses: int = 0
+    skipped_no_credentials: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -530,22 +556,105 @@ def search_tracks(db: Database, query: str, limit: int = 50) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def apply_cloud_artwork(
+def repair_albumartist(
+    db: Database,
     target: Path,
     *,
+    on_track: Callable[[Path], None] | None = None,
+) -> AlbumArtistRepairResult:
+    """Rewrite `albumartist` tags that wrongly contain the album title.
+
+    Legacy taggers (notably old Windows Media Player / Zune, which
+    leave AlbumArt_*.jpg and ZuneAlbumArt.jpg crumbs in album folders)
+    sometimes wrote the album name into the `albumartist` slot, leaving
+    the real artist only in the per-track `artist` field. That breaks
+    artist aggregation in clickwheel, Plex, and anything else that
+    keys on albumartist.
+
+    Uses the SQLite index to find the broken files under `target` and
+    only opens those — a full-library fix that used to walk every file
+    over SMB now skips ~90% of the library, since the index already
+    knows which files are affected. Each candidate is re-validated
+    against the file on disk before writing, so a stale DB row (a file
+    that was fixed externally since the last scan) is silently skipped.
+
+    Failures (e.g. an unreadable file) are collected in `failed` rather
+    than raised so a single bad file doesn't abort the whole pass.
+    """
+    from mutagen import File as MutagenFile
+
+    result = AlbumArtistRepairResult()
+    for row in db.find_corrupt_albumartists(str(target)):
+        path = Path(row["path"])
+        result.scanned += 1
+        try:
+            audio = MutagenFile(str(path), easy=True)
+        except Exception:
+            result.failed.append(str(path))
+            continue
+        if audio is None or audio.tags is None:
+            continue
+
+        def _first(key: str) -> str | None:
+            vals = audio.tags.get(key)
+            return str(vals[0]) if vals else None
+
+        albumartist = _first("albumartist")
+        album = _first("album")
+        artist = _first("artist")
+        # Re-check against the live file: the DB may be stale if
+        # something fixed this tag externally since the last scan.
+        if not (
+            albumartist
+            and album
+            and artist
+            and albumartist == album
+            and albumartist != artist
+        ):
+            continue
+
+        try:
+            audio["albumartist"] = artist
+            audio.save()
+        except Exception:
+            result.failed.append(str(path))
+            continue
+        result.repaired += 1
+        if on_track:
+            on_track(path)
+
+    return result
+
+
+def apply_cloud_artwork(
+    db: Database,
+    target: Path,
+    *,
+    refresh: bool = False,
     on_album: Callable[[str], None] | None = None,
 ) -> ArtworkResult:
     """Embed cloud cover art and canonical release years under `target`.
 
-    Walks `target` for audio files, groups them into albums by folder, and
-    for each album resolves it to a MusicBrainz release group — then embeds
-    the Cover Art Archive front cover (only on tracks lacking art) and sets
-    the release year. Albums MusicBrainz can't confidently match are left
-    untouched and reported in `unmatched`; albums that match but whose art
-    can't be fetched (a transient Cover Art Archive failure) are reported
-    in `art_fetch_failed`.
+    Walks `target` for audio files, groups them into albums by folder,
+    then for each album:
 
-    `on_album` is called with "Artist — Album" as each album is processed.
+    1. Skips entirely if the index says every track already has art AND
+       a year — nothing to do, no network call.
+    2. Else consults the `mb_matches` cache. A cached `matched` row
+       reuses the mbid/year; a cached `unmatched` row reports the
+       no-match without re-querying MusicBrainz. The 1-req/s rate
+       limit applies only to cache misses.
+    3. Else performs the MusicBrainz lookup and caches the result
+       (positive or negative) so the next `fix` run skips it.
+
+    Pass `refresh=True` to bypass the cache and force a re-lookup —
+    used by `clickwheel fix --refresh-mb`.
+
+    Albums MusicBrainz can't confidently match are reported in
+    `unmatched`; albums that match but whose Cover Art Archive fetch
+    fails (a transient network issue) are reported in
+    `art_fetch_failed`. `on_album` is called with "Artist — Album" as
+    each album is processed.
     """
     from collections import defaultdict
 
@@ -557,6 +666,7 @@ def apply_cloud_artwork(
         groups[f.parent].append(f)
 
     result = ArtworkResult()
+    network_calls = 0
     for folder, paths in sorted(groups.items()):
         meta = None
         for p in paths:
@@ -571,29 +681,213 @@ def apply_cloud_artwork(
         result.albums_seen += 1
         if on_album:
             on_album(f"{artist} — {album}")
-        # MusicBrainz asks for <=1 request/sec; the first call needn't wait.
-        if result.albums_seen > 1:
-            time.sleep(1.1)
 
-        try:
-            match = artwork.lookup_release_group(artist, album)
-        except artwork.ArtworkLookupError:
-            match = None
-        if match is None:
-            result.unmatched.append(f"{artist} — {album}")
+        # Cheapest skip: the index says every track is already complete.
+        if db.album_metadata_complete([str(p) for p in paths]):
+            result.albums_skipped_complete += 1
             continue
+
+        # Cache lookup. A cached `unmatched` row is authoritative
+        # until the user passes --refresh-mb.
+        cached = None if refresh else db.get_mb_match(artist, album)
+        if cached:
+            result.cache_hits += 1
+            if cached["status"] == "unmatched":
+                result.unmatched.append(f"{artist} — {album}")
+                continue
+            match_mbid = cached["mbid"]
+            match_year = cached["year"]
+        else:
+            result.cache_misses += 1
+            # MusicBrainz asks for <=1 req/s. Rate-limit only the
+            # actual network calls, not cache hits.
+            if network_calls > 0:
+                time.sleep(1.1)
+            network_calls += 1
+            try:
+                match = artwork.lookup_release_group(artist, album)
+            except artwork.ArtworkLookupError:
+                match = None
+            if match is None:
+                db.save_mb_match(artist, album, mbid=None, year=None)
+                result.unmatched.append(f"{artist} — {album}")
+                continue
+            match_mbid = match.mbid
+            match_year = match.year
+            db.save_mb_match(artist, album, mbid=match_mbid, year=match_year)
+
         result.albums_matched += 1
 
         art: bytes | None = None
         try:
-            art = artwork.fetch_front_cover(match.mbid)
+            art = artwork.fetch_front_cover(match_mbid)
         except artwork.ArtworkLookupError:
             result.art_fetch_failed.append(f"{artist} — {album}")
 
         for p in paths:
-            art_done, year_done = write_album_metadata(p, art=art, year=match.year)
+            art_done, year_done = write_album_metadata(p, art=art, year=match_year)
             result.art_embedded += int(art_done)
             result.years_set += int(year_done)
+
+    return result
+
+
+# Last.fm tags that look like genres but aren't useful. The lookup
+# walks the top tags and picks the first one that isn't in this list
+# and isn't a bare year. Kept short on purpose — beets' lastgenre has
+# a huge curated list, but we just need to dodge the obvious junk.
+_JUNK_GENRE_TAGS = frozenset(
+    {
+        "favorites",
+        "favourite",
+        "favourites",
+        "favorite albums",
+        "favourite albums",
+        "seen live",
+        "owned",
+        "albums i own",
+        "spotify",
+        "vinyl",
+        "mp3",
+        "want to listen",
+        "missing tags",
+        "albums",
+    }
+)
+
+
+def _is_junk_genre_tag(tag: str) -> bool:
+    t = tag.lower().strip()
+    if not t:
+        return True
+    if re.fullmatch(r"\d{4}", t):
+        return True
+    return t in _JUNK_GENRE_TAGS
+
+
+def _write_genre_tag(path: Path, genre: str) -> bool:
+    """Embed `genre` only if the file currently lacks one. Returns True
+    if a write happened."""
+    from mutagen import File as MutagenFile
+
+    try:
+        audio = MutagenFile(str(path), easy=True)
+    except Exception:
+        return False
+    if audio is None or audio.tags is None:
+        return False
+    existing = audio.tags.get("genre")
+    if existing and str(existing[0]).strip():
+        return False
+    try:
+        audio["genre"] = genre
+        audio.save()
+    except Exception:
+        return False
+    return True
+
+
+def apply_cloud_genres(
+    db: Database,
+    target: Path,
+    *,
+    api_key: str,
+    refresh: bool = False,
+    on_album: Callable[[str], None] | None = None,
+) -> GenreResult:
+    """Fill in missing genres from Last.fm's album top tags.
+
+    Replaces the old `beet lastgenre` pipeline. Same shape as
+    `apply_cloud_artwork`:
+
+    1. Skip if every track in the album already has a `genre` tag —
+       no Last.fm call.
+    2. Else consult the `genre_matches` cache. `matched` reuses the
+       cached genre; `unmatched` records the miss without re-querying.
+    3. Else query Last.fm via pylast, take the top non-junk tag, cache
+       the outcome.
+
+    Tags get a light filter: bare years and obvious meta-tags like
+    "favorites" / "seen live" are skipped. Rate limit is 0.25s between
+    actual network calls (Last.fm tolerates 5/sec). Pass `refresh=True`
+    to bypass the cache.
+
+    If `api_key` is empty, the pass returns immediately with
+    `skipped_no_credentials=True` and no work done; the caller is
+    expected to surface that as a warning.
+    """
+    result = GenreResult()
+    if not api_key:
+        result.skipped_no_credentials = True
+        return result
+
+    from collections import defaultdict
+
+    import pylast
+
+    from clickwheel.library import find_audio_files
+
+    network = pylast.LastFMNetwork(api_key=api_key)
+
+    groups: dict[Path, list[Path]] = defaultdict(list)
+    for f in find_audio_files(target):
+        groups[f.parent].append(f)
+
+    network_calls = 0
+    for folder, paths in sorted(groups.items()):
+        meta = None
+        for p in paths:
+            meta = scan_file(p)
+            if meta and meta.get("album"):
+                break
+        album = (meta or {}).get("album")
+        artist = (meta or {}).get("album_artist") or (meta or {}).get("artist")
+        if not album or not artist:
+            continue
+
+        result.albums_seen += 1
+        if on_album:
+            on_album(f"{artist} — {album}")
+
+        if db.album_genres_complete([str(p) for p in paths]):
+            result.albums_skipped_complete += 1
+            continue
+
+        cached = None if refresh else db.get_genre_match(artist, album)
+        if cached:
+            result.cache_hits += 1
+            if cached["status"] == "unmatched":
+                result.unmatched.append(f"{artist} — {album}")
+                continue
+            genre = cached["genre"]
+        else:
+            result.cache_misses += 1
+            if network_calls > 0:
+                time.sleep(0.25)
+            network_calls += 1
+            try:
+                album_obj = network.get_album(artist, album)
+                top_tags = album_obj.get_top_tags(limit=5)
+            except (pylast.WSError, pylast.NetworkError, Exception):
+                top_tags = []
+
+            genre = None
+            for item in top_tags:
+                name = getattr(item.item, "name", str(item.item)).strip()
+                if name and not _is_junk_genre_tag(name):
+                    genre = name.title()
+                    break
+
+            if genre is None:
+                db.save_genre_match(artist, album, genre=None)
+                result.unmatched.append(f"{artist} — {album}")
+                continue
+            db.save_genre_match(artist, album, genre=genre)
+
+        result.albums_matched += 1
+        for p in paths:
+            if _write_genre_tag(p, genre):
+                result.tracks_tagged += 1
 
     return result
 

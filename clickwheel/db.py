@@ -71,6 +71,32 @@ CREATE TABLE IF NOT EXISTS apple_music_song_map (
     matched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- MusicBrainz lookup cache. status='matched' rows have a real mbid +
+-- year; status='unmatched' rows record albums MB couldn't resolve, so
+-- subsequent fix runs don't burn the 1-req/s rate limit on known
+-- no-matches. Invalidated wholesale by `clickwheel fix --refresh-mb`.
+CREATE TABLE IF NOT EXISTS mb_matches (
+    artist TEXT NOT NULL,
+    album TEXT NOT NULL,
+    status TEXT NOT NULL,
+    mbid TEXT,
+    year INTEGER,
+    fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (artist, album)
+);
+
+-- Last.fm genre lookup cache. Same shape as mb_matches: positive +
+-- negative outcomes are both cached so subsequent fix runs skip the
+-- network entirely. Invalidated by `clickwheel fix --refresh-genres`.
+CREATE TABLE IF NOT EXISTS genre_matches (
+    artist TEXT NOT NULL,
+    album TEXT NOT NULL,
+    status TEXT NOT NULL,
+    genre TEXT,
+    fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (artist, album)
+);
+
 CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks(artist);
 CREATE INDEX IF NOT EXISTS idx_tracks_album ON tracks(album);
 CREATE INDEX IF NOT EXISTS idx_tracks_album_artist ON tracks(album_artist);
@@ -181,10 +207,17 @@ class Database:
 
     def get_artists(self) -> list[dict]:
         """Return all artists with track/album counts and total size.
-        Playable tracks only — artists with all-missing tracks disappear."""
+        Playable tracks only — artists with all-missing tracks disappear.
+
+        When `album_artist == album`, the file is treated as having a
+        corrupt albumartist tag (a legacy Zune/WMP pattern where the
+        album title got written into the albumartist slot) and the
+        per-track `artist` is used for the display name instead.
+        """
         rows = self.conn.execute("""
             SELECT
-                COALESCE(album_artist, artist) as name,
+                CASE WHEN album_artist = album THEN artist
+                     ELSE COALESCE(album_artist, artist) END AS name,
                 COUNT(*) as tracks,
                 COUNT(DISTINCT album) as albums,
                 SUM(file_size) as total_bytes
@@ -194,6 +227,172 @@ class Database:
             ORDER BY name COLLATE NOCASE
         """).fetchall()
         return [dict(r) for r in rows]
+
+    def find_corrupt_albumartists(self, path_prefix: str) -> list[dict]:
+        """Return tracks whose `album_artist` wrongly equals the album title.
+
+        The legacy Zune/WMP corruption pattern: `album_artist == album` with
+        a distinct per-track `artist`. Scoped by `path_prefix` so a
+        `clickwheel fix <subdir>` invocation can target one folder.
+
+        Used by `actions.repair_albumartist` to skip a full filesystem
+        walk — only the known-broken files get opened over SMB.
+        """
+        pattern = path_prefix.rstrip("/") + "/%"
+        rows = self.conn.execute(
+            """
+            SELECT path, artist, album_artist, album
+            FROM tracks
+            WHERE album_artist IS NOT NULL
+              AND album IS NOT NULL
+              AND artist IS NOT NULL
+              AND album_artist = album
+              AND album_artist != artist
+              AND missing_since IS NULL
+              AND path LIKE ?
+            ORDER BY path
+            """,
+            (pattern,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def album_metadata_complete(self, paths: list[str]) -> bool:
+        """True if every indexed track in `paths` already has art AND a
+        year set. Used by the artwork pass to skip MB lookups for
+        albums that are already fully populated.
+
+        Returns False if any path is missing from the index — that
+        means the album hasn't been scanned yet, so we can't claim
+        completeness.
+        """
+        if not paths:
+            return True
+        placeholders = ",".join("?" * len(paths))
+        row = self.conn.execute(
+            f"""
+            SELECT
+                COUNT(*) AS indexed,
+                SUM(CASE WHEN has_art = 1 AND year IS NOT NULL AND year != 0
+                         THEN 1 ELSE 0 END) AS complete
+            FROM tracks
+            WHERE path IN ({placeholders})
+              AND missing_since IS NULL
+            """,
+            paths,
+        ).fetchone()
+        if row is None or row["indexed"] != len(paths):
+            return False
+        return row["complete"] == len(paths)
+
+    def get_mb_match(self, artist: str, album: str) -> dict | None:
+        """Return the cached MusicBrainz match for (artist, album), or
+        None if nothing's cached. A cached row with status='unmatched'
+        is returned too — callers should treat that as a definitive
+        no-match (don't re-query MB) until the cache is refreshed.
+        """
+        row = self.conn.execute(
+            """
+            SELECT status, mbid, year, fetched_at
+            FROM mb_matches
+            WHERE artist = ? AND album = ?
+            """,
+            (artist, album),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def save_mb_match(
+        self,
+        artist: str,
+        album: str,
+        *,
+        mbid: str | None,
+        year: int | None,
+    ) -> None:
+        """Cache a MusicBrainz lookup result. Pass `mbid=None` to
+        record a definitive no-match (status='unmatched')."""
+        status = "matched" if mbid else "unmatched"
+        self.conn.execute(
+            """
+            INSERT INTO mb_matches (artist, album, status, mbid, year)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(artist, album) DO UPDATE SET
+                status = excluded.status,
+                mbid = excluded.mbid,
+                year = excluded.year,
+                fetched_at = CURRENT_TIMESTAMP
+            """,
+            (artist, album, status, mbid, year),
+        )
+        self.conn.commit()
+
+    def clear_mb_cache(self) -> int:
+        """Drop every cached MB match. Returns the number of rows
+        removed. Called by `clickwheel fix --refresh-mb`."""
+        cur = self.conn.execute("DELETE FROM mb_matches")
+        self.conn.commit()
+        return cur.rowcount
+
+    def album_genres_complete(self, paths: list[str]) -> bool:
+        """True if every indexed track in `paths` already has a non-empty
+        `genre`. Used by the genre pass to skip albums that need no
+        Last.fm call.
+        """
+        if not paths:
+            return True
+        placeholders = ",".join("?" * len(paths))
+        row = self.conn.execute(
+            f"""
+            SELECT
+                COUNT(*) AS indexed,
+                SUM(CASE WHEN genre IS NOT NULL AND TRIM(genre) != ''
+                         THEN 1 ELSE 0 END) AS with_genre
+            FROM tracks
+            WHERE path IN ({placeholders})
+              AND missing_since IS NULL
+            """,
+            paths,
+        ).fetchone()
+        if row is None or row["indexed"] != len(paths):
+            return False
+        return row["with_genre"] == len(paths)
+
+    def get_genre_match(self, artist: str, album: str) -> dict | None:
+        """Cached Last.fm genre for (artist, album), or None. Mirrors
+        get_mb_match: status='matched' rows carry a genre string;
+        status='unmatched' rows record Last.fm misses."""
+        row = self.conn.execute(
+            """
+            SELECT status, genre, fetched_at
+            FROM genre_matches
+            WHERE artist = ? AND album = ?
+            """,
+            (artist, album),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def save_genre_match(self, artist: str, album: str, *, genre: str | None) -> None:
+        """Cache a Last.fm genre lookup. `genre=None` records a
+        definitive no-match."""
+        status = "matched" if genre else "unmatched"
+        self.conn.execute(
+            """
+            INSERT INTO genre_matches (artist, album, status, genre)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(artist, album) DO UPDATE SET
+                status = excluded.status,
+                genre = excluded.genre,
+                fetched_at = CURRENT_TIMESTAMP
+            """,
+            (artist, album, status, genre),
+        )
+        self.conn.commit()
+
+    def clear_genre_cache(self) -> int:
+        """Drop every cached genre match. Called by
+        `clickwheel fix --refresh-genres`."""
+        cur = self.conn.execute("DELETE FROM genre_matches")
+        self.conn.commit()
+        return cur.rowcount
 
     def get_albums_by_artist(self, artist: str) -> list[dict]:
         """Return albums for a given artist with track counts and size.
@@ -483,23 +682,42 @@ class Database:
         return row["total"] if row else 0
 
     def get_playlist_artists(self, name: str) -> list[dict]:
-        """Return artists in a playlist with track counts and size."""
+        """Return artists in a playlist with track counts and size.
+
+        Same display-name fallback as `get_artists`: a corrupt
+        `album_artist == album` tag is ignored in favor of `artist`.
+
+        The GROUP BY repeats the CASE expression rather than referring
+        to the `name` alias because the joined `playlists` table also
+        has a `name` column — SQLite resolves a bare `name` to the
+        real column, collapsing every row into one group.
+        """
         rows = self.conn.execute(
             """
             SELECT
-                COALESCE(t.album_artist, t.artist) as name,
+                CASE WHEN t.album_artist = t.album THEN t.artist
+                     ELSE COALESCE(t.album_artist, t.artist) END AS artist_name,
                 COUNT(*) as tracks,
                 SUM(t.file_size) as total_bytes
             FROM tracks t
             JOIN playlist_tracks pt ON t.id = pt.track_id
             JOIN playlists p ON pt.playlist_id = p.id
             WHERE p.name = ?
-            GROUP BY COALESCE(t.album_artist, t.artist)
-            ORDER BY name COLLATE NOCASE
+            GROUP BY
+                CASE WHEN t.album_artist = t.album THEN t.artist
+                     ELSE COALESCE(t.album_artist, t.artist) END
+            ORDER BY artist_name COLLATE NOCASE
             """,
             (name,),
         ).fetchall()
-        return [dict(r) for r in rows]
+        return [
+            {
+                "name": r["artist_name"],
+                "tracks": r["tracks"],
+                "total_bytes": r["total_bytes"],
+            }
+            for r in rows
+        ]
 
     def get_scan_meta(self, key: str) -> str | None:
         """Get a scan metadata value."""

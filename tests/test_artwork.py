@@ -8,6 +8,7 @@ import urllib.error
 from pathlib import Path
 
 from clickwheel import actions, artwork
+from clickwheel.db import Database
 from clickwheel.library import write_album_metadata
 
 # A 1x1 JPEG and the PNG magic — enough to exercise the embed paths.
@@ -204,7 +205,7 @@ def test_write_album_metadata_skips_unknown_format(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_apply_cloud_artwork_orchestration(tmp_path, monkeypatch):
+def test_apply_cloud_artwork_orchestration(tmp_path, tmp_db: Database, monkeypatch):
     """Two album folders: one matches MusicBrainz, one doesn't."""
     matched = tmp_path / "Matched Album"
     unmatched = tmp_path / "Unmatched Album"
@@ -245,7 +246,7 @@ def test_apply_cloud_artwork_orchestration(tmp_path, monkeypatch):
 
     monkeypatch.setattr("clickwheel.library.write_album_metadata", fake_write)
 
-    result = actions.apply_cloud_artwork(tmp_path)
+    result = actions.apply_cloud_artwork(tmp_db, tmp_path)
 
     assert result.albums_seen == 2
     assert result.albums_matched == 1
@@ -253,9 +254,14 @@ def test_apply_cloud_artwork_orchestration(tmp_path, monkeypatch):
     assert result.years_set == 2
     assert result.unmatched == ["Artist — Unmatched Album"]
     assert result.art_fetch_failed == []
+    # Both outcomes — positive and negative — should be cached now.
+    assert tmp_db.get_mb_match("Artist", "Matched Album")["status"] == "matched"
+    assert tmp_db.get_mb_match("Artist", "Unmatched Album")["status"] == "unmatched"
 
 
-def test_apply_cloud_artwork_records_fetch_failure(tmp_path, monkeypatch):
+def test_apply_cloud_artwork_records_fetch_failure(
+    tmp_path, tmp_db: Database, monkeypatch
+):
     """An album that matches MusicBrainz but whose art fetch fails lands in
     art_fetch_failed — distinct from a genuine no-art result — and its
     release year is still written."""
@@ -288,10 +294,179 @@ def test_apply_cloud_artwork_records_fetch_failure(tmp_path, monkeypatch):
 
     monkeypatch.setattr("clickwheel.library.write_album_metadata", fake_write)
 
-    result = actions.apply_cloud_artwork(tmp_path)
+    result = actions.apply_cloud_artwork(tmp_db, tmp_path)
 
     assert result.albums_matched == 1
     assert result.art_embedded == 0
     assert result.years_set == 2  # year still written despite the art failure
     assert result.art_fetch_failed == ["Artist — Matched Album"]
     assert result.unmatched == []
+    # MB match still gets cached even when the art fetch failed.
+    assert tmp_db.get_mb_match("Artist", "Matched Album")["status"] == "matched"
+
+
+def test_apply_cloud_artwork_uses_mb_cache(tmp_path, tmp_db: Database, monkeypatch):
+    """A cached match is reused without hitting MusicBrainz."""
+    album = tmp_path / "Cached Album"
+    album.mkdir()
+    track = album / "01.mp3"
+    track.write_bytes(b"")
+
+    tmp_db.save_mb_match("Artist", "Cached Album", mbid="mb-cached", year=1999)
+
+    monkeypatch.setattr("clickwheel.library.find_audio_files", lambda target: [track])
+    monkeypatch.setattr(
+        "clickwheel.actions.scan_file",
+        lambda path: {
+            "artist": "Artist",
+            "album_artist": "Artist",
+            "album": "Cached Album",
+        },
+    )
+    monkeypatch.setattr("clickwheel.actions.time.sleep", lambda _s: None)
+
+    network_calls: list[tuple[str, str]] = []
+
+    def boom(artist, album, **_kw):
+        network_calls.append((artist, album))
+        raise AssertionError("MB should not be queried on a cache hit")
+
+    monkeypatch.setattr("clickwheel.artwork.lookup_release_group", boom)
+    monkeypatch.setattr(
+        "clickwheel.artwork.fetch_front_cover", lambda mbid, **_kw: _TINY_JPEG
+    )
+    monkeypatch.setattr(
+        "clickwheel.library.write_album_metadata",
+        lambda path, *, art, year: (art is not None, year is not None),
+    )
+
+    result = actions.apply_cloud_artwork(tmp_db, tmp_path)
+
+    assert network_calls == []
+    assert result.cache_hits == 1
+    assert result.cache_misses == 0
+    assert result.albums_matched == 1
+    assert result.years_set == 1
+
+
+def test_apply_cloud_artwork_negative_cache(tmp_path, tmp_db: Database, monkeypatch):
+    """A cached `unmatched` row blocks re-querying MB for known no-matches."""
+    album = tmp_path / "Obscure Album"
+    album.mkdir()
+    track = album / "01.mp3"
+    track.write_bytes(b"")
+
+    tmp_db.save_mb_match("Obscure Artist", "Obscure Album", mbid=None, year=None)
+
+    monkeypatch.setattr("clickwheel.library.find_audio_files", lambda target: [track])
+    monkeypatch.setattr(
+        "clickwheel.actions.scan_file",
+        lambda path: {
+            "artist": "Obscure Artist",
+            "album_artist": "Obscure Artist",
+            "album": "Obscure Album",
+        },
+    )
+    monkeypatch.setattr("clickwheel.actions.time.sleep", lambda _s: None)
+
+    def boom(artist, album, **_kw):
+        raise AssertionError("MB should not be queried on a cached unmatched")
+
+    monkeypatch.setattr("clickwheel.artwork.lookup_release_group", boom)
+
+    result = actions.apply_cloud_artwork(tmp_db, tmp_path)
+
+    assert result.cache_hits == 1
+    assert result.cache_misses == 0
+    assert result.unmatched == ["Obscure Artist — Obscure Album"]
+    assert result.albums_matched == 0
+
+
+def test_apply_cloud_artwork_per_album_skip(tmp_path, tmp_db: Database, monkeypatch):
+    """If every track already has art + year per the index, no MB call
+    happens and the album is recorded as skipped-complete."""
+    from tests.test_repair_albumartist import _track_row
+
+    album = tmp_path / "Complete Album"
+    album.mkdir()
+    track = album / "01.mp3"
+    track.write_bytes(b"")
+    row = _track_row(
+        track, artist="Artist", album="Complete Album", albumartist="Artist"
+    )
+    row["has_art"] = 1
+    row["year"] = 2005
+    tmp_db.upsert_track(row)
+    tmp_db.commit()
+
+    monkeypatch.setattr("clickwheel.library.find_audio_files", lambda target: [track])
+    monkeypatch.setattr(
+        "clickwheel.actions.scan_file",
+        lambda path: {
+            "artist": "Artist",
+            "album_artist": "Artist",
+            "album": "Complete Album",
+        },
+    )
+
+    def boom(*_a, **_kw):
+        raise AssertionError("Complete albums shouldn't trigger MB or art fetch")
+
+    monkeypatch.setattr("clickwheel.artwork.lookup_release_group", boom)
+    monkeypatch.setattr("clickwheel.artwork.fetch_front_cover", boom)
+    monkeypatch.setattr(
+        "clickwheel.library.write_album_metadata", lambda *_a, **_kw: (False, False)
+    )
+
+    result = actions.apply_cloud_artwork(tmp_db, tmp_path)
+
+    assert result.albums_skipped_complete == 1
+    assert result.cache_hits == 0
+    assert result.cache_misses == 0
+    assert result.albums_matched == 0
+
+
+def test_apply_cloud_artwork_refresh_bypasses_cache(
+    tmp_path, tmp_db: Database, monkeypatch
+):
+    """`refresh=True` ignores the cache and re-queries MB."""
+    album = tmp_path / "Stale Album"
+    album.mkdir()
+    track = album / "01.mp3"
+    track.write_bytes(b"")
+
+    # Wrong year in the cache — the refresh should overwrite it.
+    tmp_db.save_mb_match("Artist", "Stale Album", mbid="mb-old", year=1900)
+
+    monkeypatch.setattr("clickwheel.library.find_audio_files", lambda target: [track])
+    monkeypatch.setattr(
+        "clickwheel.actions.scan_file",
+        lambda path: {
+            "artist": "Artist",
+            "album_artist": "Artist",
+            "album": "Stale Album",
+        },
+    )
+    monkeypatch.setattr("clickwheel.actions.time.sleep", lambda _s: None)
+
+    monkeypatch.setattr(
+        "clickwheel.artwork.lookup_release_group",
+        lambda artist, album, **_kw: artwork.AlbumMatch(
+            mbid="mb-fresh", title=album, year=2024
+        ),
+    )
+    monkeypatch.setattr(
+        "clickwheel.artwork.fetch_front_cover", lambda mbid, **_kw: _TINY_JPEG
+    )
+    monkeypatch.setattr(
+        "clickwheel.library.write_album_metadata",
+        lambda path, *, art, year: (art is not None, year is not None),
+    )
+
+    result = actions.apply_cloud_artwork(tmp_db, tmp_path, refresh=True)
+
+    assert result.cache_misses == 1
+    assert result.cache_hits == 0
+    cached = tmp_db.get_mb_match("Artist", "Stale Album")
+    assert cached["mbid"] == "mb-fresh"
+    assert cached["year"] == 2024

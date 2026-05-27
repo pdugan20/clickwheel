@@ -5,7 +5,7 @@
 clickwheel is a Python CLI that manages the full iPod sync workflow:
 
 1. **Scan** — read metadata from a music library into a local SQLite index
-2. **Fix** — clean up metadata and album art via beets
+2. **Fix** — repair `albumartist` tags, fetch art/year from MusicBrainz, fetch genres from Last.fm. All native, all cached in SQLite.
 3. **Select** — interactively pick artists/albums that fit on the iPod
 4. **Sync** — write files and the iTunesDB to the iPod
 
@@ -47,7 +47,7 @@ clickwheel/
 
 ### Files stay in place
 
-beets and clickwheel never move, copy, or rename source files. The music library is the single source of truth. Other apps (Plex, music players) read from the same files.
+clickwheel never moves, copies, or renames source files. The music library is the single source of truth. Other apps (Plex, music players) read from the same files; tag rewrites (e.g. `clickwheel fix`) are applied in place.
 
 ### Local SQLite index
 
@@ -107,7 +107,5 @@ See [`docs/mcp/README.md`](mcp/README.md) for client install/config and the full
 | tqdm        | Progress bars             | pip (auto)          |
 | mutagen     | Audio metadata            | pip (auto)          |
 | pylast      | Last.fm API               | pip (auto)          |
-| beets       | Metadata cleanup          | pip (fix extra)     |
-| Pillow      | Album art processing      | pip (fix extra)     |
 | mcp         | Model Context Protocol    | pip (mcp extra)     |
 | numpy       | RGB565 artwork conversion | pip (artwork extra) |

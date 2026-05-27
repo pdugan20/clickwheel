@@ -56,17 +56,24 @@ The MCP server **never** auto-scans — chat tool calls always serve cached data
 
 ## Metadata cleanup (`fix`)
 
-`clickwheel fix` uses [beets](https://beets.io/) to fetch album art, fill genres, and clean up tags. Install the extras first:
+`clickwheel fix` runs a 3-step native pipeline — no extras required:
+
+1. **Repair albumartist** — rewrites tags where `albumartist == album` (a legacy Zune/WMP corruption pattern). Index-driven, so only known-broken files get touched.
+2. **MusicBrainz lookup** — fetches release group mbid, embeds front cover art (Cover Art Archive), sets the release year. Results cached in SQLite so re-runs do zero network work.
+3. **Last.fm genres** — top tag per album via `pylast`, written to tracks that lack a genre. Same cache pattern.
+
+Both lookup steps cache positive *and* negative outcomes. On an unchanged library, a re-run finishes in seconds.
 
 ```bash
-# pipx
-pipx inject clickwheel 'clickwheel[fix]'
-
-# pip
-pip install 'clickwheel[fix]'
+clickwheel fix                              # whole library
+clickwheel fix "Artist - Album Name"        # one folder
+clickwheel fix --refresh-mb                 # force re-query of MusicBrainz
+clickwheel fix --refresh-genres             # force re-query of Last.fm
 ```
 
-On first run, clickwheel generates a beets config at `~/.clickwheel/beets/config.yaml`. You can edit it to customize sources, matching thresholds, and so on. The config is set up so beets never moves or renames your files (other tools may rely on the existing paths — Plex, music players, etc.).
+The Last.fm genre step needs an API key — uses the same one as scrobbling, so if `clickwheel scrobble` works for you, genres do too. If no key is configured, the genre step is skipped with a warning; the other steps still run.
+
+Source files are never moved or renamed. Other apps (Plex, music players) reading from the same library see the corrected tags too.
 
 ```bash
 # fix one folder

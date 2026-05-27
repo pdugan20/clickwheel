@@ -16,9 +16,10 @@ pipx install clickwheel
 Optional extras:
 
 ```bash
-pipx inject clickwheel 'clickwheel[fix]'   # metadata cleanup via beets
 pipx inject clickwheel 'clickwheel[mcp]'   # MCP server for Claude / AI clients
 ```
+
+`clickwheel fix` (metadata cleanup) runs entirely on the base install — no extras required.
 
 ## Quick Start
 
@@ -46,7 +47,7 @@ The iPod workflow:
 | Command               | Description                                     |
 | --------------------- | ----------------------------------------------- |
 | `clickwheel scan`     | Index your library; report metadata gaps        |
-| `clickwheel fix`      | Clean up metadata via beets — art, genres, tags |
+| `clickwheel fix`      | Fill in album art, years, genres; repair tags   |
 | `clickwheel select`   | Interactive checkbox picker for the iPod        |
 | `clickwheel playlist` | List saved playlists or show one's tracks       |
 | `clickwheel edit`     | Add/remove artists or set a description         |

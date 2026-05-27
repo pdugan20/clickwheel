@@ -5,9 +5,8 @@ A Python CLI for syncing a music library to a classic iPod from a modern Mac.
 ## Stack
 
 - **Python 3.11+** with Typer, Rich, questionary, tqdm, mutagen, pylast
-- **SQLite** for library index, playlist storage, and scrobble cache
+- **SQLite** for library index, playlist storage, scrobble cache, MusicBrainz cache, Last.fm genre cache
 - **Vendored iOpenPodv2** for iPod database management (iTunesDB + ArtworkDB)
-- **beets** for metadata cleanup (called via subprocess)
 
 ## Project Layout
 
@@ -28,7 +27,7 @@ A Python CLI for syncing a music library to a classic iPod from a modern Mac.
 ## Commands
 
 - `clickwheel scan` — index library metadata into SQLite (incremental by default)
-- `clickwheel fix` — clean up metadata via beets (requires `[fix]` extras)
+- `clickwheel fix` — repair albumartist, fetch art/year from MusicBrainz, fetch genres from Last.fm (native — no extras required)
 - `clickwheel select` — interactive iPod subset picker (questionary checkbox, auto-scans if stale)
 - `clickwheel playlist` — list saved playlists
 - `clickwheel edit` — add/remove artists, set a description (interactive questionary menus or `--add`/`--remove`/`--description` flags)
@@ -63,13 +62,13 @@ pre-commit install --hook-type pre-commit --hook-type commit-msg
 
 6. **Interactive prompts use questionary** — not raw `typer.prompt()` or `input()`. Arrow-key selection with `questionary.select()` and `questionary.checkbox()`. Non-interactive flags (`--add`/`--remove`) are kept for scripting.
 
-7. **Long operations use `spinner()` context manager** — beets phases, iPod reads, Last.fm calls, eject. Never leave the user staring at a frozen terminal.
+7. **Long operations use `spinner()` context manager** — iPod reads, Last.fm calls, eject. Never leave the user staring at a frozen terminal.
 
 8. **Destructive operations require confirmation** — delete, sync. Use `typer.confirm()` with sensible defaults.
 
 9. **`select`, `edit`, `diff`, `sync` auto-scan** the library via a two-tier strategy: cheap probe (stat music_dir + first-level dirs, ~5s on SMB) catches new artist/album folders; full incremental scan runs only when probe detects change OR the 24h fallback timer (default `auto_scan_staleness_minutes=1440`) expires. `--no-scan` skips both. The MCP server NEVER autoscans — chat tool calls always serve cached data. See `clickwheel/autoscan.py` for the detailed contract.
 
-10. **`fix` requires beets extras** — `pip install 'clickwheel[fix]'`. Auto-generates beets config on first run.
+10. **`fix` runs a 3-step native pipeline** — repair albumartist → MusicBrainz art+year → Last.fm genres. All three steps are index-driven (no FS walks for known-clean state), cache positive *and* negative outcomes in SQLite (`mb_matches`, `genre_matches`), and skip albums the index already says are complete. Re-runs on an unchanged library do zero network work. No external dependencies beyond the base install — beets was removed in favor of native `pylast`-driven genre lookups. CLI flags `--refresh-mb` / `--refresh-genres` invalidate the respective cache.
 
 11. **MCP tools wrap `actions.py`, never `cli.py`** — CLI commands are display adapters, MCP tools are RPC adapters. Both consume the same pure functions. New library/iPod features should land in `actions.py` first, then get a thin wrapper in each surface.
 

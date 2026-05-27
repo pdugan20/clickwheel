@@ -49,6 +49,229 @@ def test_get_artists(populated_db: Database):
     assert "ArtistB" in names
 
 
+def test_get_artists_ignores_corrupt_albumartist(tmp_db: Database, sample_track: dict):
+    """When album_artist == album, the per-track `artist` should win."""
+    corrupt = {
+        **sample_track,
+        "path": "/music/A/American Idiot/01 American Idiot.mp3",
+        "artist": "Green Day",
+        "album_artist": "American Idiot",
+        "album": "American Idiot",
+    }
+    tmp_db.upsert_track(corrupt)
+    tmp_db.commit()
+    names = [a["name"] for a in tmp_db.get_artists()]
+    assert names == ["Green Day"]
+
+
+def test_get_artists_groups_corrupt_with_clean(tmp_db: Database, sample_track: dict):
+    """A corrupt track and a clean track by the same artist should
+    aggregate into a single row, not two."""
+    clean = {
+        **sample_track,
+        "path": "/music/GreenDay/Dookie/01 Burnout.mp3",
+        "artist": "Green Day",
+        "album_artist": "Green Day",
+        "album": "Dookie",
+    }
+    corrupt = {
+        **sample_track,
+        "path": "/music/AmericanIdiot/01 American Idiot.mp3",
+        "artist": "Green Day",
+        "album_artist": "American Idiot",
+        "album": "American Idiot",
+    }
+    tmp_db.upsert_track(clean)
+    tmp_db.upsert_track(corrupt)
+    tmp_db.commit()
+    artists = tmp_db.get_artists()
+    assert len(artists) == 1
+    assert artists[0]["name"] == "Green Day"
+    assert artists[0]["tracks"] == 2
+    assert artists[0]["albums"] == 2
+
+
+def test_find_corrupt_albumartists(tmp_db: Database, sample_track: dict):
+    """Returns rows matching the broken pattern, filtered by path prefix
+    and excluding self-titled / null-albumartist / clean rows."""
+    rows = [
+        # corrupt under /music — should be returned
+        {
+            **sample_track,
+            "path": "/music/Green Day/American Idiot/01.mp3",
+            "artist": "Green Day",
+            "album_artist": "American Idiot",
+            "album": "American Idiot",
+        },
+        # corrupt under /music — should be returned
+        {
+            **sample_track,
+            "path": "/music/Jay-Z/Reasonable Doubt/01.mp3",
+            "artist": "Jay-Z",
+            "album_artist": "Reasonable Doubt",
+            "album": "Reasonable Doubt",
+        },
+        # clean — same artist as albumartist — excluded
+        {
+            **sample_track,
+            "path": "/music/Green Day/Dookie/01.mp3",
+            "artist": "Green Day",
+            "album_artist": "Green Day",
+            "album": "Dookie",
+        },
+        # self-titled — albumartist == album but also == artist — excluded
+        {
+            **sample_track,
+            "path": "/music/Black Sabbath/Black Sabbath/01.mp3",
+            "artist": "Black Sabbath",
+            "album_artist": "Black Sabbath",
+            "album": "Black Sabbath",
+        },
+        # null albumartist — excluded
+        {
+            **sample_track,
+            "path": "/music/Misc/Unknown/01.mp3",
+            "artist": "Somebody",
+            "album_artist": None,
+            "album": "Unknown",
+        },
+    ]
+    for r in rows:
+        tmp_db.upsert_track(r)
+    tmp_db.commit()
+
+    found = tmp_db.find_corrupt_albumartists("/music")
+    paths = [r["path"] for r in found]
+    assert paths == [
+        "/music/Green Day/American Idiot/01.mp3",
+        "/music/Jay-Z/Reasonable Doubt/01.mp3",
+    ]
+
+    # Scoped prefix filters out Jay-Z.
+    scoped = tmp_db.find_corrupt_albumartists("/music/Green Day")
+    assert [r["path"] for r in scoped] == [
+        "/music/Green Day/American Idiot/01.mp3",
+    ]
+
+
+def test_mb_match_roundtrip(tmp_db: Database):
+    """save → get → save (overwrite) → get."""
+    assert tmp_db.get_mb_match("Artist", "Album") is None
+    tmp_db.save_mb_match("Artist", "Album", mbid="abc", year=2001)
+    hit = tmp_db.get_mb_match("Artist", "Album")
+    assert hit["status"] == "matched"
+    assert hit["mbid"] == "abc"
+    assert hit["year"] == 2001
+
+    # Overwriting an existing match flips status/year correctly.
+    tmp_db.save_mb_match("Artist", "Album", mbid="def", year=2024)
+    hit2 = tmp_db.get_mb_match("Artist", "Album")
+    assert hit2["mbid"] == "def"
+    assert hit2["year"] == 2024
+
+
+def test_mb_match_negative(tmp_db: Database):
+    """An unmatched album persists as status='unmatched'."""
+    tmp_db.save_mb_match("Nobody", "Nothing", mbid=None, year=None)
+    hit = tmp_db.get_mb_match("Nobody", "Nothing")
+    assert hit["status"] == "unmatched"
+    assert hit["mbid"] is None
+
+
+def test_clear_mb_cache(tmp_db: Database):
+    tmp_db.save_mb_match("A", "B", mbid="x", year=2000)
+    tmp_db.save_mb_match("C", "D", mbid=None, year=None)
+    removed = tmp_db.clear_mb_cache()
+    assert removed == 2
+    assert tmp_db.get_mb_match("A", "B") is None
+    assert tmp_db.get_mb_match("C", "D") is None
+
+
+def test_genre_match_roundtrip(tmp_db: Database):
+    assert tmp_db.get_genre_match("A", "B") is None
+    tmp_db.save_genre_match("A", "B", genre="Rock")
+    hit = tmp_db.get_genre_match("A", "B")
+    assert hit["status"] == "matched"
+    assert hit["genre"] == "Rock"
+
+    tmp_db.save_genre_match("A", "B", genre="Jazz")
+    assert tmp_db.get_genre_match("A", "B")["genre"] == "Jazz"
+
+
+def test_genre_match_negative(tmp_db: Database):
+    tmp_db.save_genre_match("Nobody", "Nothing", genre=None)
+    hit = tmp_db.get_genre_match("Nobody", "Nothing")
+    assert hit["status"] == "unmatched"
+    assert hit["genre"] is None
+
+
+def test_clear_genre_cache(tmp_db: Database):
+    tmp_db.save_genre_match("A", "B", genre="Rock")
+    tmp_db.save_genre_match("C", "D", genre=None)
+    assert tmp_db.clear_genre_cache() == 2
+    assert tmp_db.get_genre_match("A", "B") is None
+
+
+def test_album_genres_complete(tmp_db: Database, sample_track: dict):
+    p1, p2 = "/music/A/Album/01.mp3", "/music/A/Album/02.mp3"
+    base = {**sample_track, "artist": "A", "album_artist": "A", "album": "Album"}
+    tmp_db.upsert_track({**base, "path": p1, "genre": "Rock"})
+    tmp_db.upsert_track({**base, "path": p2, "genre": "Rock"})
+    tmp_db.commit()
+    assert tmp_db.album_genres_complete([p1, p2]) is True
+
+    tmp_db.upsert_track({**base, "path": p2, "genre": None})
+    tmp_db.commit()
+    assert tmp_db.album_genres_complete([p1, p2]) is False
+
+    tmp_db.upsert_track({**base, "path": p2, "genre": "  "})  # whitespace only
+    tmp_db.commit()
+    assert tmp_db.album_genres_complete([p1, p2]) is False
+
+
+def test_album_metadata_complete(tmp_db: Database, sample_track: dict):
+    """True only when every passed path is indexed AND has art AND has year."""
+    p1 = "/music/A/Album/01.mp3"
+    p2 = "/music/A/Album/02.mp3"
+    base = {**sample_track, "album_artist": "A", "artist": "A", "album": "Album"}
+    tmp_db.upsert_track({**base, "path": p1, "has_art": 1, "year": 2010})
+    tmp_db.upsert_track({**base, "path": p2, "has_art": 1, "year": 2010})
+    tmp_db.commit()
+    assert tmp_db.album_metadata_complete([p1, p2]) is True
+
+    # One missing art: not complete.
+    tmp_db.upsert_track({**base, "path": p2, "has_art": 0, "year": 2010})
+    tmp_db.commit()
+    assert tmp_db.album_metadata_complete([p1, p2]) is False
+
+    # Year zero counts as missing.
+    tmp_db.upsert_track({**base, "path": p2, "has_art": 1, "year": 0})
+    tmp_db.commit()
+    assert tmp_db.album_metadata_complete([p1, p2]) is False
+
+    # Unknown path → cannot claim completeness.
+    assert tmp_db.album_metadata_complete([p1, "/not/indexed.mp3"]) is False
+
+
+def test_find_corrupt_albumartists_excludes_missing(
+    tmp_db: Database, sample_track: dict
+):
+    """A broken-pattern row flagged missing on disk shouldn't surface."""
+    tmp_db.upsert_track(
+        {
+            **sample_track,
+            "path": "/music/Green Day/American Idiot/01.mp3",
+            "artist": "Green Day",
+            "album_artist": "American Idiot",
+            "album": "American Idiot",
+        }
+    )
+    tmp_db.commit()
+    tmp_db.mark_missing({"/music/Green Day/American Idiot/01.mp3"})
+
+    assert tmp_db.find_corrupt_albumartists("/music") == []
+
+
 def test_get_albums_by_artist(populated_db: Database):
     albums = populated_db.get_albums_by_artist("ArtistA")
     assert len(albums) == 1

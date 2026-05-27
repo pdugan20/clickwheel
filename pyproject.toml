@@ -36,10 +36,11 @@ Issues = "https://github.com/pdugan20/clickwheel/issues"
 Changelog = "https://github.com/pdugan20/clickwheel/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-fix = [
-    "beets>=2.0",
-    "Pillow>=10.0",
-]
+# The `fix` command no longer needs any extras — MusicBrainz/CAA/
+# Last.fm work natively via base dependencies. The empty extra is
+# kept so existing `pip install 'clickwheel[fix]'` / `pipx inject`
+# commands in users' setup scripts don't error out.
+fix = []
 artwork = [
     "Pillow>=10.0",
     "numpy>=1.24",
