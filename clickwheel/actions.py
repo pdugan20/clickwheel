@@ -728,10 +728,11 @@ def apply_cloud_artwork(
             # A file indexed at scan time may have vanished by now
             # (download tools that move/delete temp files, manual
             # library reorganization, SMB hiccups). Skip the write
-            # rather than aborting the whole pass.
+            # rather than aborting the whole pass. `OSError` covers
+            # `FileNotFoundError` and any SMB/network filesystem error.
             try:
                 art_done, year_done = write_album_metadata(p, art=art, year=match_year)
-            except (FileNotFoundError, OSError):
+            except OSError:
                 continue
             result.art_embedded += int(art_done)
             result.years_set += int(year_done)
@@ -875,7 +876,11 @@ def apply_cloud_genres(
             try:
                 album_obj = network.get_album(artist, album)
                 top_tags = album_obj.get_top_tags(limit=5)
-            except (pylast.WSError, pylast.NetworkError, Exception):
+            except (pylast.PyLastError, OSError):
+                # Last.fm API errors and low-level network failures
+                # both surface here. Programming errors (KeyError,
+                # AttributeError, etc.) deliberately bubble up so a
+                # broken integration doesn't silently no-op every album.
                 top_tags = []
 
             genre = None

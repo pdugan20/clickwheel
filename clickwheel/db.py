@@ -238,7 +238,16 @@ class Database:
         Used by `actions.repair_albumartist` to skip a full filesystem
         walk — only the known-broken files get opened over SMB.
         """
-        pattern = path_prefix.rstrip("/") + "/%"
+        # `_` and `%` are LIKE wildcards. Music paths legitimately contain
+        # underscores (`Foo_Bar`), so we escape them — otherwise the
+        # prefix match would silently include unrelated trees.
+        escaped = (
+            path_prefix.rstrip("/")
+            .replace("\\", "\\\\")
+            .replace("_", "\\_")
+            .replace("%", "\\%")
+        )
+        pattern = escaped + "/%"
         rows = self.conn.execute(
             """
             SELECT path, artist, album_artist, album
@@ -249,7 +258,7 @@ class Database:
               AND album_artist = album
               AND album_artist != artist
               AND missing_since IS NULL
-              AND path LIKE ?
+              AND path LIKE ? ESCAPE '\\'
             ORDER BY path
             """,
             (pattern,),

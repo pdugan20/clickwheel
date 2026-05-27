@@ -253,6 +253,35 @@ def test_album_metadata_complete(tmp_db: Database, sample_track: dict):
     assert tmp_db.album_metadata_complete([p1, "/not/indexed.mp3"]) is False
 
 
+def test_find_corrupt_albumartists_escapes_like_wildcards(
+    tmp_db: Database, sample_track: dict
+):
+    """A `_` in the prefix must be treated literally — without escaping,
+    SQLite's LIKE would match any character at that position, sweeping
+    in unrelated trees."""
+    in_scope = {
+        **sample_track,
+        "path": "/music/Foo_Bar/Album/01.mp3",
+        "artist": "Foo_Bar",
+        "album_artist": "Album",
+        "album": "Album",
+    }
+    sibling = {
+        **sample_track,
+        "path": "/music/FooXBar/Album/01.mp3",
+        "artist": "FooXBar",
+        "album_artist": "Album",
+        "album": "Album",
+    }
+    tmp_db.upsert_track(in_scope)
+    tmp_db.upsert_track(sibling)
+    tmp_db.commit()
+
+    found = tmp_db.find_corrupt_albumartists("/music/Foo_Bar")
+    paths = [r["path"] for r in found]
+    assert paths == ["/music/Foo_Bar/Album/01.mp3"]
+
+
 def test_find_corrupt_albumartists_excludes_missing(
     tmp_db: Database, sample_track: dict
 ):
