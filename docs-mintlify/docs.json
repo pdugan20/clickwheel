@@ -1,0 +1,81 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "theme": "almond",
+  "name": "clickwheel",
+  "description": "Sync your music library to a classic iPod from a modern Mac — with optional Claude/MCP control.",
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
+  },
+  "favicon": "/favicon.svg",
+  "appearance": {
+    "default": "system"
+  },
+  "colors": {
+    "primary": "#5d6ddf",
+    "light": "#8b94f0",
+    "dark": "#5d6ddf"
+  },
+  "navbar": {
+    "primary": {
+      "type": "button",
+      "label": "GitHub",
+      "href": "https://github.com/pdugan20/clickwheel"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/pdugan20/clickwheel"
+    }
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Getting started",
+            "pages": ["introduction", "quickstart"]
+          },
+          {
+            "group": "How-to guides",
+            "pages": [
+              "guides/sync-to-ipod",
+              "guides/playlists",
+              "guides/plex",
+              "guides/apple-music",
+              "guides/scrobbling",
+              "guides/fix-metadata",
+              "guides/remote-mcp"
+            ]
+          },
+          {
+            "group": "Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/design",
+              "concepts/mcp-server"
+            ]
+          },
+          {
+            "group": "Updates",
+            "pages": ["changelog"]
+          }
+        ]
+      },
+      {
+        "tab": "Reference",
+        "groups": [
+          {
+            "group": "Reference",
+            "pages": [
+              "reference/cli",
+              "reference/mcp-tools",
+              "reference/configuration"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

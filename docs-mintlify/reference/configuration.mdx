@@ -1,0 +1,46 @@
+---
+title: Configuration
+description: clickwheel's config file and environment variables.
+---
+
+clickwheel reads runtime settings from **`~/.clickwheel/config.yaml`**.
+Environment variables override the file.
+
+## Minimal config
+
+```yaml
+music_dir: /Users/you/Music
+```
+
+## Common settings
+
+| Setting | What it does |
+| --- | --- |
+| `music_dir` | Root of your music library (scanned by `scan`). |
+| `db_path` | SQLite catalog location (defaults under `~/.clickwheel/`). |
+| `auto_scan_staleness_minutes` | Fallback timer for the interactive commands' auto-scan (default 1440 = 24h). |
+
+## Integrations
+
+Plex, Apple Music, and Last.fm each add their own settings (server URLs, tokens,
+the Plex path remap, the Apple Music `.p8` / Key ID / Team ID, Last.fm API
+credentials). See the relevant guide:
+
+- [Plex / Plexamp](/guides/plex)
+- [Apple Music](/guides/apple-music)
+- [Last.fm scrobbling](/guides/scrobbling)
+
+## MCP server environment
+
+| Variable | What it does |
+| --- | --- |
+| `CLICKWHEEL_MCP_TRANSPORT` | `http` to serve Streamable HTTP (else stdio). |
+| `CLICKWHEEL_MCP_HOST` / `_PORT` / `_PATH` | HTTP bind + path (default `127.0.0.1:8000/mcp`). |
+| `CLICKWHEEL_MCP_ALLOWED_HOSTS` | Public Host header(s) to allow behind a tunnel (e.g. `clickwheel.fm`). |
+| `CLICKWHEEL_MCP_ALLOWED_ORIGINS` | Origin header(s) to allow. |
+| `CLICKWHEEL_MCP_LOG_LEVEL` | Server log level (stderr). |
+
+<Note>
+  The full set of settings is documented in the project README; this page covers
+  the ones you'll touch most.
+</Note>

@@ -1,0 +1,50 @@
+---
+title: Architecture
+description: How clickwheel's pieces fit together.
+---
+
+clickwheel is a Python CLI with a small set of focused modules and an optional
+MCP server layered on top of the same core logic.
+
+## The pieces
+
+| Module | Role |
+| --- | --- |
+| `cli.py` | Typer command definitions — the CLI entry point and display layer. |
+| `actions.py` | Pure-logic functions shared by the CLI and the MCP server. No Rich/typer; errors are a typed `ClickwheelError` hierarchy. |
+| `db.py` | SQLite catalog — tracks, playlists, scrobble cache, MusicBrainz + genre caches. |
+| `library.py` | Music-file scanning via mutagen. |
+| `scrobble.py` | Last.fm scrobbling (pylast). |
+| `ipod/` | Vendored iOpenPodv2 — reads/writes the binary iTunesDB + ArtworkDB. |
+| `mcp/` | Optional MCP server (gated by the `[mcp]` extra). |
+
+## The data flow
+
+```text
+your music files ──scan──▶ SQLite catalog ──select──▶ playlist
+                                                          │
+                                                   diff / sync
+                                                          ▼
+                                                   iPod (iTunesDB)
+```
+
+- **`scan`** reads tags and populates SQLite. It never writes to your files.
+- **`select`/`edit`** build playlists in SQLite.
+- **`sync`** reads a playlist and writes the iPod database + artwork, copying
+  missing audio.
+- **`fix`** is the one path that writes *into* your library — repairing metadata
+  in place (it never moves or renames files, because Plex reads the same library).
+
+## Two surfaces, one core
+
+The CLI and the MCP server are both thin adapters over `actions.py`:
+
+- **CLI** — a *display* adapter (Rich tables, spinners, interactive pickers).
+- **MCP** — an *RPC* adapter (structured tool results for Claude).
+
+New library/iPod features land in `actions.py` first, then get a thin wrapper in
+each surface. This is why the two never drift apart.
+
+See [Design](/concepts/design) for the deliberate constraints (single-tenant,
+Mac-as-source-of-truth) and [MCP server](/concepts/mcp-server) for the Claude
+integration.

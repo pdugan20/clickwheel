@@ -1,0 +1,26 @@
+---
+title: Plex / Plexamp
+description: Push clickwheel playlists to Plex, and recover them back.
+---
+
+If you run Plex, clickwheel can push the same playlists to your Plex music
+library (so Plexamp picks them up) and pull them back.
+
+## Configure
+
+Add your Plex server to `~/.clickwheel/config.yaml` (URL, token, and the
+library path remap if Plex sees your music at a different path than your Mac).
+See [Configuration](/reference/configuration).
+
+Verify the setup end-to-end with the MCP `plex_health` probe, or via the CLI.
+
+## Push and pull
+
+- **Push** a clickwheel playlist to Plex so Plexamp sees it.
+- **Pull** a Plex playlist back into clickwheel's catalog — useful after a fresh
+  install or Mac wipe, when Plex still has your playlists but clickwheel's
+  catalog is empty.
+
+These flows are also available as MCP tools (`sync_playlist_to_plex`,
+`list_plex_playlists`, `pull_playlist_from_plex`) — see the
+[MCP tool reference](/reference/mcp-tools).

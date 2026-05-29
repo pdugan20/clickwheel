@@ -1,0 +1,83 @@
+---
+title: Quickstart
+description: Install clickwheel, index your library, and load your iPod.
+---
+
+This walks you from zero to a freshly-loaded iPod.
+
+## 1. Install
+
+clickwheel installs as a CLI with [pipx](https://pipx.pypa.io/):
+
+```bash
+pipx install clickwheel
+```
+
+<Note>
+  Requires Python 3.11+ and macOS. For the optional MCP server, also run
+  `pipx inject clickwheel 'clickwheel[mcp]'` — see [MCP server](/concepts/mcp-server).
+</Note>
+
+## 2. Point it at your music
+
+clickwheel reads its settings from `~/.clickwheel/config.yaml`. Set your music
+directory:
+
+```yaml
+music_dir: /Users/you/Music
+```
+
+See [Configuration](/reference/configuration) for every option (and the env-var
+overrides).
+
+## 3. Index your library
+
+```bash
+clickwheel scan
+```
+
+`scan` is read-only — it reads tags and writes a local SQLite catalog. Nothing
+in your library is modified. Re-runs are incremental.
+
+## 4. Pick what goes on the iPod
+
+Plug in your iPod, then:
+
+```bash
+clickwheel select
+```
+
+An interactive checkbox picker lets you choose artists/albums for the device.
+Your selection is saved as a playlist you can re-sync later.
+
+## 5. Sync
+
+```bash
+clickwheel diff   # preview what will change
+clickwheel sync   # push it to the iPod
+clickwheel eject  # safely unmount
+```
+
+`sync` writes the iPod database and artwork directly and copies any missing
+tracks. It's additive — it won't delete tracks you didn't ask it to.
+
+<Warning>
+  FLAC files are skipped — stock iPod firmware doesn't play them.
+</Warning>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Repair metadata" icon="wand-magic-sparkles" href="/guides/fix-metadata">
+    Fix album artists, fetch art + year + genres.
+  </Card>
+  <Card title="Build playlists" icon="list-music" href="/guides/playlists">
+    Curate named playlists for the device.
+  </Card>
+  <Card title="Scrobble to Last.fm" icon="lastfm" href="/guides/scrobbling">
+    Submit your iPod listens.
+  </Card>
+  <Card title="Drive it from Claude" icon="robot" href="/guides/remote-mcp">
+    Use clickwheel from the Claude app, even on your phone.
+  </Card>
+</CardGroup>

@@ -1,0 +1,30 @@
+---
+title: Apple Music
+description: Sync clickwheel playlists to Apple Music and import them back.
+---
+
+clickwheel can create playlists in your Apple Music library from clickwheel
+playlists, and import Apple Music playlists back into clickwheel.
+
+## Configure
+
+Apple Music uses a MusicKit developer token (a `.p8` key + Key ID + Team ID).
+Add them to `~/.clickwheel/config.yaml` — see [Configuration](/reference/configuration).
+Run the `apple_music_health` probe (config, `.p8`, dev token, user token, iCloud
+Music Library state) before your first push to catch setup issues early.
+
+## Push and pull
+
+- **Push** — create an Apple Music library playlist from a clickwheel playlist.
+  The matcher (ISRC → catalog fuzzy → your library if iCloud Music Library is
+  on) runs first; low-confidence matches are skipped unless you opt in. The new
+  playlist syncs to your other Apple devices via iCloud Music Library.
+- **Pull** — import an Apple Music playlist into clickwheel, resolving each Apple
+  track to a local file. Handy when you curated on your iPhone and want it on the
+  iPod.
+- **Delete** — Apple's REST API can't delete library playlists, so clickwheel
+  drives Music.app via AppleScript (macOS-only) to remove them; the deletion
+  propagates via iCloud Music Library.
+
+All available as MCP tools (`sync_playlist_to_apple_music`,
+`pull_playlist_from_apple_music`, `delete_apple_music_playlist`, …).
