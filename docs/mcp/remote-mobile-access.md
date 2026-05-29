@@ -120,17 +120,19 @@ The existing rules held while doing this:
 - Install `cloudflared`, create a named tunnel, route `clickwheel.fm` (apex,
   or a hostname on it) → `http://127.0.0.1:8000`. Cloudflare provides the
   public DNS + TLS; nothing is port-forwarded on the home network.
-- **Auth: use Cloudflare Access for SaaS (OIDC), not a self-hosted Access app.**
-  This resolves the brief's former "primary unknown." A _self-hosted_ Access
-  application presents a browser SSO login that the MCP OAuth 2.1 flow doesn't
-  cleanly complete — that was the risk. Cloudflare's **Access for SaaS OIDC**
-  path makes **Cloudflare Access itself the OAuth authorization server** for the
-  MCP endpoint, which is exactly what the Claude connector's OAuth flow expects,
-  with **zero OAuth code on our side**. Configure it per Cloudflare's "Secure
-  MCP servers with Access for SaaS" guide; the resulting OIDC client ID/secret
-  go into the connector's _Advanced settings_ on claude.ai if prompted. Because
-  the connector is added in a desktop browser (see above), the OAuth round-trip
-  runs in a real browser, not a mobile webview.
+- **Auth: a plain self-hosted Cloudflare Access application — verified.** (This
+  supersedes an earlier draft that recommended "Access for SaaS / OIDC.") A
+  self-hosted Access app over `clickwheel.fm` is all that's required: Cloudflare
+  Access natively serves the MCP OAuth challenge and discovery metadata, so the
+  Claude connector authenticates with **zero OAuth code, no OIDC app, no Claude
+  redirect URL, and no client ID/secret**. Confirmed against the live endpoint:
+  a no-auth request to `/mcp` returns
+  `www-authenticate: Cloudflare-Access resource_metadata="…/.well-known/cloudflare-access-protected-resource/mcp"`,
+  and that metadata advertises `authorization_servers: [<team>.cloudflareaccess.com]`.
+  Use the built-in One-time PIN identity (email code) and a policy allowing your
+  email only. Steps in [`deploy/README.md`](deploy/README.md) §3. Because the
+  connector is added in a desktop browser, the OAuth round-trip runs in a real
+  browser, not a mobile webview.
 - **Connector icon — verify before doing the favicon dance.** The server
   already advertises a protocol-level icon (`icons=[SERVER_ICON]`, an inlined
   base64 SVG in `_runtime.py`). If claude.ai renders the connector from that

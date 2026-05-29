@@ -46,22 +46,33 @@ cloudflared tunnel run clickwheel          # foreground test
 With both the server and tunnel running, `https://clickwheel.fm/mcp` should
 reach the server (you'll get Access-challenged once step 3 is in place).
 
-## 3. Auth — Cloudflare Access for SaaS (OIDC)
+## 3. Auth — Cloudflare Access (self-hosted application)
 
-In the Cloudflare Zero Trust dashboard:
+Verified May 2026: a plain **self-hosted** Access app is all you need. Cloudflare
+Access natively serves the MCP OAuth challenge + discovery metadata, so the
+Claude connector authenticates with **no** SaaS/OIDC app, redirect URL, or
+client ID/secret on your side.
 
-1. **Settings → Authentication**: add an identity provider (Google / GitHub /
-   one-time PIN).
-2. **Access → Applications → Add → SaaS → OIDC**. App name `clickwheel`.
-3. Redirect URL: `https://claude.ai/api/mcp/auth_callback`.
-4. **Policy**: allow your email only.
-5. Save; copy the **Client ID + Client Secret** — you may need them in the
-   connector's _Advanced settings_ on claude.ai.
+In the Cloudflare Zero Trust dashboard ([one.dash.cloudflare.com](https://one.dash.cloudflare.com)):
 
-> Use **Access for SaaS (OIDC)**, not a _self-hosted_ Access app. The SaaS-OIDC
-> app makes Cloudflare the OAuth authorization server, which is what the Claude
-> connector's OAuth flow expects. A self-hosted app only shows a browser SSO
-> login the connector won't complete cleanly.
+1. Enable Zero Trust if prompted (**Free** plan; the team name is account-wide —
+   keep the auto-assigned one).
+2. **Access → Applications → Add an application → Self-hosted.**
+3. **Destinations → Public hostnames:** Domain `clickwheel.fm`, leave subdomain
+   and path blank (protects the whole host; Cloudflare serves the OAuth
+   discovery itself).
+4. **Access policies → Create new policy:** name `Only me`, Action **Allow**,
+   Include rule Selector **Emails** = your email. Save and attach it.
+5. Identity: the built-in **One-time PIN** (email code) needs no setup — leave
+   "Accept all available identity providers" on. Optionally enable "Apply
+   instant authentication" to skip the IdP-picker screen.
+6. Save the application.
+
+Verify it's gated: `curl -sI https://clickwheel.fm/mcp` should `302` to your
+`<team>.cloudflareaccess.com` login, and
+`curl -s https://clickwheel.fm/.well-known/cloudflare-access-protected-resource/mcp`
+should return JSON with `authorization_servers`. The connector URL stays
+`https://clickwheel.fm/mcp`.
 
 ## 4. Favicon bypass — **GATED on final favicon design**
 

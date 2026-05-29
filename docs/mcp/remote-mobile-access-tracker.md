@@ -13,10 +13,14 @@ Cloudflare account / devices).
 **Discipline:** every not-started task names its blocker/reason — no silent
 deferrals. "—" means nothing blocks it but the owner's time.
 
-**Where we are:** Phase 0 (transport) done. Phase 3's serving code is done with
-a **provisional** icon; the favicon art is being iterated, so the "go public"
-steps are intentionally gated. Everything else is owner-owned (Cloudflare +
-devices), prepped with templates in `deploy/`. On a branch, not merged.
+**Where we are:** Phases 0–2 done — transport shipped, tunnel live, and the
+endpoint is locked behind Cloudflare Access (verified: Cloudflare serves the MCP
+OAuth challenge, so the connector can authenticate). Phase 3's serving code is
+done with a **provisional** icon (go-public steps gated on final art).
+**Decision:** all live testing (Phase 5 — claude.ai connector + phone + iPod) is
+batched to the end, after the favicon is locked. Remaining: Phase 4 (launchd
+persistence), favicon finalize + go-public, then the one test batch. On a
+branch, not merged.
 
 ---
 
@@ -34,41 +38,44 @@ devices), prepped with templates in `deploy/`. On a branch, not merged.
 
 ---
 
-## Phase 1 — Cloudflare Tunnel 🧑
+## Phase 1 — Cloudflare Tunnel ✅
 
-Make `clickwheel.fm` actually reach the MCP server on the Mac. (The domain is
-registered but currently points at nothing.) Config template:
+`clickwheel.fm` now reaches the local MCP server through a named tunnel. Config:
 [`deploy/cloudflared-config.example.yml`](deploy/cloudflared-config.example.yml).
+Tunnel id `0c2c25a5-…`; config at `~/.cloudflared/config.yml`.
 
-| ✓   | Owner | Task                                                                  | Blocked by / reason                   |
-| --- | ----- | --------------------------------------------------------------------- | ------------------------------------- |
-| ⬜  | 🧑    | Install `cloudflared` (`brew install cloudflared`)                    | —                                     |
-| ⬜  | 🧑    | `cloudflared tunnel login`; create tunnel `clickwheel`                | needs browser auth to your CF account |
-| ⬜  | 🧑    | Ingress `clickwheel.fm` → `http://127.0.0.1:8000` (fill the template) | after tunnel created                  |
-| ⬜  | 🧑    | DNS: `cloudflared tunnel route dns clickwheel clickwheel.fm`          | after tunnel created                  |
-| ⬜  | 🧑    | Bring server + tunnel up; confirm healthy                             | after the above                       |
+| ✓   | Owner | Task                                                                  | Blocked by / reason             |
+| --- | ----- | --------------------------------------------------------------------- | ------------------------------- |
+| ✅  | 🧑    | `cloudflared` installed (was already present, 2026.5.0)               | —                               |
+| ✅  | 🧑    | `cloudflared tunnel login` + `tunnel create clickwheel`               | —                               |
+| ✅  | 🧑    | Ingress `clickwheel.fm` → `http://127.0.0.1:8000`                     | —                               |
+| ✅  | 🧑    | Deleted the stale Namecheap parking `A` record, then `route dns`      | apex A record blocked the CNAME |
+| ✅  | 🤖    | Bring server + tunnel up; confirm `https://clickwheel.fm/mcp` reaches | —                               |
 
-**Acceptance:** with the server running, `https://clickwheel.fm/mcp` reaches it (auth comes next).
+**Acceptance:** met — full MCP handshake over `https://clickwheel.fm/mcp` (37 tools + `library_stats`). Required a code fix: allowlist the public Host (`--allowed-host`) or the SDK returns 421.
 
 ---
 
-## Phase 2 — Auth: Cloudflare Access for SaaS (OIDC) 🧑
+## Phase 2 — Auth: Cloudflare Access (self-hosted app) ✅
 
-Cloudflare Access becomes the OAuth authorization server for the connector — no
-OAuth code on our side. (Not a _self-hosted_ Access app; that shows a browser
-SSO login the MCP OAuth flow won't complete cleanly.) Steps: see
+**Correction to the brief:** a plain **self-hosted Access application** is all
+that's needed — Cloudflare Access natively handles the MCP OAuth flow. No
+"Access for SaaS / OIDC" app, no Claude redirect URL, no client ID/secret. We
+verified Cloudflare serves the OAuth challenge:
+`www-authenticate: Cloudflare-Access resource_metadata=".../.well-known/cloudflare-access-protected-resource/mcp"`,
+and that metadata returns `authorization_servers: [<team>.cloudflareaccess.com]`.
+Team domain: `sparkling-violet-bfb4.cloudflareaccess.com`. Steps:
 [`deploy/README.md`](deploy/README.md) §3.
 
-| ✓   | Owner | Task                                                          | Blocked by / reason |
-| --- | ----- | ------------------------------------------------------------- | ------------------- |
-| ⬜  | 🧑    | Enable Zero Trust (Access) on the account                     | —                   |
-| ⬜  | 🧑    | Add an identity provider (Google / GitHub / one-time PIN)     | dashboard           |
-| ⬜  | 🧑    | Create **Access for SaaS** app, type **OIDC**                 | dashboard           |
-| ⬜  | 🧑    | Add Claude redirect `https://claude.ai/api/mcp/auth_callback` | dashboard           |
-| ⬜  | 🧑    | Access policy: allow **your email only**                      | dashboard           |
-| ⬜  | 🧑    | Capture OIDC **client ID + secret**                           | after app created   |
+| ✓   | Owner | Task                                                                | Blocked by / reason |
+| --- | ----- | ------------------------------------------------------------------- | ------------------- |
+| ✅  | 🧑    | Enable Zero Trust (Free plan)                                       | —                   |
+| ✅  | 🧑    | Self-hosted Access application over `clickwheel.fm` (whole host)    | —                   |
+| ✅  | 🧑    | Policy `Only me`: Allow, Emails = `dugan.pat@gmail.com`             | —                   |
+| ✅  | 🧑    | Identity = built-in One-time PIN (email code); no external IdP      | —                   |
+| ✅  | 🤖    | Verify gating: `/`, `/mcp` now 302 → Access login; MCP OAuth served | —                   |
 
-**Acceptance:** an unauthenticated request to `clickwheel.fm` is challenged; you can log in.
+**Acceptance:** met — unauthenticated requests bounce to the Cloudflare Access login, and the MCP OAuth discovery metadata is served publicly so the connector can authenticate. (favicon paths are also gated for now — opened up in Phase 3.)
 
 ---
 
@@ -131,7 +138,10 @@ Server + tunnel must survive logout/reboot. LaunchAgent template:
 
 ---
 
-## Phase 5 — Connect + verify on devices 🧑
+## Phase 5 — Connect + verify on devices 🧑 (batched to the end)
+
+**Decision:** all live testing below is deferred until the favicon is locked, so
+it runs once against the final setup rather than twice.
 
 | ✓   | Owner | Task                                                                                          | Blocked by / reason         |
 | --- | ----- | --------------------------------------------------------------------------------------------- | --------------------------- |
@@ -149,6 +159,7 @@ Server + tunnel must survive logout/reboot. LaunchAgent template:
 ## Open questions (carried from the brief)
 
 - Does claude.ai/mobile honor `destructiveHint` with an Allow/Deny prompt? (Phase 5)
+- ~~Does the Claude connector complete Cloudflare Access auth?~~ **Resolved:** yes — a self-hosted Access app serves the MCP OAuth challenge + discovery metadata natively (verified via `www-authenticate` + the resource-metadata endpoint). (Phase 2)
 - ~~Connector icon source: MCP `icons` field vs. domain favicon?~~ **Resolved:** Google `s2/favicons` keyed off the connector domain; the MCP `icons` field doesn't drive it. (Phase 3)
 - Keep-awake approach without leaving the Mac wide open. (Phase 4)
 - Do MCP Apps inline UI bundles render on mobile, or text-only fallback? (non-blocking)
