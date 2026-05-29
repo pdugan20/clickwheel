@@ -57,7 +57,7 @@ applemusic = [
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
-    "ruff>=0.9",
+    "ruff>=0.15",
     "build>=1.0",
     "python-semantic-release>=9.0",
 ]
@@ -100,7 +100,28 @@ line-length = 88
 exclude = ["clickwheel/ipod/", "clickwheel/mcp/_ui_bundles.py"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP"]
+# E/W pycodestyle, F pyflakes, I isort, N naming, UP pyupgrade,
+# B bugbear, C4 comprehensions, SIM simplify, PT pytest-style, RUF ruff-native.
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM", "PT", "RUF"]
+ignore = [
+    # clickwheel uses en/em dashes deliberately in user-facing strings and
+    # docstrings; the "ambiguous unicode" rules are noise here.
+    "RUF001",
+    "RUF002",
+    # try/except/pass reads fine; contextlib.suppress isn't clearly better and
+    # would require an import in modules that don't otherwise need one.
+    "SIM105",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Typer (CLI) and pydantic/FastMCP (MCP tools) idiomatically use function calls
+# as parameter defaults — typer.Option(...), Field(...) inside Annotated[...].
+# B008 (function-call-in-default-argument) flags those, but they're correct.
+"clickwheel/cli.py" = ["B008"]
+"clickwheel/mcp/tools/*" = ["B008"]
+# Opinionated pytest-style/format rules that don't catch bugs — not worth
+# churning the existing suite over; new code still gets the rest of the rules.
+"tests/*" = ["PT011", "PT017", "PT018", "PT019", "RUF012", "RUF015", "SIM117"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["clickwheel"]

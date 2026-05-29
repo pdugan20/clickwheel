@@ -25,12 +25,12 @@ import pytest
 
 pytest.importorskip("mcp", reason="mcp not installed")
 
-from clickwheel.mcp.ui import (  # noqa: E402
+from clickwheel.mcp.ui import (
     EXTENSION_ID,
     RESOURCE_MIME_TYPE,
     RESOURCE_URI_META_KEY,
 )
-from clickwheel.mcp.ui_resources import IPOD_CAPACITY_URI  # noqa: E402
+from clickwheel.mcp.ui_resources import IPOD_CAPACITY_URI
 
 
 def _exercise_protocol():

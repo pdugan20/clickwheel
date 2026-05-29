@@ -596,7 +596,9 @@ def repair_albumartist(
             continue
 
         def _first(key: str) -> str | None:
-            vals = audio.tags.get(key)
+            # Called synchronously within this iteration, so the closure over
+            # `audio` never outlives the loop — B023 is a false positive here.
+            vals = audio.tags.get(key)  # noqa: B023
             return str(vals[0]) if vals else None
 
         albumartist = _first("albumartist")
@@ -667,7 +669,7 @@ def apply_cloud_artwork(
 
     result = ArtworkResult()
     network_calls = 0
-    for folder, paths in sorted(groups.items()):
+    for _folder, paths in sorted(groups.items()):
         meta = None
         for p in paths:
             meta = scan_file(p)
@@ -842,7 +844,7 @@ def apply_cloud_genres(
         groups[f.parent].append(f)
 
     network_calls = 0
-    for folder, paths in sorted(groups.items()):
+    for _folder, paths in sorted(groups.items()):
         meta = None
         for p in paths:
             meta = scan_file(p)
@@ -2780,7 +2782,7 @@ def _read_track_metadata(db: Database, name: str) -> list[dict]:
         path = r["path"]
         try:
             isrc = _am.read_isrc(path) if Path(path).exists() else None
-        except Exception:  # noqa: BLE001
+        except Exception:
             isrc = None
         out.append(
             {
@@ -2805,7 +2807,7 @@ def _detect_icml(cfg: Config, dev_token: str) -> bool:
         return _am.detect_icloud_music_library(
             dev_token, cfg.apple_music_user_token, cfg.apple_music_storefront
         )
-    except Exception:  # noqa: BLE001
+    except Exception:
         return False
 
 

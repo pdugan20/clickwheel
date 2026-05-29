@@ -66,7 +66,7 @@ def _get(url: str, timeout: float) -> bytes:
     for attempt in range(_MAX_ATTEMPTS):
         try:
             req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
-            with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
                 return resp.read()
         except urllib.error.HTTPError as exc:
             if exc.code < 500 and exc.code != 429:

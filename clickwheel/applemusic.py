@@ -114,7 +114,7 @@ def read_isrc(file_path: str | Path) -> str | None:
 
     try:
         audio = MutagenFile(str(file_path))
-    except Exception:  # noqa: BLE001  — mutagen raises a zoo of exceptions
+    except Exception:
         return None
     if audio is None:
         return None
@@ -132,7 +132,7 @@ def read_isrc(file_path: str | Path) -> str | None:
         if m4a_value:
             try:
                 raw = bytes(m4a_value[0]).decode("utf-8")
-            except Exception:  # noqa: BLE001
+            except Exception:
                 raw = ""
             if raw:
                 return _normalize_isrc(raw)
@@ -838,12 +838,12 @@ def run_user_token_auth(
     )
 
     class _Handler(BaseHTTPRequestHandler):
-        def log_message(self, fmt, *args):  # noqa: N802  (stdlib API)
+        def log_message(self, fmt, *args):
             # Silence the default per-request stderr logging; we route
             # through the module logger instead.
             logger.debug("auth-server: " + fmt, *args)
 
-        def do_GET(self):  # noqa: N802
+        def do_GET(self):
             if self.path in ("/", "/index.html"):
                 payload = html.encode("utf-8")
                 self.send_response(200)
@@ -855,7 +855,7 @@ def run_user_token_auth(
             self.send_response(404)
             self.end_headers()
 
-        def do_POST(self):  # noqa: N802
+        def do_POST(self):
             if self.path != "/callback":
                 self.send_response(404)
                 self.end_headers()

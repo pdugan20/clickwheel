@@ -22,7 +22,7 @@ from clickwheel.actions import (
 from clickwheel.config import Config
 
 
-@pytest.fixture()
+@pytest.fixture
 def _gen_p8(tmp_path: Path) -> Path:
     """Generate a fresh ES256 private key in PEM format and write it as
     a .p8 file. Cheap; ~ms on modern hardware."""
@@ -40,7 +40,7 @@ def _gen_p8(tmp_path: Path) -> Path:
     return p
 
 
-@pytest.fixture()
+@pytest.fixture
 def am_cfg(tmp_path: Path, _gen_p8: Path) -> Config:
     """Config with Apple Music enabled and pointed at the generated .p8."""
     return Config(

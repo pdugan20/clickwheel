@@ -18,9 +18,9 @@ import pytest
 
 pytest.importorskip("mcp", reason="mcp not installed")
 
-from clickwheel.actions import IpodNotFoundError, PlaylistNotFoundError  # noqa: E402
-from clickwheel.config import Config  # noqa: E402
-from clickwheel.db import Database  # noqa: E402
+from clickwheel.actions import IpodNotFoundError, PlaylistNotFoundError
+from clickwheel.config import Config
+from clickwheel.db import Database
 
 
 def _call(fn, **kwargs):

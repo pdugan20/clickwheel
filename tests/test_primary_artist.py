@@ -64,7 +64,7 @@ CASES: list[tuple[str | None, str | None, str]] = [
 ]
 
 
-@pytest.mark.parametrize("artist,album_artist,expected", CASES)
+@pytest.mark.parametrize(("artist", "album_artist", "expected"), CASES)
 def test_primary_artist(
     artist: str | None,
     album_artist: str | None,
