@@ -34,7 +34,7 @@ with open(sys.argv[1], "wb") as fh:
 PY
 
 echo "Rasterizing $TMP_SVG -> $ASSETS"
-magick -background none "$TMP_SVG" -depth 8 -resize 32x32   "$ASSETS/favicon-32.png"
+magick -background none "$TMP_SVG" -depth 8 -resize 32x32 "$ASSETS/favicon-32.png"
 magick -background none "$TMP_SVG" -depth 8 -resize 180x180 "$ASSETS/apple-touch-icon.png"
 magick -background none "$TMP_SVG" -depth 8 -define icon:auto-resize=16,32,48 "$ASSETS/favicon.ico"
 

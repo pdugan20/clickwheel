@@ -3,7 +3,7 @@
 Concrete steps to take the in-repo work (the `serve --http` transport) live
 behind a Cloudflare Tunnel so the Claude iOS app can reach it. This is the
 owner-owned half — it touches your Mac, your Cloudflare account, and your
-devices. The *why* is in [`../remote-mobile-access.md`](../remote-mobile-access.md);
+devices. The _why_ is in [`../remote-mobile-access.md`](../remote-mobile-access.md);
 the phase/task status is in
 [`../remote-mobile-access-tracker.md`](../remote-mobile-access-tracker.md).
 
@@ -49,9 +49,9 @@ In the Cloudflare Zero Trust dashboard:
 3. Redirect URL: `https://claude.ai/api/mcp/auth_callback`.
 4. **Policy**: allow your email only.
 5. Save; copy the **Client ID + Client Secret** — you may need them in the
-   connector's *Advanced settings* on claude.ai.
+   connector's _Advanced settings_ on claude.ai.
 
-> Use **Access for SaaS (OIDC)**, not a *self-hosted* Access app. The SaaS-OIDC
+> Use **Access for SaaS (OIDC)**, not a _self-hosted_ Access app. The SaaS-OIDC
 > app makes Cloudflare the OAuth authorization server, which is what the Claude
 > connector's OAuth flow expects. A self-hosted app only shows a browser SSO
 > login the connector won't complete cleanly.
@@ -64,19 +64,18 @@ In the Cloudflare Zero Trust dashboard:
 
 Once the design is final and regenerated (`./scripts/generate-favicon.sh`):
 
-1. **Access → Applications**: add a **Bypass** policy (or a separate app with
-   Bypass) for paths `/favicon.ico`, `/apple-touch-icon.png`, `/favicon-32.png`
-   so Google's *unauthenticated* crawler can fetch them. Without this, Access
-   gates the whole hostname and the icon never resolves.
-2. Verify unauthenticated:
-   ```bash
-   curl -I https://clickwheel.fm/favicon.ico      # 200, no Access redirect
-   ```
-3. Nudge + confirm Google cached it (allow ~1 day):
-   ```bash
-   curl -sL "https://www.google.com/s2/favicons?domain=clickwheel.fm&sz=32" -o /tmp/cw.png
-   # md5 should DIFFER from the default globe (a nonexistent domain's response)
-   ```
+In **Access → Applications**, add a **Bypass** policy (or a separate app with
+Bypass) for paths `/favicon.ico`, `/apple-touch-icon.png`, `/favicon-32.png` so
+Google's _unauthenticated_ crawler can fetch them. Without this, Access gates
+the whole hostname and the icon never resolves.
+
+Then verify the fetch is unauthenticated and that Google caches it (allow ~1 day):
+
+```bash
+curl -I https://clickwheel.fm/favicon.ico      # 200, no Access redirect
+curl -sL "https://www.google.com/s2/favicons?domain=clickwheel.fm&sz=32" -o /tmp/cw.png
+# md5 of /tmp/cw.png should DIFFER from the default globe (a nonexistent domain's response)
+```
 
 ## 5. Keep it running (launchd)
 

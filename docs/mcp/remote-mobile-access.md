@@ -6,7 +6,7 @@
 > happen on the owner's Mac and Cloudflare account and can't be done in-repo.
 > Self-contained on purpose — the reference servers it draws on (`rewind`,
 > `nextup-backend-mcp`) and the sibling brief (`bibliocommons-mcp`) live in
-> *other repos* you can't see, so the relevant patterns are extracted inline.
+> _other repos_ you can't see, so the relevant patterns are extracted inline.
 >
 > **For the step-by-step task list, see the
 > [tracker](remote-mobile-access-tracker.md).** This page is the rationale.
@@ -24,20 +24,20 @@ not by re-hosting it in the cloud. Two approaches were considered and
 **rejected** — don't re-litigate them without new information:
 
 - **Cloud-replica (sync the SQLite up to a hosted server):** high effort (DB
-  replication + keeping it fresh + config→env migration) and it *still can't
-  touch the iPod*. You'd rebuild half the system to get a strictly degraded
+  replication + keeping it fresh + config→env migration) and it _still can't
+  touch the iPod_. You'd rebuild half the system to get a strictly degraded
   subset. The valuable data — the library index and the playlists — is built
   from local music files (`config.py` `music_dir`, `db.py` SQLite at
-  `~/.clickwheel/`), and the Plex/Apple Music sync tools read playlists *out
-  of that local store*. Divorced from the Mac, there's little left worth
+  `~/.clickwheel/`), and the Plex/Apple Music sync tools read playlists _out
+  of that local store_. Divorced from the Mac, there's little left worth
   calling.
 - **Multi-user:** impossible as a single cloud service. Each user's library
-  index and iPod are physically bound to *their own* Mac (the iPod is a
+  index and iPod are physically bound to _their own_ Mac (the iPod is a
   USB-mounted volume — `clickwheel/ipod/`, vendored iOpenPodv2, reads/writes
   the binary iTunesDB on `/Volumes/IPOD`). "Multi-user clickwheel" can only
   mean "each person runs this same tunnel recipe on their own Mac." There is
   no shared instance that can serve two libraries. (This is the opposite of
-  the sibling `bibliocommons-mcp`, which *is* going multi-user — because its
+  the sibling `bibliocommons-mcp`, which _is_ going multi-user — because its
   data lives on BiblioCommons' servers, not the user's machine.)
 
 The tunnel approach keeps every tool working, needs zero data re-architecture,
@@ -51,11 +51,11 @@ be awake and online.** For a desktop music tool that's acceptable.
 
 You **cannot add a custom connector from the Claude iOS/Android app.** Per
 Anthropic's docs, custom connectors are added on **claude.ai (web) or Claude
-Desktop**; the mobile app then *uses* connectors already added there. So the
+Desktop**; the mobile app then _uses_ connectors already added there. So the
 flow is: add `clickwheel.fm` as a custom connector on claude.ai in a desktop
 browser → complete auth there (a full browser, not a mobile webview, which is
 the easy place for the OAuth round-trip) → it shows up and works in the iOS
-app. Verification on the phone tests *use*, not *adding*.
+app. Verification on the phone tests _use_, not _adding_.
 
 Plan tiers are a non-issue: custom connectors are available on **Free, Pro,
 Max, Team, and Enterprise** (Free is capped at one connector; on Team/Enterprise
@@ -67,7 +67,7 @@ The only transport was stdio (`clickwheel/mcp/server.py`,
 `mcp.run(transport="stdio")`), so the server could only run as a local
 subprocess of a desktop MCP client. claude.ai/mobile attach only to a **remote
 MCP server reachable over the public internet** speaking **Streamable HTTP**.
-Step 1 below gives it exactly that, with the server still running on *this*
+Step 1 below gives it exactly that, with the server still running on _this_
 Mac behind a tunnel. (SSE is the deprecated transport; we target Streamable
 HTTP.)
 
@@ -121,14 +121,14 @@ The existing rules held while doing this:
   or a hostname on it) → `http://127.0.0.1:8000`. Cloudflare provides the
   public DNS + TLS; nothing is port-forwarded on the home network.
 - **Auth: use Cloudflare Access for SaaS (OIDC), not a self-hosted Access app.**
-  This resolves the brief's former "primary unknown." A *self-hosted* Access
+  This resolves the brief's former "primary unknown." A _self-hosted_ Access
   application presents a browser SSO login that the MCP OAuth 2.1 flow doesn't
   cleanly complete — that was the risk. Cloudflare's **Access for SaaS OIDC**
   path makes **Cloudflare Access itself the OAuth authorization server** for the
   MCP endpoint, which is exactly what the Claude connector's OAuth flow expects,
   with **zero OAuth code on our side**. Configure it per Cloudflare's "Secure
   MCP servers with Access for SaaS" guide; the resulting OIDC client ID/secret
-  go into the connector's *Advanced settings* on claude.ai if prompted. Because
+  go into the connector's _Advanced settings_ on claude.ai if prompted. Because
   the connector is added in a desktop browser (see above), the OAuth round-trip
   runs in a real browser, not a mobile webview.
 - **Connector icon — verify before doing the favicon dance.** The server
@@ -138,7 +138,7 @@ The existing rules held while doing this:
   derives the icon from the domain favicon (Google's favicon service, keyed off
   the apex), then serve a `clickwheel.fm` `/favicon.ico` **and** add an Access
   **bypass** policy for `/favicon.ico` and `/.well-known/*` so the
-  *unauthenticated* crawler can fetch them — otherwise Access gates the whole
+  _unauthenticated_ crawler can fetch them — otherwise Access gates the whole
   hostname and the icon never resolves. Expect up to a day of crawl/cache lag.
   The distinct apex (`clickwheel.fm` vs the sibling's `getbiblio.app`) is what
   makes the two connectors show different icons.
@@ -163,8 +163,8 @@ The server and `cloudflared` must survive logout/reboot:
 - **Library + playlist tools** (read + mutation): fully work — they hit local
   SQLite. Build/edit playlists from your phone anytime.
 - **Plex / Apple Music / Last.fm** tools: work whenever the Mac can reach
-  those services (Plex on the LAN is reachable since the server runs *on the
-  LAN*).
+  those services (Plex on the LAN is reachable since the server runs _on the
+  LAN_).
 - **iPod tools:** work **only when the iPod is docked** to the Mac. Undocked,
   they return the same "not connected" error as locally — by design. Queue the
   intent; dock later; re-issue.
