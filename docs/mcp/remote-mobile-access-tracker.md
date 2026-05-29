@@ -13,14 +13,13 @@ Cloudflare account / devices).
 **Discipline:** every not-started task names its blocker/reason — no silent
 deferrals. "—" means nothing blocks it but the owner's time.
 
-**Where we are:** Phases 0–2 done — transport shipped, tunnel live, and the
-endpoint is locked behind Cloudflare Access (verified: Cloudflare serves the MCP
-OAuth challenge, so the connector can authenticate). Phase 3's serving code is
-done with a **provisional** icon (go-public steps gated on final art).
-**Decision:** all live testing (Phase 5 — claude.ai connector + phone + iPod) is
-batched to the end, after the favicon is locked. Remaining: Phase 4 (launchd
-persistence), favicon finalize + go-public, then the one test batch. On a
-branch, not merged.
+**Where we are:** Phases 0–2 done — transport shipped, tunnel live, endpoint
+locked behind Cloudflare Access (verified: Cloudflare serves the MCP OAuth
+challenge). Phase 3 favicon **art is final** and served; #48 is rebased onto the
+modernized `main` and fully green. **Remaining (the final mile):** the Access
+bypass for the favicon paths (deploy), Phase 4 (launchd persistence), then the
+batched Phase 5 live test (connector + phone + iPod), then merge #48. Still a
+draft branch.
 
 ---
 
@@ -84,12 +83,15 @@ Team domain: `sparkling-violet-bfb4.cloudflareaccess.com`. Steps:
 The piece you asked for — a domain favicon so the connector shows the
 clickwheel mark, the way rewind's does.
 
-> ⚠️ **Favicon art is PROVISIONAL.** The serving mechanism is built and tested,
-> but the current icon is the existing clickwheel mark (`SERVER_ICON`) used as a
-> placeholder — we're iterating on the design. **Do not run the "go public"
-> steps until the design is locked:** Google's favicon cache is sticky (~1 day+
-> lag), so a published draft is annoying to replace. Regenerate with
-> `./scripts/generate-favicon.sh` once final.
+> **Favicon art is FINAL** — `clickwheel/mcp/assets/favicon.svg`, served as
+> `/favicon.svg` + rasterized `/favicon.ico` + PNGs. Regenerate rasters with
+> `./scripts/generate-favicon.sh` if the SVG changes. The go-public steps below
+> are now unblocked.
+>
+> **Approach (simplified):** serve the favicon from the existing MCP HTTP
+> endpoint (already built) + one Cloudflare Access **bypass** so Google's
+> crawler reaches it unauthenticated. We did NOT replicate rewind's edge-Worker
+> (`apex-worker`) — unnecessary here; once Google caches the icon it's sticky.
 
 **Confirmed mechanism (not the MCP `icons` field):** Claude renders the
 connector-list icon from Google's favicon service, keyed off the connector
@@ -109,15 +111,15 @@ the MCP/OAuth routes — its favicon is public by default. clickwheel is **tunne
 → Mac behind Cloudflare Access**, which gates the _entire_ hostname — hence the
 explicit Access **bypass** below.
 
-| ✓   | Owner | Task                                                                                                                                                                  | Blocked by / reason                                 |
-| --- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| ✅  | 🤖    | Raster favicon from the mark → `favicon.ico` + 32/180px PNG (`scripts/generate-favicon.sh` → `clickwheel/mcp/assets/`)                                                | **provisional art** — regenerate when design locked |
-| ✅  | 🤖    | Serve `/favicon.ico`, `/favicon-32.png`, `/apple-touch-icon.png`, `/` from the MCP app (`_http_assets.py`); tests in `test_mcp_http_assets.py`; packaged in the wheel | —                                                   |
-| ⬜  | 🧑    | Cloudflare Access **bypass** for `/favicon.ico`, `/apple-touch-icon.png`, `/favicon-32.png`, `/.well-known/*`                                                         | **final favicon design** + Phase 2                  |
-| ⬜  | 🧑    | Verify unauthenticated: `curl -I https://clickwheel.fm/favicon.ico` → 200, no redirect                                                                                | after bypass                                        |
-| ⬜  | 🧑    | Nudge Google to crawl (open in browser / request indexing)                                                                                                            | after bypass                                        |
-| ⬜  | 🧑    | Confirm cached: `s2/favicons?domain=clickwheel.fm` md5 ≠ default globe                                                                                                | after crawl (~1 day lag)                            |
-| ⬜  | 🧑    | Confirm icon renders in claude.ai, distinct from rewind/bibliocommons                                                                                                 | after Phase 5 connect                               |
+| ✓   | Owner | Task                                                                                                                                                     | Blocked by / reason          |
+| --- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| ✅  | 🤖    | Final favicon art committed (`clickwheel/mcp/assets/favicon.svg`); rasterized to `favicon.ico` + 32/180px PNG via `scripts/generate-favicon.sh`          | —                            |
+| ✅  | 🤖    | Serve `/favicon.svg`, `/favicon.ico`, `/favicon-32.png`, `/apple-touch-icon.png`, `/` from the MCP app (`_http_assets.py`); tests; packaged in the wheel | —                            |
+| ⬜  | 🧑    | Cloudflare Access **bypass** for `/favicon.ico`, `/favicon.svg`, `/apple-touch-icon.png`, `/`                                                            | Phase 2 (done) — ready to do |
+| ⬜  | 🧑    | Verify unauthenticated: `curl -I https://clickwheel.fm/favicon.ico` → 200, no redirect                                                                   | after bypass                 |
+| ⬜  | 🧑    | Nudge Google to crawl (open in browser / request indexing)                                                                                               | after bypass                 |
+| ⬜  | 🧑    | Confirm cached: `s2/favicons?domain=clickwheel.fm` md5 ≠ default globe                                                                                   | after crawl (~1 day lag)     |
+| ⬜  | 🧑    | Confirm icon renders in claude.ai, distinct from rewind/bibliocommons                                                                                    | after Phase 5 connect        |
 
 **Acceptance:** `s2/favicons?domain=clickwheel.fm` returns the **final** clickwheel mark (md5 ≠ default globe), and the connector list shows it.
 
