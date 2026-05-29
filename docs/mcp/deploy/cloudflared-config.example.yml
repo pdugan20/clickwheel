@@ -1,0 +1,19 @@
+# cloudflared tunnel config for clickwheel — template.
+# Copy to ~/.cloudflared/config.yml and fill the placeholders.
+#
+#   <TUNNEL>      the tunnel name or UUID from `cloudflared tunnel create clickwheel`
+#   <USER>        your macOS short username
+#   <UUID>        the credentials file UUID printed by `tunnel create`
+#
+# The MCP server binds 127.0.0.1:8000 (clickwheel-mcp serve --http); the tunnel
+# is the only public ingress. Bump the port here AND in the LaunchAgent if you
+# change it.
+
+tunnel: <TUNNEL>
+credentials-file: /Users/<USER>/.cloudflared/<UUID>.json
+
+ingress:
+  - hostname: clickwheel.fm
+    service: http://127.0.0.1:8000
+  # Everything else 404s rather than leaking other local services.
+  - service: http_status:404
