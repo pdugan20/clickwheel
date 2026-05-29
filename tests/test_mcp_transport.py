@@ -11,7 +11,7 @@ import pytest
 
 pytest.importorskip("mcp", reason="mcp not installed")
 
-from clickwheel.mcp.server import (  # noqa: E402
+from clickwheel.mcp.server import (
     DEFAULT_HTTP_HOST,
     DEFAULT_HTTP_PORT,
     _resolve_transport,
