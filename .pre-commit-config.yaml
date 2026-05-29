@@ -62,6 +62,16 @@ repos:
         files: '^clickwheel/(?!output\.py).*\.py$'
         exclude: '^clickwheel/ipod/'
         types: [python]
+      - id: mypy
+        name: mypy
+        language: system
+        entry: mypy
+        # Check the whole package (not just changed files) so cross-module
+        # types resolve; relies on mypy from the dev env (`make dev`).
+        args: ['clickwheel']
+        pass_filenames: false
+        files: '^clickwheel/.*\.py$'
+        types: [python]
       - id: no-manual-version-bump
         name: No manual version bumps (release-please owns __version__)
         language: script
