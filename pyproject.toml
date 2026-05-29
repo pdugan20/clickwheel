@@ -59,7 +59,6 @@ dev = [
     "pytest-cov>=4.0",
     "ruff>=0.15",
     "build>=1.0",
-    "python-semantic-release>=9.0",
 ]
 
 [project.scripts]
@@ -68,19 +67,6 @@ clickwheel-mcp = "clickwheel.mcp:main"
 
 [tool.hatch.version]
 path = "clickwheel/__init__.py"
-
-[tool.semantic_release]
-version_variables = ["clickwheel/__init__.py:__version__"]
-build_command = "python -m build"
-commit_message = "chore: release v{version}"
-changelog_file = "CHANGELOG.md"
-
-[tool.semantic_release.branches.main]
-match = "main"
-prerelease = false
-
-[tool.semantic_release.changelog]
-exclude_commit_patterns = ["^chore:"]
 
 [tool.pytest.ini_options]
 addopts = "--cov=clickwheel --cov-report=term-missing --cov-fail-under=30"
