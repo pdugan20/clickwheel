@@ -44,19 +44,19 @@ clickwheel sync      # push to the iPod
 
 The iPod workflow:
 
-| Command               | Description                                     |
-| --------------------- | ----------------------------------------------- |
-| `clickwheel scan`     | Index your library; report metadata gaps        |
-| `clickwheel fix`      | Fill in album art, years, genres; repair tags   |
-| `clickwheel select`   | Interactive checkbox picker for the iPod        |
-| `clickwheel playlist` | List saved playlists or show one's tracks       |
-| `clickwheel edit`     | Add/remove artists or set a description         |
-| `clickwheel heal`     | Drop playlist refs to files no longer on disk   |
-| `clickwheel delete`   | Delete a saved playlist                         |
-| `clickwheel diff`     | Preview what would change on the iPod           |
-| `clickwheel sync`     | Push your playlist to the iPod                  |
-| `clickwheel ls`       | Show what's on the iPod                         |
-| `clickwheel eject`    | Safely unmount the iPod                         |
+| Command               | Description                                   |
+| --------------------- | --------------------------------------------- |
+| `clickwheel scan`     | Index your library; report metadata gaps      |
+| `clickwheel fix`      | Fill in album art, years, genres; repair tags |
+| `clickwheel select`   | Interactive checkbox picker for the iPod      |
+| `clickwheel playlist` | List saved playlists or show one's tracks     |
+| `clickwheel edit`     | Add/remove artists or set a description       |
+| `clickwheel heal`     | Drop playlist refs to files no longer on disk |
+| `clickwheel delete`   | Delete a saved playlist                       |
+| `clickwheel diff`     | Preview what would change on the iPod         |
+| `clickwheel sync`     | Push your playlist to the iPod                |
+| `clickwheel ls`       | Show what's on the iPod                       |
+| `clickwheel eject`    | Safely unmount the iPod                       |
 
 Each optional integration has its own doc:
 
