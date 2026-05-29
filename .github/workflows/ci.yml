@@ -56,28 +56,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: astral-sh/setup-uv@v6
         with:
-          python-version: '3.12'
-      - name: Install Ruff
-        run: pip install ruff
+          enable-cache: true
       - name: Check linting
-        run: ruff check clickwheel/
+        run: uv run --locked --extra dev ruff check clickwheel/
       - name: Check formatting
-        run: ruff format --check clickwheel/
+        run: uv run --locked --extra dev ruff format --check clickwheel/
 
   mypy:
     name: Mypy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: astral-sh/setup-uv@v6
         with:
-          python-version: '3.12'
-      - name: Install
-        run: pip install -e ".[dev,mcp]"
+          enable-cache: true
       - name: Type check
-        run: mypy clickwheel
+        run: uv run --locked --extra dev --extra mcp mypy clickwheel
 
   test:
     name: Tests (${{ matrix.os }}, ${{ matrix.python-version }})
@@ -88,15 +84,16 @@ jobs:
         python-version: ['3.11', '3.12', '3.13']
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: astral-sh/setup-uv@v6
         with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install package with dev dependencies
-        # [mcp] is included so the MCP test suite actually runs — without
-        # it, test_mcp_server.py is skipped wholesale via importorskip.
-        run: pip install -e ".[dev,mcp]"
+          enable-cache: true
       - name: Run tests with coverage
-        run: python -m pytest tests/ -v --tb=short --cov-report=xml
+        # [mcp] extra so the MCP suite runs — without it, test_mcp_server.py is
+        # skipped wholesale via importorskip.
+        run: >-
+          uv run --locked --python ${{ matrix.python-version }}
+          --extra dev --extra mcp
+          pytest tests/ -v --tb=short --cov-report=xml
       - name: Upload coverage
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         uses: codecov/codecov-action@v6

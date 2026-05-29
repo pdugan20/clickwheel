@@ -65,9 +65,9 @@ repos:
       - id: mypy
         name: mypy
         language: system
-        entry: mypy
+        entry: uv run --extra dev --extra mcp mypy
         # Check the whole package (not just changed files) so cross-module
-        # types resolve; relies on mypy from the dev env (`make dev`).
+        # types resolve; runs via uv against the locked dev env.
         args: ['clickwheel']
         pass_filenames: false
         files: '^clickwheel/.*\.py$'

@@ -3,6 +3,7 @@ beets/config.yaml
 reports/
 *.log
 .env
+.venv/
 __pycache__/
 *.pyc
 *.egg-info/
