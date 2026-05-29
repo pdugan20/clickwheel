@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/) and
 [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [0.15.1](https://github.com/pdugan20/clickwheel/compare/v0.15.0...v0.15.1) (2026-05-29)
+
+
+### Bug Fixes
+
+* **fix:** escape LIKE wildcards in path prefix; tighten exception catches ([29e66be](https://github.com/pdugan20/clickwheel/commit/29e66be41b9a00d20d7949eb603b9c9c9cd3c5e1))
+* **fix:** skip writes for files that vanished between scan and write ([1d4a54c](https://github.com/pdugan20/clickwheel/commit/1d4a54ceb36b21a842042e691986ffcf04eb8df6))
+
+
+### Documentation
+
+* reflect the native fix pipeline + metadata caches ([5810c5e](https://github.com/pdugan20/clickwheel/commit/5810c5e76f8b9461e1d257ff4a4135bd0de17d18))
+
 ## [0.15.0](https://github.com/pdugan20/clickwheel/compare/v0.14.1...v0.15.0) (2026-05-22)
 
 
