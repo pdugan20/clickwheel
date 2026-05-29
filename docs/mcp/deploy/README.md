@@ -18,11 +18,18 @@ Replace `<USER>` / `<TUNNEL>` / `<UUID>` placeholders with your values.
 
 ```bash
 pipx inject clickwheel 'clickwheel[mcp]'   # if not already
-clickwheel-mcp serve --http                # binds 127.0.0.1:8000/mcp
+# --allowed-host is REQUIRED for the tunnel: the SDK's DNS-rebinding
+# protection rejects the public Host header with HTTP 421 otherwise.
+# Omit it for purely local testing (127.0.0.1 is always allowed).
+clickwheel-mcp serve --http --allowed-host clickwheel.fm   # binds 127.0.0.1:8000/mcp
 # in another shell:
 curl -s http://127.0.0.1:8000/favicon.ico -o /dev/null -w '%{http_code}\n'   # 200
 npx @modelcontextprotocol/inspector        # point at http://127.0.0.1:8000/mcp
 ```
+
+`--allowed-host` can also be set via `CLICKWHEEL_MCP_ALLOWED_HOSTS=clickwheel.fm`
+(comma-separated). If Claude's requests ever get a 403, add its origin with
+`--allow-origin https://claude.ai` / `CLICKWHEEL_MCP_ALLOWED_ORIGINS`.
 
 ## 2. Cloudflare Tunnel
 

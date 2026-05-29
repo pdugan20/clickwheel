@@ -25,6 +25,10 @@
       <string>/Users/<USER>/.local/bin/clickwheel-mcp</string>
       <string>serve</string>
       <string>--http</string>
+      <!-- REQUIRED behind the tunnel: allowlist the public Host header, or
+           the SDK's DNS-rebinding protection rejects every request with 421. -->
+      <string>--allowed-host</string>
+      <string>clickwheel.fm</string>
     </array>
 
     <key>EnvironmentVariables</key>
