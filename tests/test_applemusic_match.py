@@ -21,7 +21,7 @@ from clickwheel.config import Config
 from clickwheel.db import Database
 
 
-@pytest.fixture()
+@pytest.fixture
 def _gen_p8(tmp_path: Path) -> Path:
     from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.primitives.asymmetric import ec
@@ -37,7 +37,7 @@ def _gen_p8(tmp_path: Path) -> Path:
     return p
 
 
-@pytest.fixture()
+@pytest.fixture
 def am_cfg(tmp_path: Path, _gen_p8: Path) -> Config:
     """Apple-Music-enabled config with a synthetic .p8 and a user token
     so push paths can run."""
@@ -53,7 +53,7 @@ def am_cfg(tmp_path: Path, _gen_p8: Path) -> Config:
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def db_with_playlist(tmp_path: Path) -> Database:
     """SQLite database pre-populated with two tracks and a playlist
     referencing both. Track paths are synthetic — read_isrc returns

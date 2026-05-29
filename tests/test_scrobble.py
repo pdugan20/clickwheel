@@ -14,7 +14,7 @@ from clickwheel.scrobble import (
 )
 
 
-@pytest.fixture()
+@pytest.fixture
 def scrobble_db(tmp_path: Path) -> Database:
     """Database for scrobble tests."""
     return Database(tmp_path / "scrobble_test.db")

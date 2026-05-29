@@ -1369,7 +1369,7 @@ def _get_path() -> str:
 
     path = os.environ.get("PATH", "")
     extra = ["/opt/homebrew/bin", "/usr/local/bin", str(Path.home() / ".local/bin")]
-    return ":".join(extra + [path])
+    return ":".join([*extra, path])
 
 
 def _run_fix(
@@ -1557,7 +1557,7 @@ def apple_doctor_cmd() -> None:
     cfg = load_config()
     try:
         result = actions.apple_music_doctor(cfg)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         error(f"Apple Music doctor crashed: {exc}")
         raise typer.Exit(1) from exc
 

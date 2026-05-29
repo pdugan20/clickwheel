@@ -10,13 +10,13 @@ from clickwheel.config import Config
 from clickwheel.db import Database
 
 
-@pytest.fixture()
+@pytest.fixture
 def tmp_db(tmp_path: Path) -> Database:
     """Create a fresh database in a temp directory."""
     return Database(tmp_path / "test.db")
 
 
-@pytest.fixture()
+@pytest.fixture
 def sample_track() -> dict:
     """A minimal valid track dict for testing."""
     return {
@@ -40,7 +40,7 @@ def sample_track() -> dict:
     }
 
 
-@pytest.fixture()
+@pytest.fixture
 def populated_db(tmp_db: Database, sample_track: dict) -> Database:
     """Database pre-loaded with a few tracks across two artists."""
     tracks = [
@@ -74,7 +74,7 @@ def populated_db(tmp_db: Database, sample_track: dict) -> Database:
     return tmp_db
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_config(tmp_path: Path) -> Config:
     """A Config pointing at temp directories."""
     music_dir = tmp_path / "music"
@@ -87,7 +87,7 @@ def mock_config(tmp_path: Path) -> Config:
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def music_dir_with_mp3(tmp_path: Path) -> Path:
     """Create a temp dir with a minimal valid MP3 file using mutagen."""
     from mutagen.id3 import TALB, TIT2, TPE1

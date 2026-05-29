@@ -358,12 +358,9 @@ def render(text: str, data: object | None = None) -> CallToolResult:
         sc: dict = {}
         content = [TextContent(type="text", text=text)]
     else:
-        if isinstance(data, dict):
-            sc = data
-        else:
-            # MCP requires structuredContent to be an object. Wrap lists/scalars
-            # under "result", matching FastMCP's own auto-wrap convention.
-            sc = {"result": data}
+        # MCP requires structuredContent to be an object. Wrap lists/scalars
+        # under "result", matching FastMCP's own auto-wrap convention.
+        sc = data if isinstance(data, dict) else {"result": data}
         json_block = json.dumps(sc, default=str, separators=(",", ":"))
         content = [
             TextContent(type="text", text=text),

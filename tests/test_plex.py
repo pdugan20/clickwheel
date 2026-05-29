@@ -26,7 +26,7 @@ from clickwheel.actions import (
 from clickwheel.config import Config
 
 
-@pytest.fixture()
+@pytest.fixture
 def plex_cfg(tmp_path: Path) -> Config:
     """A Config with Plex enabled and pointed at a fake server."""
     return Config(
@@ -294,7 +294,7 @@ class _StubSearchSection(_StubSection):
     def __init__(self, returned_paths: list[str], *, title: str = "Music") -> None:
         super().__init__(title, "artist")
         self.key = "4"
-        self.totalSize = 285  # noqa: N815
+        self.totalSize = 285
         self._paths = returned_paths
 
     def searchTracks(self, **kwargs):  # noqa: N802
@@ -309,7 +309,7 @@ class _StubServer:
         self.library = _StubLibrary(sections)
 
 
-@pytest.fixture()
+@pytest.fixture
 def _plexapi_stub(monkeypatch):
     """Tests that stub `_plex.connect` must also bypass the
     plexapi-extra check, otherwise the doctor stops there before the
@@ -487,11 +487,11 @@ class _StubPlexPlaylist:
         summary: str = "",
     ) -> None:
         self.title = title
-        self.playlistType = "audio"  # noqa: N815
+        self.playlistType = "audio"
         self.smart = smart
         self.summary = summary
         self._tracks = tracks
-        self.leafCount = len(tracks)  # noqa: N815
+        self.leafCount = len(tracks)
 
     def items(self) -> list[_StubTrack]:
         return self._tracks
@@ -500,8 +500,8 @@ class _StubPlexPlaylist:
 def _make_audio_track(path: str, *, title="t", artist="a", album="b", dur_ms=200_000):
     t = _StubTrack(path)
     t.title = title
-    t.grandparentTitle = artist  # noqa: N815
-    t.parentTitle = album  # noqa: N815
+    t.grandparentTitle = artist
+    t.parentTitle = album
     t.duration = dur_ms
     return t
 

@@ -22,7 +22,7 @@ from clickwheel.config import Config
 from clickwheel.db import Database
 
 
-@pytest.fixture()
+@pytest.fixture
 def _gen_p8(tmp_path: Path) -> Path:
     from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.primitives.asymmetric import ec
@@ -38,7 +38,7 @@ def _gen_p8(tmp_path: Path) -> Path:
     return p
 
 
-@pytest.fixture()
+@pytest.fixture
 def am_cfg(tmp_path: Path, _gen_p8: Path) -> Config:
     return Config(
         music_dir=tmp_path / "m",
@@ -52,7 +52,7 @@ def am_cfg(tmp_path: Path, _gen_p8: Path) -> Config:
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def db_with_tracks(tmp_path: Path) -> Database:
     """SQLite with three tracks across two artists; no playlist yet."""
     db = Database(tmp_path / "t.db")

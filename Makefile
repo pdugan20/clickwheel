@@ -1,4 +1,4 @@
-.PHONY: dev lint format test build clean check-all release release-dry release-patch release-minor release-major dev-web build-web lint-web format-web
+.PHONY: dev lint format test build clean check-all dev-web build-web lint-web format-web
 
 dev:
 	pip install -e '.[dev]'
@@ -42,21 +42,7 @@ check-all: lint test
 	shellcheck scripts/*.sh
 	shfmt -d scripts/*.sh
 
-release-dry:
-	semantic-release version --print
-
-release:
-	semantic-release version
-	git push origin main --tags
-
-release-patch:
-	semantic-release version --patch
-	git push origin main --tags
-
-release-minor:
-	semantic-release version --minor
-	git push origin main --tags
-
-release-major:
-	semantic-release version --major
-	git push origin main --tags
+# Releases are automated by release-please (.github/workflows/release-please.yml):
+# merge conventional commits to main → it opens a release PR → merging that PR
+# tags + publishes via publish.yml. Do not bump the version by hand
+# (the no-manual-version-bump pre-commit hook enforces this).

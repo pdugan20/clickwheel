@@ -22,9 +22,9 @@ import pytest
 
 pytest.importorskip("mcp", reason="mcp not installed")
 
-from clickwheel import actions  # noqa: E402
-from clickwheel.config import Config  # noqa: E402
-from clickwheel.db import Database  # noqa: E402
+from clickwheel import actions
+from clickwheel.config import Config
+from clickwheel.db import Database
 
 
 class _FakeContext:

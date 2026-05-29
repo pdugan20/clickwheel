@@ -62,7 +62,7 @@ The MCP server **never** auto-scans — chat tool calls always serve cached data
 2. **MusicBrainz lookup** — fetches release group mbid, embeds front cover art (Cover Art Archive), sets the release year. Results cached in SQLite so re-runs do zero network work.
 3. **Last.fm genres** — top tag per album via `pylast`, written to tracks that lack a genre. Same cache pattern.
 
-Both lookup steps cache positive *and* negative outcomes. On an unchanged library, a re-run finishes in seconds.
+Both lookup steps cache positive _and_ negative outcomes. On an unchanged library, a re-run finishes in seconds.
 
 ```bash
 clickwheel fix                              # whole library
