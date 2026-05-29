@@ -40,12 +40,16 @@ A Python CLI for syncing a music library to a classic iPod from a modern Mac.
 
 ## Development
 
+Dev tooling uses [uv](https://docs.astral.sh/uv/) (env + dependency management;
+`uv.lock` is committed, tools run via `uv run`). uv is **dev-only** — end users
+still install the published package with `pipx`.
+
 ```bash
-make dev                             # install with dev dependencies
-make test                            # run tests with coverage
-make lint                            # ruff check + format check
-make format                          # auto-format code
-pre-commit install --hook-type pre-commit --hook-type commit-msg
+make dev        # uv sync (dev + mcp extras) + install pre-commit hooks
+make test       # run tests with coverage
+make lint       # ruff check + format check
+make typecheck  # mypy
+make format     # auto-format code
 ```
 
 ## Critical Rules

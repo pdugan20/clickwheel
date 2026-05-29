@@ -1,33 +1,36 @@
-.PHONY: dev lint format test build clean check-all dev-web build-web lint-web format-web
+.PHONY: dev lint typecheck format test build clean check-all dev-web build-web lint-web format-web
 
 dev:
-	pip install -e '.[dev]'
-	pre-commit install --hook-type pre-commit --hook-type commit-msg
+	uv sync --extra dev --extra mcp
+	uv run pre-commit install --hook-type pre-commit --hook-type commit-msg
 
 dev-web:
 	cd web && npm install
 	cd web && npm run dev
 
 lint:
-	ruff check clickwheel/
-	ruff format --check clickwheel/
+	uv run ruff check clickwheel/
+	uv run ruff format --check clickwheel/
+
+typecheck:
+	uv run mypy clickwheel
 
 lint-web:
 	cd web && npm run lint
 	cd web && npm run typecheck
 
 format:
-	ruff check --fix clickwheel/
-	ruff format clickwheel/
+	uv run ruff check --fix clickwheel/
+	uv run ruff format clickwheel/
 
 format-web:
 	cd web && npm run format
 
 test:
-	python -m pytest tests/ -v
+	uv run pytest tests/ -v
 
 build: clean
-	python -m build
+	uv build
 
 # Build the React UI bundles via Vite + emit clickwheel/mcp/_ui_bundles.py.
 # Run this after editing anything under web/ before committing.
@@ -38,7 +41,7 @@ build-web:
 clean:
 	rm -rf dist/ build/ *.egg-info clickwheel/*.egg-info web/dist/
 
-check-all: lint test
+check-all: lint typecheck test
 	shellcheck scripts/*.sh
 	shfmt -d scripts/*.sh
 

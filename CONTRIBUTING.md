@@ -2,13 +2,18 @@
 
 ## Setup
 
+Install [uv](https://docs.astral.sh/uv/) first (`brew install uv` or the
+[standalone installer](https://docs.astral.sh/uv/getting-started/installation/)),
+then:
+
 ```bash
 git clone https://github.com/pdugan20/clickwheel.git
 cd clickwheel
 make dev
 ```
 
-This installs the package with dev dependencies and sets up pre-commit hooks.
+This runs `uv sync` (dev + mcp extras) and sets up pre-commit hooks. Run tools
+via `uv run …` (e.g. `uv run pytest`), or use the `make` targets.
 
 ## Running Tests
 
