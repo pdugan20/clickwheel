@@ -36,6 +36,13 @@ def test_favicon_png_served(client):
     assert r.content[:8] == b"\x89PNG\r\n\x1a\n"  # PNG magic
 
 
+def test_favicon_svg_served(client):
+    r = client.get("/favicon.svg")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "image/svg+xml"
+    assert r.text.lstrip().startswith("<svg")
+
+
 def test_apple_touch_icon_served(client):
     r = client.get("/apple-touch-icon.png")
     assert r.status_code == 200

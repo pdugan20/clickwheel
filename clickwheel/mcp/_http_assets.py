@@ -24,6 +24,7 @@ from importlib.resources import files
 # Served paths -> (asset filename, content type). Order is cosmetic.
 _ASSETS: dict[str, tuple[str, str]] = {
     "/favicon.ico": ("favicon.ico", "image/x-icon"),
+    "/favicon.svg": ("favicon.svg", "image/svg+xml"),
     "/favicon-32.png": ("favicon-32.png", "image/png"),
     "/apple-touch-icon.png": ("apple-touch-icon.png", "image/png"),
 }
@@ -33,6 +34,7 @@ _ASSETS: dict[str, tuple[str, str]] = {
 _INDEX_HTML = (
     "<!doctype html><html><head><meta charset=utf-8>"
     "<title>clickwheel</title>"
+    '<link rel="icon" type="image/svg+xml" href="/favicon.svg">'
     '<link rel="icon" href="/favicon.ico">'
     '<link rel="apple-touch-icon" href="/apple-touch-icon.png">'
     "</head><body>clickwheel MCP server.</body></html>"

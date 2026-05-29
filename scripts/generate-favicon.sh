@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Regenerate the favicon assets served by the MCP HTTP transport.
+# Regenerate the rasterized favicon assets served by the MCP HTTP transport.
 #
-# Source of truth is the inlined SVG in clickwheel/mcp/_runtime.py
-# (SERVER_ICON) — the same orange clickwheel mark used as the MCP protocol
-# icon. This rasterizes it to the formats Google's favicon crawler wants
-# (.ico + PNG), which is what drives the Claude connector-list icon
-# (https://www.google.com/s2/favicons?domain=clickwheel.fm).
+# Source of truth is clickwheel/mcp/assets/favicon.svg (the clickwheel mark).
+# These rasters are what Google's favicon crawler consumes, which is what paints
+# the Claude connector-list icon (https://www.google.com/s2/favicons?domain=clickwheel.fm).
+#
+# The SVG is taller than it is wide, so each raster is rendered preserving aspect
+# and centered on a square transparent canvas (favicons must be square).
 #
 # Requires ImageMagick 7 (`magick`). Run from the repo root:
 #   ./scripts/generate-favicon.sh
@@ -13,30 +14,22 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-PY=".venv/bin/python"
-[ -x "$PY" ] || PY="python3"
-
 ASSETS="clickwheel/mcp/assets"
-mkdir -p "$ASSETS"
+SVG="$ASSETS/favicon.svg"
+[ -f "$SVG" ] || {
+    echo "missing $SVG" >&2
+    exit 1
+}
 
-TMP_SVG="$(mktemp -t clickwheel-icon-XXXX.svg)"
-trap 'rm -f "$TMP_SVG"' EXIT
+# Square master at high res, icon centered on a transparent canvas.
+MASTER="$(mktemp -t clickwheel-fav-XXXX.png)"
+trap 'rm -f "$MASTER"' EXIT
+magick -background none "$SVG" -resize 256x256 -gravity center -extent 256x256 "$MASTER"
 
-# Decode the data-URI SVG out of SERVER_ICON so the asset never drifts from
-# the protocol icon.
-"$PY" - "$TMP_SVG" <<'PY'
-import base64, sys
-from clickwheel.mcp._runtime import SERVER_ICON
-
-b64 = SERVER_ICON.src.split(",", 1)[1]
-with open(sys.argv[1], "wb") as fh:
-    fh.write(base64.b64decode(b64))
-PY
-
-echo "Rasterizing $TMP_SVG -> $ASSETS"
-magick -background none "$TMP_SVG" -depth 8 -resize 32x32 "$ASSETS/favicon-32.png"
-magick -background none "$TMP_SVG" -depth 8 -resize 180x180 "$ASSETS/apple-touch-icon.png"
-magick -background none "$TMP_SVG" -depth 8 -define icon:auto-resize=16,32,48 "$ASSETS/favicon.ico"
+echo "Rasterizing $SVG -> $ASSETS"
+magick "$MASTER" -resize 32x32 "$ASSETS/favicon-32.png"
+magick "$MASTER" -resize 180x180 "$ASSETS/apple-touch-icon.png"
+magick "$MASTER" -define icon:auto-resize=16,32,48 "$ASSETS/favicon.ico"
 
 echo "Done:"
 ls -l "$ASSETS"
