@@ -68,6 +68,22 @@ test: add unit tests for scrobble dedup logic
 - Keep the header under 100 characters
 - No period at the end of the subject
 
+## Documentation
+
+The docs site (Mintlify) lives in `docs-mintlify/`. The **CLI** and **MCP tool**
+reference pages are **generated from source** — never edit them by hand:
+
+```bash
+make docs-reference   # regenerate reference/cli.mdx + reference/mcp-tools.mdx
+make docs             # live-preview (needs the Mintlify CLI: npm i -g mint)
+make docs-links       # check for broken links
+```
+
+If you add/change a CLI command or MCP tool, run `make docs-reference` and
+commit the result — CI ("Docs Reference Freshness") fails if the committed
+reference has drifted from the code. See
+[docs/projects/docs-site/](docs/projects/docs-site/) for the plan.
+
 ## Building
 
 ```bash
