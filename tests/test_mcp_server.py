@@ -907,7 +907,13 @@ def _conform(fn, **kwargs):
         result = asyncio.run(fn(**kwargs))
     else:
         result = fn(**kwargs)
-    ann = typing.get_type_hints(fn)["return"]
+    # Tools annotate `-> Annotated[CallToolResult, <Model>]` so the static
+    # return type matches render()'s CallToolResult while the output model
+    # lives in the Annotated metadata. Pull the model out exactly the way
+    # FastMCP's func_metadata does (metadata[0]) to validate against it.
+    ann = typing.get_type_hints(fn, include_extras=True)["return"]
+    if hasattr(ann, "__metadata__"):
+        ann = ann.__metadata__[0]
     sc = result.structuredContent
     assert sc is not None, f"{fn.__name__}: no structuredContent"
     payload = sc["result"] if typing.get_origin(ann) is list else sc

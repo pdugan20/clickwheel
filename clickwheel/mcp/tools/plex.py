@@ -26,6 +26,7 @@ from __future__ import annotations
 import logging
 from typing import Annotated
 
+from mcp.types import CallToolResult
 from pydantic import Field
 
 from clickwheel import actions
@@ -57,7 +58,7 @@ logger = logging.getLogger(__name__)
 
 
 @mcp.tool(title="Plex health", annotations=READ_ONLY)
-def plex_health() -> PlexHealth:
+def plex_health() -> Annotated[CallToolResult, PlexHealth]:
     """Probe the Plex integration end-to-end without changing anything.
 
     Walks five stages: config (enabled + url + token set), plexapi
@@ -97,7 +98,7 @@ def sync_playlist_to_plex(
     playlist: Annotated[
         str, Field(description="Saved clickwheel playlist name to push to Plex.")
     ],
-) -> PlexSyncResult:
+) -> Annotated[CallToolResult, PlexSyncResult]:
     """Push a clickwheel playlist into the user's Plex music library so
     it shows up in Plex web and Plexamp alongside the iPod sync.
 
@@ -199,7 +200,7 @@ def sync_playlist_to_plex(
 
 
 @mcp.tool(title="List Plex playlists", annotations=READ_ONLY)
-def list_plex_playlists() -> PlexPlaylistListResult:
+def list_plex_playlists() -> Annotated[CallToolResult, PlexPlaylistListResult]:
     """List every audio playlist on the user's Plex server.
 
     Use before `pull_playlist_from_plex` so the user can pick which to
@@ -275,7 +276,7 @@ def pull_playlist_from_plex(
             )
         ),
     ] = False,
-) -> PlexPullResult:
+) -> Annotated[CallToolResult, PlexPullResult]:
     """Recover a Plex audio playlist into clickwheel's local SQLite.
 
     The Plex playlist's track list is translated path-by-path back to
