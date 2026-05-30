@@ -94,6 +94,6 @@ Runtime config is in `~/.clickwheel/config.yaml`. Environment variables override
 
 ## Testing
 
-- pytest with coverage threshold (30% minimum, excluding vendored ipod/)
+- pytest with coverage threshold (60% minimum, excluding vendored ipod/)
 - Coverage runs in CI and uploads to Codecov
-- Test matrix: Python 3.11-3.13 on Ubuntu and macOS
+- Test matrix: Python 3.11-3.14 on Ubuntu and macOS
