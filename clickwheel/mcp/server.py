@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from dataclasses import dataclass, field
 
 from clickwheel.actions import ClickwheelError
 from clickwheel.mcp import (
@@ -36,12 +37,201 @@ def _setup_logging() -> None:
     )
 
 
-def main() -> None:
-    """Console-script entry point. Runs the server over stdio."""
-    _setup_logging()
-    logger.info("Starting clickwheel MCP server (stdio)")
+# Streamable-HTTP defaults. The HTTP transport is meant to sit behind a
+# Cloudflare Tunnel for remote access (see docs/mcp/remote-mobile-access.md),
+# so it binds loopback only — the tunnel is the sole public ingress; the
+# server never listens on a routable interface itself.
+DEFAULT_HTTP_HOST = "127.0.0.1"
+DEFAULT_HTTP_PORT = 8000
+DEFAULT_HTTP_PATH = "/mcp"
+_LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
+
+
+def _env_int(name: str, default: int) -> int:
+    """Read an int from the environment, falling back on missing/garbage."""
+    raw = os.environ.get(name)
+    if not raw:
+        return default
     try:
-        mcp.run(transport="stdio")
+        return int(raw)
+    except ValueError:
+        logger.warning("Ignoring non-integer %s=%r; using %d", name, raw, default)
+        return default
+
+
+def _split_csv(raw: str | None) -> list[str]:
+    """Parse a comma-separated env value into a stripped, non-empty list."""
+    if not raw:
+        return []
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _dedupe(items: list[str]) -> list[str]:
+    """Order-preserving de-duplication."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for item in items:
+        if item not in seen:
+            seen.add(item)
+            out.append(item)
+    return out
+
+
+@dataclass
+class ServeConfig:
+    """Resolved server configuration. ``transport`` is ``"stdio"`` (default,
+    for local desktop clients) or ``"http"``. The remaining fields only apply
+    to the HTTP transport."""
+
+    transport: str
+    host: str = DEFAULT_HTTP_HOST
+    port: int = DEFAULT_HTTP_PORT
+    path: str = DEFAULT_HTTP_PATH
+    # Extra Host header values to allowlist beyond the local bind — the public
+    # hostname(s) the tunnel forwards (e.g. "clickwheel.fm"). Without these the
+    # SDK's DNS-rebinding protection rejects tunneled requests with HTTP 421.
+    allowed_hosts: list[str] = field(default_factory=list)
+    allowed_origins: list[str] = field(default_factory=list)
+
+
+def _resolve_transport(argv: list[str]) -> ServeConfig:
+    """Decide stdio vs streamable-http from argv + environment.
+
+    Selection, highest precedence first:
+    - ``serve`` subcommand (with optional ``--http``/``--host``/``--port``/
+      ``--path``/``--allowed-host``/``--allow-origin``) -> HTTP.
+    - ``CLICKWHEEL_MCP_TRANSPORT=http`` (or ``streamable-http``) -> HTTP, with
+      host/port/path/allowlists from ``CLICKWHEEL_MCP_HOST``/``_PORT``/
+      ``_PATH``/``_ALLOWED_HOSTS``/``_ALLOWED_ORIGINS``.
+    - otherwise -> stdio.
+    """
+    import argparse
+
+    env_transport = os.environ.get("CLICKWHEEL_MCP_TRANSPORT", "").strip().lower()
+    env_http = env_transport in {"http", "streamable-http", "streamable_http"}
+
+    env_host = os.environ.get("CLICKWHEEL_MCP_HOST", DEFAULT_HTTP_HOST)
+    env_port = _env_int("CLICKWHEEL_MCP_PORT", DEFAULT_HTTP_PORT)
+    env_path = os.environ.get("CLICKWHEEL_MCP_PATH", DEFAULT_HTTP_PATH)
+    env_allowed_hosts = _split_csv(os.environ.get("CLICKWHEEL_MCP_ALLOWED_HOSTS"))
+    env_allowed_origins = _split_csv(os.environ.get("CLICKWHEEL_MCP_ALLOWED_ORIGINS"))
+
+    parser = argparse.ArgumentParser(
+        prog="clickwheel-mcp",
+        description="clickwheel MCP server. No arguments runs over stdio for "
+        "local desktop clients; `serve --http` runs a Streamable HTTP server "
+        "for remote access behind a tunnel.",
+    )
+    sub = parser.add_subparsers(dest="command")
+    serve = sub.add_parser(
+        "serve",
+        help="Run an explicit transport (defaults to Streamable HTTP on localhost).",
+    )
+    serve.add_argument(
+        "--http",
+        action="store_true",
+        help="Serve Streamable HTTP (the default for `serve`; flag kept for clarity).",
+    )
+    serve.add_argument(
+        "--host", default=env_host, help=f"Bind address (default {env_host})."
+    )
+    serve.add_argument(
+        "--port", type=int, default=env_port, help=f"Bind port (default {env_port})."
+    )
+    serve.add_argument(
+        "--path", default=env_path, help=f"HTTP path (default {env_path})."
+    )
+    serve.add_argument(
+        "--allowed-host",
+        action="append",
+        default=[],
+        metavar="HOST",
+        help="Public Host header value to allow (e.g. clickwheel.fm). Repeatable. "
+        "Required behind a tunnel or requests are rejected with HTTP 421.",
+    )
+    serve.add_argument(
+        "--allow-origin",
+        action="append",
+        default=[],
+        metavar="ORIGIN",
+        help="Origin header value to allow (e.g. https://clickwheel.fm). Repeatable.",
+    )
+    args = parser.parse_args(argv)
+
+    if args.command == "serve":
+        host, port, path = args.host, args.port, args.path
+        extra_hosts = env_allowed_hosts + list(args.allowed_host)
+        extra_origins = env_allowed_origins + list(args.allow_origin)
+    elif env_http:
+        host, port, path = env_host, env_port, env_path
+        extra_hosts = env_allowed_hosts
+        extra_origins = env_allowed_origins
+    else:
+        return ServeConfig(transport="stdio")
+
+    if not path.startswith("/"):
+        path = "/" + path
+
+    # Always allow the local bind so on-box clients / health checks work; add
+    # the configured public hosts on top. Derive an https origin for each
+    # public (port-less) host so same-origin browser requests pass too.
+    allowed_hosts = _dedupe([f"{host}:{port}", f"127.0.0.1:{port}", *extra_hosts])
+    derived_origins = [f"https://{h}" for h in extra_hosts if ":" not in h]
+    allowed_origins = _dedupe([*extra_origins, *derived_origins])
+
+    return ServeConfig(
+        transport="http",
+        host=host,
+        port=port,
+        path=path,
+        allowed_hosts=allowed_hosts,
+        allowed_origins=allowed_origins,
+    )
+
+
+def main() -> None:
+    """Console-script entry point.
+
+    Default (no arguments) runs over stdio, unchanged, for local desktop MCP
+    clients (Claude Code / Claude Desktop via the `clickwheel-mcp` script or
+    `python -m clickwheel.mcp`). `clickwheel-mcp serve --http` runs a
+    Streamable HTTP server bound to localhost for remote access behind a
+    Cloudflare Tunnel — see docs/mcp/remote-mobile-access.md.
+    """
+    _setup_logging()
+    cfg = _resolve_transport(sys.argv[1:])
+    try:
+        if cfg.transport == "http":
+            if cfg.host not in _LOOPBACK_HOSTS:
+                logger.warning(
+                    "Binding %s (not loopback); the HTTP transport is intended to "
+                    "sit behind a tunnel and listen on localhost only.",
+                    cfg.host,
+                )
+            mcp.settings.host = cfg.host
+            mcp.settings.port = cfg.port
+            mcp.settings.streamable_http_path = cfg.path
+            # DNS-rebinding protection stays on; the allowlist is what lets the
+            # tunnel's public Host header through (otherwise HTTP 421).
+            from mcp.server.transport_security import TransportSecuritySettings
+
+            mcp.settings.transport_security = TransportSecuritySettings(
+                enable_dns_rebinding_protection=True,
+                allowed_hosts=cfg.allowed_hosts,
+                allowed_origins=cfg.allowed_origins,
+            )
+            logger.info(
+                "Starting clickwheel MCP server (streamable-http) on http://%s:%d%s "
+                "(allowed hosts: %s)",
+                cfg.host,
+                cfg.port,
+                cfg.path,
+                ", ".join(cfg.allowed_hosts),
+            )
+            mcp.run(transport="streamable-http")
+        else:
+            logger.info("Starting clickwheel MCP server (stdio)")
+            mcp.run(transport="stdio")
     except ClickwheelError as exc:
         logger.error("Server error: %s", exc)
         sys.exit(1)

@@ -76,7 +76,7 @@ make format     # auto-format code
 
 11. **MCP tools wrap `actions.py`, never `cli.py`** — CLI commands are display adapters, MCP tools are RPC adapters. Both consume the same pure functions. New library/iPod features should land in `actions.py` first, then get a thin wrapper in each surface.
 
-12. **MCP destructive tools elicit confirmation** — `delete_playlist` and `sync_playlist_to_ipod` use `Context.elicit()` to ask the user via the client when `confirm=False`. Don't bypass this on the server side; if a caller really needs no prompt they pass `confirm=True`.
+12. **MCP destructive tools are gated by the client, not the server** — mutation tools (`delete_playlist`, `sync_playlist_to_ipod`, the `add_*`/`remove_*` family, etc.) carry the `destructiveHint=true` annotation (the `DESTRUCTIVE` preset in `_runtime.py`); compliant clients (Claude Code, Claude Desktop, claude.ai) surface a native Allow/Deny prompt before invoking. The server does **not** call `Context.elicit()` and there is no `confirm` parameter — gating lives entirely in the annotation plus the `instructions` block, which tells the model to summarize the impact (track count, target, names) in chat before calling. Keep the `destructiveHint` annotation on every mutating tool; that flag _is_ the confirmation contract. (`ctx: Context` is used only for `report_progress`.)
 
 13. **MCP server logs to stderr only** — stdout is the wire protocol. Use `logger` from `clickwheel.mcp.server`, controlled by `CLICKWHEEL_MCP_LOG_LEVEL`.
 

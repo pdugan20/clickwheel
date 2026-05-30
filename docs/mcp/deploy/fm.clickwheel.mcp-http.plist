@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  LaunchAgent for the clickwheel MCP server over Streamable HTTP.
+
+  Install:
+    cp docs/mcp/deploy/fm.clickwheel.mcp-http.plist ~/Library/LaunchAgents/
+    # edit the <USER> placeholders + the clickwheel-mcp path to match your install
+    launchctl load -w ~/Library/LaunchAgents/fm.clickwheel.mcp-http.plist
+
+  Verify:   launchctl list | grep clickwheel
+  Logs:     tail -f ~/.local/log/clickwheel-mcp.log
+  Stop:     launchctl unload -w ~/Library/LaunchAgents/fm.clickwheel.mcp-http.plist
+
+  The path below assumes a pipx install (~/.local/bin/clickwheel-mcp). Adjust
+  if you installed into a venv. Binds 127.0.0.1:8000 — keep the port in sync
+  with the cloudflared ingress.
+-->
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>fm.clickwheel.mcp-http</string>
+
+    <key>ProgramArguments</key>
+    <array>
+      <string>/Users/<USER>/.local/bin/clickwheel-mcp</string>
+      <string>serve</string>
+      <string>--http</string>
+      <!-- REQUIRED behind the tunnel: allowlist the public Host header, or
+           the SDK's DNS-rebinding protection rejects every request with 421. -->
+      <string>--allowed-host</string>
+      <string>clickwheel.fm</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>CLICKWHEEL_MCP_LOG_LEVEL</key>
+      <string>INFO</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/<USER>/.local/log/clickwheel-mcp.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/<USER>/.local/log/clickwheel-mcp.log</string>
+  </dict>
+</plist>

@@ -159,4 +159,25 @@ Clickwheel ships an MCP Apps extension that lets compatible hosts (Claude Deskto
 
 For build/edit/add-new-bundle internals + the macOS-`Documents`-sandbox dev-install caveat, see [`bundles.md`](bundles.md).
 
+## Remote access (mobile)
+
+By default the server runs over stdio, so it attaches to desktop MCP clients
+(Claude Code / Claude Desktop). It also speaks **Streamable HTTP** for remote
+access:
+
+```bash
+clickwheel-mcp serve --http          # binds 127.0.0.1:8000/mcp
+clickwheel-mcp serve --http --port 9000
+CLICKWHEEL_MCP_TRANSPORT=http clickwheel-mcp   # env-driven equivalent
+```
+
+The HTTP transport binds **localhost only** — it's meant to sit behind a
+Cloudflare Tunnel, which is the sole public ingress. To run clickwheel from the
+Claude mobile app (single-tenant, preserving iPod sync), pair this with a
+tunnel + Cloudflare Access; the full recipe, auth design, and verification
+checklist are in the project brief
+[`remote-mobile-access.md`](remote-mobile-access.md). Note: custom connectors
+are added on claude.ai (web) or Claude Desktop, then become usable in the
+mobile app — you can't add one from the phone.
+
 For high-level architecture, see [`docs/architecture.md`](../architecture.md).
