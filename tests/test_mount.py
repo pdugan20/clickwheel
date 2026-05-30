@@ -14,8 +14,8 @@ from clickwheel.mount import MountResult, MountStatus
 
 SAMPLE_MOUNT = (
     "/dev/disk3s1s1 on / (apfs, sealed, local, read-only, journaled)\n"
-    "//pat@KITCHEN-TS-264._smb._tcp.local/Public on /Volumes/Public "
-    "(smbfs, nodev, nosuid, mounted by patrickdugan)\n"
+    "//user@nas.local/Music on /Volumes/Music "
+    "(smbfs, nodev, nosuid, mounted by user)\n"
     "map auto_home on /System/Volumes/Data/home (autofs, nodev, nosuid)\n"
 )
 
@@ -59,11 +59,8 @@ def test_probe_live_never_hangs_on_blocking_stat():
 
 def test_network_mount_for_matches_smbfs(monkeypatch):
     monkeypatch.setattr(mount.subprocess, "run", _fake_run(SAMPLE_MOUNT))
-    found = mount._network_mount_for(Path("/Volumes/Public/Multimedia/Music"))
-    assert found == (
-        "//pat@KITCHEN-TS-264._smb._tcp.local/Public",
-        "/Volumes/Public",
-    )
+    found = mount._network_mount_for(Path("/Volumes/Music/Library/Albums"))
+    assert found == ("//user@nas.local/Music", "/Volumes/Music")
 
 
 def test_network_mount_for_ignores_local_root(monkeypatch):
@@ -74,14 +71,13 @@ def test_network_mount_for_ignores_local_root(monkeypatch):
 
 
 def test_smb_url():
-    assert mount._smb_url("//pat@host/Public") == "smb://pat@host/Public"
-    assert mount._smb_url("smb://pat@host/Public") == "smb://pat@host/Public"
+    assert mount._smb_url("//user@nas.local/Music") == "smb://user@nas.local/Music"
+    assert mount._smb_url("smb://user@nas.local/Music") == "smb://user@nas.local/Music"
 
 
 def test_mountpoint_for_volumes_path():
     assert (
-        mount._mountpoint_for(Path("/Volumes/Public/Multimedia/Music"))
-        == "/Volumes/Public"
+        mount._mountpoint_for(Path("/Volumes/Music/Library/Albums")) == "/Volumes/Music"
     )
 
 
@@ -127,16 +123,16 @@ def test_ensure_mounted_remounts_stale_share(monkeypatch):
     monkeypatch.setattr(
         mount,
         "_network_mount_for",
-        lambda p: ("//pat@host/Public", "/Volumes/Public"),
+        lambda p: ("//user@nas.local/Music", "/Volumes/Music"),
     )
     monkeypatch.setattr(mount.os.path, "ismount", lambda mp: True)
     ran: list = []
     monkeypatch.setattr(mount.subprocess, "run", _fake_run(record=ran))
 
-    res = mount.ensure_mounted(Path("/Volumes/Public/Multimedia/Music"))
+    res = mount.ensure_mounted(Path("/Volumes/Music/Library/Albums"))
     assert res.status is MountStatus.REMOUNTED
-    assert ["diskutil", "unmount", "force", "/Volumes/Public"] in ran
-    assert ["open", "smb://pat@host/Public"] in ran
+    assert ["diskutil", "unmount", "force", "/Volumes/Music"] in ran
+    assert ["open", "smb://user@nas.local/Music"] in ran
 
 
 def test_ensure_mounted_offline_when_remount_never_comes_up(monkeypatch):
@@ -145,13 +141,11 @@ def test_ensure_mounted_offline_when_remount_never_comes_up(monkeypatch):
     monkeypatch.setattr(
         mount,
         "_network_mount_for",
-        lambda p: ("//pat@host/Public", "/Volumes/Public"),
+        lambda p: ("//user@nas.local/Music", "/Volumes/Music"),
     )
     monkeypatch.setattr(mount.os.path, "ismount", lambda mp: True)
     monkeypatch.setattr(mount.subprocess, "run", _fake_run())
-    res = mount.ensure_mounted(
-        Path("/Volumes/Public/Multimedia/Music"), remount_wait=0.2
-    )
+    res = mount.ensure_mounted(Path("/Volumes/Music/Library/Albums"), remount_wait=0.2)
     assert res.status is MountStatus.OFFLINE
 
 
@@ -169,7 +163,7 @@ def test_offline_error_subclasses_library_not_found():
 def test_ensure_library_available_raises_when_offline(monkeypatch, tmp_path):
     monkeypatch.setattr(
         "clickwheel.mount.ensure_mounted",
-        lambda *a, **k: MountResult(MountStatus.OFFLINE, "/Volumes/Public", "asleep"),
+        lambda *a, **k: MountResult(MountStatus.OFFLINE, "/Volumes/Music", "asleep"),
     )
     with pytest.raises(actions.LibraryStorageOfflineError) as exc:
         actions.ensure_library_available(_cfg(tmp_path))
@@ -182,7 +176,7 @@ def test_ensure_library_available_ok_when_live_or_remounted(
 ):
     monkeypatch.setattr(
         "clickwheel.mount.ensure_mounted",
-        lambda *a, **k: MountResult(status, "/Volumes/Public"),
+        lambda *a, **k: MountResult(status, "/Volumes/Music"),
     )
     # Should not raise.
     actions.ensure_library_available(_cfg(tmp_path))

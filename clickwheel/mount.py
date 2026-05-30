@@ -1,8 +1,8 @@
 """Library storage mount health + automatic remount (macOS network shares).
 
 The music library lives on a network share — typically a NAS over SMB
-(`/Volumes/Public` from a QNAP, in the reference setup). Network shares
-drop: after the Mac sleeps, a Wi-Fi blip, or a NAS reboot, the mount goes
+(e.g. `/Volumes/Music`). Network shares drop: after the Mac sleeps, a
+Wi-Fi blip, or a NAS reboot, the mount goes
 *stale* — it still shows up in `mount`, but any access blocks on a long
 kernel timeout and then errors. A plain `Path.is_dir()` guard HANGS on a
 stale mount, which is exactly wrong for the remote-MCP case (a tool call
@@ -99,7 +99,7 @@ def _network_mount_for(path: Path) -> tuple[str, str] | None:
 
     Parses `mount` output, e.g.::
 
-        //pat@host._smb._tcp.local/Public on /Volumes/Public (smbfs, nodev, ...)
+        //user@nas.local/Music on /Volumes/Music (smbfs, nodev, ...)
 
     Only network filesystem types are considered (see `_NETWORK_FS_TYPES`), so
     a local path under `/` never matches the root mount. Picks the longest
@@ -131,8 +131,9 @@ def _network_mount_for(path: Path) -> tuple[str, str] | None:
 
 
 def _smb_url(source: str) -> str:
-    """Turn a mount source like `//pat@host/Public` into `smb://pat@host/Public`
-    so `open` can hand it to NetFS (which authenticates from the keychain)."""
+    """Turn a mount source like `//user@nas.local/Music` into
+    `smb://user@nas.local/Music` so `open` can hand it to NetFS (which
+    authenticates from the keychain)."""
     source = source.strip()
     if source.startswith("//"):
         return "smb:" + source
