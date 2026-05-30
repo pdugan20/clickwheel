@@ -8,11 +8,11 @@ Owner: 🤖 in-repo (code/docs) · 🧑 owner-owned (Mintlify account / DNS).
 **Discipline:** every not-started task names its blocker/reason; no silent
 deferrals (parked items go in DEFERRED.md with a reason).
 
-**Where we are:** Phases 0–2 done — the full Mintlify site is scaffolded in-repo
-(`docs-mintlify/`) with all narrative pages, and the CLI + MCP reference is
-generated from source with anti-drift CI. Remaining is owner-owned: stand up the
-Mintlify project + `docs.clickwheel.fm` (Phase 3), then cutover (Phase 4). On the
-`docs-site` branch.
+**Where we are:** Phases 0–2 **merged to `main`** (#52). The full Mintlify site
+is in-repo (`docs-mintlify/`) with all narrative pages, and the CLI + MCP
+reference is generated from source with anti-drift CI. Remaining is owner-owned:
+stand up the Mintlify project + `docs.clickwheel.fm` (Phase 3), then cutover
+(Phase 4).
 
 ---
 

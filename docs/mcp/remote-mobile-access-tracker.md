@@ -13,13 +13,15 @@ Cloudflare account / devices).
 **Discipline:** every not-started task names its blocker/reason — no silent
 deferrals. "—" means nothing blocks it but the owner's time.
 
-**Where we are:** Phases 0–2 done — transport shipped, tunnel live, endpoint
-locked behind Cloudflare Access (verified: Cloudflare serves the MCP OAuth
-challenge). Phase 3 favicon **art is final** and served; #48 is rebased onto the
-modernized `main` and fully green. **Remaining (the final mile):** the Access
-bypass for the favicon paths (deploy), Phase 4 (launchd persistence), then the
-batched Phase 5 live test (connector + phone + iPod), then merge #48. Still a
-draft branch.
+**Where we are:** Phases 0–3 done and **#48 merged to `main`** — transport
+shipped, tunnel live, endpoint locked behind Cloudflare Access (Cloudflare serves
+the MCP OAuth challenge), and the favicon is **live**: the four favicon paths
+return 200 via a separate Cloudflare Access **Bypass** app, while `/mcp` stays
+gated (verified). Google's favicon cache will pick it up (~1 day). A **0.16.0
+release PR (#53)** is open from the merge — merge it to publish remote access to
+PyPI. **Remaining (the final mile):** Phase 4 (launchd persistence so the
+tunnel + server survive reboots — currently running ad-hoc) and the Phase 5 live
+test (add the connector on claude.ai → verify on phone + iPod docked/undocked).
 
 ---
 
@@ -111,15 +113,15 @@ the MCP/OAuth routes — its favicon is public by default. clickwheel is **tunne
 → Mac behind Cloudflare Access**, which gates the _entire_ hostname — hence the
 explicit Access **bypass** below.
 
-| ✓   | Owner | Task                                                                                                                                                     | Blocked by / reason          |
-| --- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| ✅  | 🤖    | Final favicon art committed (`clickwheel/mcp/assets/favicon.svg`); rasterized to `favicon.ico` + 32/180px PNG via `scripts/generate-favicon.sh`          | —                            |
-| ✅  | 🤖    | Serve `/favicon.svg`, `/favicon.ico`, `/favicon-32.png`, `/apple-touch-icon.png`, `/` from the MCP app (`_http_assets.py`); tests; packaged in the wheel | —                            |
-| ⬜  | 🧑    | Cloudflare Access **bypass** for `/favicon.ico`, `/favicon.svg`, `/apple-touch-icon.png`, `/`                                                            | Phase 2 (done) — ready to do |
-| ⬜  | 🧑    | Verify unauthenticated: `curl -I https://clickwheel.fm/favicon.ico` → 200, no redirect                                                                   | after bypass                 |
-| ⬜  | 🧑    | Nudge Google to crawl (open in browser / request indexing)                                                                                               | after bypass                 |
-| ⬜  | 🧑    | Confirm cached: `s2/favicons?domain=clickwheel.fm` md5 ≠ default globe                                                                                   | after crawl (~1 day lag)     |
-| ⬜  | 🧑    | Confirm icon renders in claude.ai, distinct from rewind/bibliocommons                                                                                    | after Phase 5 connect        |
+| ✓   | Owner | Task                                                                                                                                                              | Blocked by / reason      |
+| --- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| ✅  | 🤖    | Final favicon art committed (`clickwheel/mcp/assets/favicon.svg`); rasterized to `favicon.ico` + 32/180px PNG via `scripts/generate-favicon.sh`                   | —                        |
+| ✅  | 🤖    | Serve `/favicon.svg`, `/favicon.ico`, `/favicon-32.png`, `/apple-touch-icon.png`, `/` from the MCP app (`_http_assets.py`); tests; packaged in the wheel          | —                        |
+| ✅  | 🧑    | Cloudflare Access **bypass** for `/favicon.ico`, `/favicon.svg`, `/apple-touch-icon.png`, `/favicon-32.png` (separate "clickwheel-favicons" app, Bypass/Everyone) | —                        |
+| ✅  | 🤖    | Verify unauthenticated: favicon paths → 200; `/mcp` still 302 gated                                                                                               | —                        |
+| ⬜  | 🧑    | Nudge Google to crawl (open in browser / request indexing)                                                                                                        | after bypass (done)      |
+| ⬜  | 🧑    | Confirm cached: `s2/favicons?domain=clickwheel.fm` md5 ≠ default globe                                                                                            | after crawl (~1 day lag) |
+| ⬜  | 🧑    | Confirm icon renders in claude.ai, distinct from rewind/bibliocommons                                                                                             | after Phase 5 connect    |
 
 **Acceptance:** `s2/favicons?domain=clickwheel.fm` returns the **final** clickwheel mark (md5 ≠ default globe), and the connector list shows it.
 
