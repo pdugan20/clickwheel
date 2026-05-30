@@ -76,6 +76,7 @@ def _get(url: str, timeout: float) -> bytes:
             last_exc = exc
         if attempt + 1 < _MAX_ATTEMPTS:
             time.sleep(_RETRY_BACKOFF * 2**attempt)
+    assert last_exc is not None  # the loop always records an exception here
     raise last_exc
 
 

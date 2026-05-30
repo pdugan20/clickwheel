@@ -284,7 +284,10 @@ class SyncEvent:
 
 @dataclass
 class SyncResult:
-    copied: list[dict] = field(default_factory=list)
+    # copied holds (track_dict, ipod_relative_path) tuples — the first
+    # element of copy_tracks_to_ipod()'s return. failed holds the track
+    # dicts that couldn't be copied.
+    copied: list[tuple[dict, str]] = field(default_factory=list)
     failed: list[dict] = field(default_factory=list)
     # Tracks that exist on the iPod but aren't in the playlist being synced.
     # NOT removed — sync is additive. Renamed from `removed_count` (which
@@ -1547,11 +1550,11 @@ def _match_ipod_tracks_by_triples(
     matched: list[dict] = []
     unmatched: list[tuple[str, str, str]] = []
     for triple in triples:
-        t = by_triple.get(triple)
-        if t is None:
+        rec = by_triple.get(triple)
+        if rec is None:
             unmatched.append(triple)
         else:
-            matched.append(t)
+            matched.append(rec)
     return matched, unmatched
 
 
@@ -1759,7 +1762,7 @@ def remove_ipod_playlist(cfg: Config, name: str) -> RemoveResult:
     )
 
 
-def retry_ipod_db_write(cfg: Config, copied: list[dict]) -> bool:
+def retry_ipod_db_write(cfg: Config, copied: list[tuple[dict, str]]) -> bool:
     from clickwheel.ipod.sync import write_ipod_db
 
     return write_ipod_db(cfg.ipod_mount, copied)
@@ -1950,7 +1953,7 @@ def _connect_plex(cfg: Config):
 
     try:
         return _plex.connect(cfg.plex_url, cfg.plex_token)
-    except _plex.PlexExtraMissing as exc:
+    except _plex.PlexExtraMissingError as exc:
         raise PlexExtraNotInstalledError(str(exc)) from exc
     except Exception as exc:
         # plexapi raises Unauthorized for bad tokens and various

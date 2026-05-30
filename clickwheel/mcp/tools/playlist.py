@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
+from mcp.types import CallToolResult
 from pydantic import Field
 
 from clickwheel import actions
@@ -33,7 +34,7 @@ from clickwheel.mcp.models import (
 
 
 @mcp.tool(title="List playlists", annotations=READ_ONLY)
-def list_playlists() -> list[PlaylistSummary]:
+def list_playlists() -> Annotated[CallToolResult, list[PlaylistSummary]]:
     """All saved playlists (the curated, named collections — workout
     mix, road trip, etc.) with track counts, total size in bytes, and
     last-updated timestamps.
@@ -70,7 +71,7 @@ def list_playlists() -> list[PlaylistSummary]:
 @mcp.tool(title="Get playlist", annotations=READ_ONLY)
 def get_playlist(
     name: Annotated[str, Field(description="Playlist name.")],
-) -> PlaylistDetail:
+) -> Annotated[CallToolResult, PlaylistDetail]:
     """Summary of one playlist: total track count, total size, and the
     artist breakdown (with track count + size per artist). Does NOT return
     the full track list — use `list_playlist_tracks` to page through tracks.
@@ -114,7 +115,7 @@ def list_playlist_tracks(
         int,
         Field(description="Pagination offset (0 = first page).", ge=0),
     ] = 0,
-) -> list[FullTrack]:
+) -> Annotated[CallToolResult, list[FullTrack]]:
     """Paginated list of tracks in a saved playlist, in playlist order.
     Returns full track records (artist, title, album, path, duration,
     file_size, format) — the `path` values are needed if you're going to
@@ -162,7 +163,7 @@ def create_playlist(
             ),
         ),
     ] = None,
-) -> CreatePlaylistResult:
+) -> Annotated[CallToolResult, CreatePlaylistResult]:
     """Create a new named playlist (a curated collection — workout mix,
     road trip, etc.) with the given track paths. Errors if a playlist
     with the same name already exists — use `update_playlist` to replace
@@ -210,7 +211,7 @@ def update_playlist(
             ),
         ),
     ] = None,
-) -> UpdatePlaylistResult:
+) -> Annotated[CallToolResult, UpdatePlaylistResult]:
     """Replace a playlist's contents wholesale (or create it if it doesn't
     exist). Returns the new track count and `replaced` (True if a playlist
     by this name already existed).
@@ -246,7 +247,7 @@ def set_playlist_description(
             ),
         ),
     ],
-) -> SetPlaylistDescriptionResult:
+) -> Annotated[CallToolResult, SetPlaylistDescriptionResult]:
     """Set a saved playlist's description without touching its track list.
 
     The description shows up in playlist listings and is carried over to
@@ -268,7 +269,7 @@ def set_playlist_description(
 @mcp.tool(title="Delete playlist", annotations=DESTRUCTIVE)
 def delete_playlist(
     name: Annotated[str, Field(description="Playlist name.")],
-) -> DeletePlaylistResult:
+) -> Annotated[CallToolResult, DeletePlaylistResult]:
     """Permanently delete a saved playlist. Cannot be undone — the playlist
     record is removed; the underlying music files are untouched.
 
@@ -292,7 +293,7 @@ def delete_playlist(
 def add_artist_to_playlist(
     playlist: Annotated[str, Field(description="Playlist name (created if missing).")],
     artist: Annotated[str, Field(description="Artist name (exact match).")],
-) -> AddArtistToPlaylistResult:
+) -> Annotated[CallToolResult, AddArtistToPlaylistResult]:
     """Add every track by `artist` to `playlist` (skipping duplicates).
     Creates the playlist if it doesn't already exist. Returns the number
     of tracks actually added.
@@ -321,7 +322,7 @@ def add_artist_to_playlist(
 @mcp.tool(title="Heal playlist", annotations=MUTATION)
 def heal_playlist(
     name: Annotated[str, Field(description="Playlist name.")],
-) -> HealPlaylistResult:
+) -> Annotated[CallToolResult, HealPlaylistResult]:
     """Drop references in a playlist to tracks whose files are no longer on
     disk (flagged missing by `clickwheel scan`). Returns the number dropped,
     the number remaining, and the list of removed track records.
@@ -360,7 +361,7 @@ def heal_playlist(
 def remove_artist_from_playlist(
     playlist: Annotated[str, Field(description="Playlist name.")],
     artist: Annotated[str, Field(description="Artist name (exact match).")],
-) -> RemoveArtistFromPlaylistResult:
+) -> Annotated[CallToolResult, RemoveArtistFromPlaylistResult]:
     """Remove every track by `artist` from `playlist`. Returns the number
     of tracks removed (0 if the artist wasn't in the playlist).
 

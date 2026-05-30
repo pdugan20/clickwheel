@@ -118,24 +118,15 @@ known-first-party = ["clickwheel"]
 
 [tool.mypy]
 python_version = "3.11"
-# Several runtime deps ship no type stubs (mutagen, pylast, tqdm, questionary,
+# Several runtime deps ship no type stubs (pylast, tqdm, questionary,
 # plexapi). Silence missing-stub noise rather than vendor stubs; tighten later.
 ignore_missing_imports = true
 # Vendored iOpenPodv2 and the generated MCP Apps bundle are not ours to type.
 exclude = ['clickwheel/ipod/', 'clickwheel/mcp/_ui_bundles\.py']
 
-# Gradual typing ratchet: mypy is enforced on every module EXCEPT those listed
-# below, which carry pre-existing type debt. Drive the list down over time —
-# remove a module once it's clean. Do NOT add new modules here; new code is
-# expected to type-check.
-[[tool.mypy.overrides]]
-module = [
-    "clickwheel.actions",
-    "clickwheel.artwork",
-    "clickwheel.cli",
-    "clickwheel.library",
-    "clickwheel.scrobble",
-    "clickwheel.mcp._runtime",
-    "clickwheel.mcp.tools.*",
-]
-ignore_errors = true
+# Full type coverage: every non-excluded module type-checks with no per-module
+# `ignore_errors` exemptions. New code is expected to keep it that way — fix the
+# types rather than adding an override here. (The MCP tools use
+# `Annotated[CallToolResult, <Model>]` return types so the static type matches
+# `render()`'s actual return while FastMCP still derives each tool's output
+# schema from the model in the annotation metadata.)

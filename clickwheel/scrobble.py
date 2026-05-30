@@ -7,6 +7,10 @@ import sqlite3
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import pylast
 
 logger = logging.getLogger(__name__)
 
@@ -204,11 +208,14 @@ def submit_scrobbles(
     return submitted, errors
 
 
-def authenticate_lastfm(api_key: str, api_secret: str) -> str:
-    """Run the Last.fm web auth flow. Returns a session key.
+def authenticate_lastfm(
+    api_key: str, api_secret: str
+) -> tuple[str, pylast.SessionKeyGenerator]:
+    """Run the Last.fm web auth flow.
 
-    Opens the user's browser to authorize clickwheel, then waits
-    for them to confirm before fetching the session key.
+    Opens the user's browser to authorize clickwheel and returns the
+    ``(auth_url, session_key_generator)`` pair; the caller passes both to
+    ``complete_lastfm_auth`` once the user has approved in their browser.
     """
     import webbrowser
 

@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 from typing import Annotated
 
+from mcp.types import CallToolResult
 from pydantic import Field
 
 from clickwheel import actions
@@ -40,7 +41,7 @@ logger = logging.getLogger(__name__)
 
 
 @mcp.tool(title="Apple Music health", annotations=READ_ONLY)
-def apple_music_health() -> AppleMusicHealth:
+def apple_music_health() -> Annotated[CallToolResult, AppleMusicHealth]:
     """Probe the Apple Music integration end-to-end without changing
     anything.
 
@@ -112,7 +113,7 @@ def sync_playlist_to_apple_music(
             )
         ),
     ] = False,
-) -> AppleMusicPushResult:
+) -> Annotated[CallToolResult, AppleMusicPushResult]:
     """Create a playlist in the user's Apple Music account from a
     clickwheel playlist.
 
@@ -213,7 +214,9 @@ def sync_playlist_to_apple_music(
 
 
 @mcp.tool(title="List Apple Music playlists", annotations=READ_ONLY)
-def list_apple_music_playlists() -> AppleMusicPlaylistListResult:
+def list_apple_music_playlists() -> Annotated[
+    CallToolResult, AppleMusicPlaylistListResult
+]:
     """List every library playlist in the user's Apple Music account.
 
     Use before `pull_playlist_from_apple_music` so the user (or agent)
@@ -290,7 +293,7 @@ def pull_playlist_from_apple_music(
             le=1.0,
         ),
     ] = 0.85,
-) -> AppleMusicPullResult:
+) -> Annotated[CallToolResult, AppleMusicPullResult]:
     """Import a library playlist from Apple Music into clickwheel.
 
     Each Apple Music track is resolved to a local file in three steps:
@@ -402,7 +405,7 @@ def delete_apple_music_playlist(
     name: Annotated[
         str, Field(description="Library playlist name to delete from Apple Music.")
     ],
-) -> AppleMusicDeleteResult:
+) -> Annotated[CallToolResult, AppleMusicDeleteResult]:
     """Delete a library playlist from the user's Apple Music account.
 
     Apple's REST API doesn't expose DELETE on library playlists, so
