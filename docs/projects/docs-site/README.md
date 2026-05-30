@@ -6,11 +6,13 @@ built docs-as-code with anti-staleness guarantees.
 - **[TRACKER.md](TRACKER.md)** — phased task list (status, owner, blockers).
 - **[DEFERRED.md](DEFERRED.md)** — explicitly parked / out-of-scope items.
 
-> **Status: PAUSED (2026-05-30).** Content, generators, and anti-rot CI are done
-> and merged to `main` (they're host-agnostic). **Hosting tool changed: Mintlify
-> → Astro Starlight on Cloudflare Pages** (see "Decisions" + the Mintlify
-> post-mortem below). Resume = build the Starlight site, repoint the generators +
-> CI from `docs-mintlify/` to it, deploy to Pages, README cutover.
+> **Status: PAUSED (2026-05-30), holding on Mintlify.** The Mintlify content,
+> generators, and anti-rot CI are built and merged to `main` (`docs-mintlify/`).
+> Hosting is blocked: Mintlify's free tier allows one self-serve site (already
+> used by rewind) and a second is sales-gated — so **we emailed `gtm@mintlify.com`
+> asking about a free/OSS second site and are waiting for their reply.** No tool
+> change has been decided. If Mintlify grants it → deploy (content's ready). If
+> they decline → weigh fallbacks (Starlight, MkDocs, …), but **none is chosen.**
 
 ## Goals
 
@@ -23,13 +25,12 @@ built docs-as-code with anti-staleness guarantees.
 
 ## Decisions (settled — don't re-litigate without new info)
 
-- **Tool: Astro Starlight, self-hosted on Cloudflare Pages**, at
-  `docs.clickwheel.fm`. (Superseded Mintlify — see the post-mortem below.)
-  Rationale: free + self-serve with **no per-account site limits**; actively
-  developed (not maintenance-mode); clean modern aesthetic; and maximally aligned
-  with our stack — **Cloudflare's own developer docs run on Starlight, and Astro
-  joined Cloudflare in Jan 2026**. Same Astro + `wrangler pages deploy` pattern
-  rewind uses for its `www` site.
+- **Tool: Mintlify (intended), at `docs.clickwheel.fm`** — content is built
+  (`docs-mintlify/`). **Hosting is on hold** pending Mintlify's reply about a
+  free/OSS second site (see the blocker below). **No switch has been decided.**
+  Researched fallbacks if Mintlify declines: Astro Starlight on Cloudflare Pages
+  (actively developed, no per-account limits, what Cloudflare's own docs use) or
+  MkDocs Material — **neither chosen.** Do not document either as a decision.
 - **Structure: Diátaxis** — Tutorial / How-to / Reference / Explanation, kept in
   separate sections (better for humans and AI assistants).
 - **Subdomain `docs.clickwheel.fm`**, separate from the Access-gated MCP apex.
@@ -39,27 +40,32 @@ built docs-as-code with anti-staleness guarantees.
   `README.md` shrinks to a blurb + link. In-repo `docs/` (architecture, mcp
   internals, releasing) stays for _contributors_.
 
-## Mintlify post-mortem (why we left, so we don't retry it)
+## The Mintlify hosting blocker (what we're waiting on)
 
-We scaffolded a Mintlify site (`docs-mintlify/`, merged in #52) and tried to host
-it. It's a dead end for clickwheel, for cited reasons:
+We scaffolded a Mintlify site (`docs-mintlify/`, merged in #52) and went to host
+it. The blocker:
 
 - **Free (Hobby) tier = one self-serve hosted site, and it's already used by
   `rewind`.** A second site is **sales-gated**: the dashboard's "new site"
   literally opens a `mailto:gtm@mintlify.com` "new deployment request." This
   limit is **not documented** on the [pricing page](https://www.mintlify.com/pricing)
   or [Deployments doc](https://www.mintlify.com/docs/deploy/deployments) — the
-  dashboard behavior is the only signal. A second site means **Pro (~$250/mo)**.
+  dashboard behavior is the only signal. A self-serve second site otherwise means
+  **Pro (~$250/mo)**.
 - **GitHub App linkage:** one Mintlify GitHub-App install maps to one Mintlify
   account; the `rewind` account (`dugan.pat@`) owns it, so a separate
   `dugan.pat+clickwheel@` account couldn't connect `pdugan20/clickwheel` at all.
-- Not worth $250/mo for an OSS tool's docs. (Aesthetic note: also didn't want
-  Material-style design, and Material-for-MkDocs entered maintenance mode in
-  early 2026 — both ruled out as alternatives.)
+  (The fix would be using the `dugan.pat@` account, but that's the one at its
+  one-site limit.)
 
-The `docs-mintlify/` content + generators + CI stay on `main` for now (they're
-the source we'll convert to Starlight); the CI link check uses `mint broken-links`
-locally and needs no Mintlify account, so it's still green.
+**Current move:** emailed `gtm@mintlify.com` to ask whether a second site is
+available free for an open-source project. **Holding for their reply.** Only if
+they decline do we evaluate fallbacks (Starlight / MkDocs) — and that would be a
+fresh decision, not a foregone one.
+
+The `docs-mintlify/` content + generators + CI stay on `main` regardless; the CI
+link check uses `mint broken-links` locally (no Mintlify account needed), so it's
+still green.
 
 ## Architecture
 
@@ -92,8 +98,8 @@ Mirrors rewind's snapshot/drift pattern and clickwheel's existing
    committed, and a **"Docs Reference Freshness" CI job** regenerates them and
    fails if the committed copies differ. → reference can't drift from code.
 2. **Link checking in CI** — broken links / nav references block merge.
-3. **Auto-deploy** on merge to `main` (Cloudflare Pages, via `wrangler` in CI or
-   the Pages GitHub integration).
+3. **Auto-deploy** on merge to `main` (via the chosen host's git integration —
+   Mintlify's GitHub app, or whatever fallback we land on).
 4. **Single source of truth** — README links to the site; no duplicated prose to
    drift.
 5. **Git-derived "last updated"** timestamps.

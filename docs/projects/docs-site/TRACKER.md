@@ -8,13 +8,13 @@ Owner: 🤖 in-repo (code/docs) · 🧑 owner-owned (Mintlify account / DNS).
 **Discipline:** every not-started task names its blocker/reason; no silent
 deferrals (parked items go in DEFERRED.md with a reason).
 
-**Where we are: PAUSED (2026-05-30).** Phases 0–2 merged to `main` (#52) — all
-narrative content + the generated CLI/MCP reference + anti-rot CI. **The hosting
-tool changed from Mintlify to Astro Starlight on Cloudflare Pages** (Mintlify
-free tier is one self-serve site, already used by rewind; see the post-mortem in
-[README.md](README.md)). The content/generators/CI are **host-agnostic** and stay
-green on `main`. Remaining work is re-scoped below for Starlight; **paused until
-we pick it back up.**
+**Where we are: PAUSED (2026-05-30), holding on Mintlify.** Phases 0–2 merged to
+`main` (#52) — all Mintlify content + the generated CLI/MCP reference + anti-rot
+CI. **Hosting is blocked:** Mintlify's free tier allows one self-serve site
+(rewind has it) and a second is sales-gated, so **we emailed `gtm@mintlify.com`
+about a free/OSS second site and are waiting** (see [README.md](README.md)). **No
+tool change is decided** — Starlight/MkDocs are researched fallbacks only if
+Mintlify declines. The content/generators/CI stay green on `main`.
 
 ---
 
@@ -58,30 +58,29 @@ we pick it back up.**
 
 ---
 
-## Phase 3 — Build Starlight site (re-scoped from Mintlify) 🤖 — PAUSED
+## Phase 3 — Host the site 🧑 — PAUSED (waiting on Mintlify)
 
-| ✓   | Owner | Task                                                                                                       | Blocked by / reason |
-| --- | ----- | ---------------------------------------------------------------------------------------------------------- | ------------------- |
-| ⬜  | 🤖    | Stand up Astro Starlight project in-repo (`docs-site/`); Astro config sidebar = Diátaxis nav               | paused              |
-| ⬜  | 🤖    | Port the 13 pages from `docs-mintlify/` (Mintlify components → Starlight equivalents)                      | paused              |
-| ⬜  | 🤖    | Repoint `gen-cli-reference.py` / `gen-mcp-reference.py` output at the Starlight content dir                | paused              |
-| ⬜  | 🤖    | Repoint CI: keep "Docs Reference Freshness"; replace `mint broken-links` with a Starlight/Astro link check | paused              |
-| ⬜  | 🤖    | Remove the dead `docs-mintlify/` scaffold once Starlight replaces it                                       | paused              |
+The decision point. **Blocked on Mintlify's reply** to the `gtm@mintlify.com`
+email about a free/OSS second site.
 
-**Acceptance:** `astro build` succeeds; nav + generated reference render; link check passes.
+| ✓   | Owner | Task                                                                                                                                   | Blocked by / reason          |
+| --- | ----- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| ⬜  | 🧑    | Mintlify reply re: free second site for OSS                                                                                            | waiting on Mintlify          |
+| ⬜  | 🧑    | **If yes** → connect `pdugan20/clickwheel` (monorepo subdir `/docs-mintlify`) under the `dugan.pat@` account; add `docs.clickwheel.fm` | after reply                  |
+| ⬜  | 🤖🧑  | **If no** → choose a fallback (Starlight on Pages / MkDocs — _not yet decided_), then build + deploy it                                | after reply (fresh decision) |
+
+**Acceptance:** the site is hosted at `https://docs.clickwheel.fm`.
 
 ---
 
-## Phase 4 — Deploy + cutover 🤖🧑 — PAUSED
+## Phase 4 — Cutover + verify 🤖🧑 — PAUSED
 
-| ✓   | Owner | Task                                                                           | Blocked by / reason    |
-| --- | ----- | ------------------------------------------------------------------------------ | ---------------------- |
-| ⬜  | 🤖🧑  | Create Cloudflare Pages project; `wrangler pages deploy` (one command)         | after Starlight builds |
-| ⬜  | 🧑    | Add `docs.clickwheel.fm` custom domain in Cloudflare Pages (DNS already on CF) | after Pages project    |
-| ⬜  | 🤖    | Shrink `README.md` to a blurb + link to `docs.clickwheel.fm`                   | after site is live     |
-| ⬜  | 🧑    | Spot-check rendered site (nav, search, mobile, links, generated ref)           | after deploy           |
+| ✓   | Owner | Task                                                                 | Blocked by / reason |
+| --- | ----- | -------------------------------------------------------------------- | ------------------- |
+| ⬜  | 🤖    | Shrink `README.md` to a blurb + link to `docs.clickwheel.fm`         | after site is live  |
+| ⬜  | 🧑    | Spot-check rendered site (nav, search, mobile, links, generated ref) | after deploy        |
 
-**Acceptance:** `https://docs.clickwheel.fm` serves the Starlight site; README points to it.
+**Acceptance:** README points to the live site; nav + generated reference correct.
 
 ---
 
