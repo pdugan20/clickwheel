@@ -13,15 +13,16 @@ Cloudflare account / devices).
 **Discipline:** every not-started task names its blocker/reason — no silent
 deferrals. "—" means nothing blocks it but the owner's time.
 
-**Where we are:** Phases 0–3 done and **#48 merged to `main`** — transport
-shipped, tunnel live, endpoint locked behind Cloudflare Access (Cloudflare serves
-the MCP OAuth challenge), and the favicon is **live**: the four favicon paths
-return 200 via a separate Cloudflare Access **Bypass** app, while `/mcp` stays
-gated (verified). Google's favicon cache will pick it up (~1 day). A **0.16.0
-release PR (#53)** is open from the merge — merge it to publish remote access to
-PyPI. **Remaining (the final mile):** Phase 4 (launchd persistence so the
-tunnel + server survive reboots — currently running ad-hoc) and the Phase 5 live
-test (add the connector on claude.ai → verify on phone + iPod docked/undocked).
+**Where we are: WORKING.** #48 merged, **0.16.0 published to PyPI** (#53),
+**launchd persistence is live** (server + tunnel run as LaunchAgents), and the
+**Claude connector authenticates and works** — verified on web (`library_stats`
+returned the real library). The auth path that finally worked: self-hosted
+Access app + **Managed OAuth** enabled + `https://claude.ai/api/mcp/auth_callback`
+in Allowed redirect URIs (see [`deploy/README.md`](deploy/README.md) §3 for the
+full story incl. the `ofid_` cheat-sheet). Favicon is live; Google cache ~1 day.
+**Remaining:** verify on phone + iPod docked/undocked (user), and the keep-awake
+decision. The big unknown — can the connector auth through Cloudflare Access? —
+is now a definitive **yes**.
 
 ---
 
@@ -132,11 +133,11 @@ explicit Access **bypass** below.
 Server + tunnel must survive logout/reboot. LaunchAgent template:
 [`deploy/fm.clickwheel.mcp-http.plist`](deploy/fm.clickwheel.mcp-http.plist).
 
-| ✓   | Owner | Task                                                                               | Blocked by / reason |
-| --- | ----- | ---------------------------------------------------------------------------------- | ------------------- |
-| ⬜  | 🧑    | Install the MCP-server LaunchAgent (`KeepAlive`, `RunAtLoad`); fill `<USER>` paths | — (template ready)  |
-| ⬜  | 🧑    | `cloudflared` as a service (`sudo cloudflared service install`)                    | after Phase 1       |
-| ⬜  | 🧑    | Keep-awake decision: `caffeinate` vs. Power Settings vs. accept "desk-only"        | judgment call       |
+| ✓   | Owner | Task                                                                                                                                                                    | Blocked by / reason |
+| --- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| ✅  | 🤖    | MCP-server LaunchAgent installed (`~/Library/LaunchAgents/fm.clickwheel.mcp-http.plist`, points at the pipx `clickwheel-mcp serve --http --allowed-host clickwheel.fm`) | —                   |
+| ✅  | 🤖    | `cloudflared` LaunchAgent installed (`fm.clickwheel.cloudflared.plist`, no sudo); both verified live                                                                    | —                   |
+| ⬜  | 🧑    | Keep-awake decision: `caffeinate` LaunchAgent vs. Power Settings vs. accept "desk-only"                                                                                 | judgment call       |
 
 **Acceptance:** survives a reboot; tunnel auto-reconnects; server auto-restarts.
 
@@ -147,14 +148,14 @@ Server + tunnel must survive logout/reboot. LaunchAgent template:
 **Decision:** all live testing below is deferred until the favicon is locked, so
 it runs once against the final setup rather than twice.
 
-| ✓   | Owner | Task                                                                                          | Blocked by / reason         |
-| --- | ----- | --------------------------------------------------------------------------------------------- | --------------------------- |
-| ⬜  | 🧑    | On **claude.ai (desktop browser)**: add `clickwheel.fm` connector, complete OAuth, list tools | Phases 1–2                  |
-| ⬜  | 🧑    | Web sanity: `library_stats` + `search_tracks`                                                 | after connect               |
-| ⬜  | 🧑    | **Phone:** connector (added on web) usable from iOS app                                       | after web connect           |
-| ⬜  | 🧑    | **iPod docked:** `get_ipod_contents`; `sync_playlist_to_ipod` surfaces Allow/Deny + completes | after connect + iPod docked |
-| ⬜  | 🧑    | **iPod undocked:** iPod tools fail gracefully ("not connected")                               | after connect               |
-| ⬜  | 🧑    | Connector icon renders for `clickwheel.fm`, distinct from rewind/bibliocommons                | Phase 3 go-public           |
+| ✓   | Owner | Task                                                                                               | Blocked by / reason         |
+| --- | ----- | -------------------------------------------------------------------------------------------------- | --------------------------- |
+| ✅  | 🧑    | On **claude.ai (desktop browser)**: add `clickwheel.fm` connector, complete OAuth, list tools (37) | —                           |
+| ✅  | 🧑    | Web sanity: `library_stats` returned real data (12,910 tracks)                                     | —                           |
+| ⬜  | 🧑    | **Phone:** connector (added on web) usable from iOS app                                            | after web connect (done)    |
+| ⬜  | 🧑    | **iPod docked:** `get_ipod_contents`; `sync_playlist_to_ipod` surfaces Allow/Deny + completes      | after connect + iPod docked |
+| ⬜  | 🧑    | **iPod undocked:** iPod tools fail gracefully ("not connected")                                    | after connect               |
+| ⬜  | 🧑    | Connector icon renders for `clickwheel.fm`, distinct from rewind/bibliocommons                     | Phase 3 go-public           |
 
 **Acceptance:** clickwheel is fully usable from the iOS app; iPod tools work when docked, degrade cleanly when not.
 

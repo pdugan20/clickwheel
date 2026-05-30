@@ -46,33 +46,48 @@ cloudflared tunnel run clickwheel          # foreground test
 With both the server and tunnel running, `https://clickwheel.fm/mcp` should
 reach the server (you'll get Access-challenged once step 3 is in place).
 
-## 3. Auth — Cloudflare Access (self-hosted application)
+## 3. Auth — Cloudflare Access (self-hosted app + **Managed OAuth**)
 
-Verified May 2026: a plain **self-hosted** Access app is all you need. Cloudflare
-Access natively serves the MCP OAuth challenge + discovery metadata, so the
-Claude connector authenticates with **no** SaaS/OIDC app, redirect URL, or
-client ID/secret on your side.
+Verified working May 2026. A self-hosted Access app gates the endpoint, and
+**Managed OAuth** (a per-app toggle) is what lets the Claude connector
+authenticate — it adds OAuth **dynamic client registration (RFC 7591)** + PKCE.
+Without it you get the `ofid_…` "couldn't register" error. The connector URL
+stays `https://clickwheel.fm/mcp` (no portal, no SaaS-OIDC app, no manual client
+ID/secret).
 
-In the Cloudflare Zero Trust dashboard ([one.dash.cloudflare.com](https://one.dash.cloudflare.com)):
+In the Cloudflare Zero Trust dashboard ([one.dash.cloudflare.com](https://one.dash.cloudflare.com)
+→ **Access controls → Applications**):
 
-1. Enable Zero Trust if prompted (**Free** plan; the team name is account-wide —
-   keep the auto-assigned one).
-2. **Access → Applications → Add an application → Self-hosted.**
-3. **Destinations → Public hostnames:** Domain `clickwheel.fm`, leave subdomain
-   and path blank (protects the whole host; Cloudflare serves the OAuth
-   discovery itself).
+1. Enable Zero Trust if prompted (**Free** plan; team name is account-wide — keep
+   the auto-assigned one).
+2. **Add an application → Self-hosted.**
+3. **Destinations → Public hostnames:** Domain `clickwheel.fm`, blank subdomain
+   and path (protects the whole host).
 4. **Access policies → Create new policy:** name `Only me`, Action **Allow**,
-   Include rule Selector **Emails** = your email. Save and attach it.
-5. Identity: the built-in **One-time PIN** (email code) needs no setup — leave
-   "Accept all available identity providers" on. Optionally enable "Apply
-   instant authentication" to skip the IdP-picker screen.
-6. Save the application.
+   Include Selector **Emails** = your email. Save + attach.
+5. Identity: built-in **One-time PIN** (email code); leave "Accept all available
+   identity providers" on.
+6. **Enable Managed OAuth** (toggle in the app settings, marked "Beta"). Then
+   under **Allowed redirect URIs → + Add URI**, add **exactly**:
+   `https://claude.ai/api/mcp/auth_callback`
+   (Leave "Allow localhost/loopback clients" on.) **This redirect URI is
+   required** — without it DCR registers but authorization is rejected with the
+   `ofid_…` "Authorization with the MCP server failed" error.
+7. Save the application.
 
-Verify it's gated: `curl -sI https://clickwheel.fm/mcp` should `302` to your
-`<team>.cloudflareaccess.com` login, and
-`curl -s https://clickwheel.fm/.well-known/cloudflare-access-protected-resource/mcp`
-should return JSON with `authorization_servers`. The connector URL stays
-`https://clickwheel.fm/mcp`.
+Verify (unauthenticated): `curl -sI https://clickwheel.fm/mcp` → `401`/`302`
+toward your `<team>.cloudflareaccess.com` login, and
+`curl -s https://clickwheel.fm/.well-known/oauth-authorization-server` returns
+JSON containing a **`registration_endpoint`** (proof Managed OAuth/DCR is live).
+
+### `ofid_` error cheat-sheet
+
+- **"couldn't register with … sign-in service"** → Managed OAuth not enabled (no
+  DCR endpoint). Do step 6.
+- **"Authorization with the MCP server failed … credentials and permissions"** →
+  the redirect URI is missing (add `https://claude.ai/api/mcp/auth_callback`),
+  or Cloudflare **"Block AI bots"/Bot Fight Mode** is dropping Claude's requests
+  (zone → Security → Bots → off, or allow IP range `160.79.104.0/21`).
 
 ## 4. Favicon bypass — **GATED on final favicon design**
 
