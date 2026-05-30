@@ -128,14 +128,16 @@ exclude = ['clickwheel/ipod/', 'clickwheel/mcp/_ui_bundles\.py']
 # below, which carry pre-existing type debt. Drive the list down over time —
 # remove a module once it's clean. Do NOT add new modules here; new code is
 # expected to type-check.
+#
+# clickwheel.mcp.tools.* — the only remaining exemption (88 errors, all
+# [return-value]): each tool is annotated `-> <PydanticModel>` but returns
+# `render(...)`, which is a `CallToolResult`. Resolving this needs a design
+# decision, not a mechanical fix: FastMCP may derive each tool's output JSON
+# Schema from that return annotation, so blindly switching them all to
+# `-> CallToolResult` could drop structured-output schemas clients rely on.
+# Tracked separately; un-exempt once that's settled.
 [[tool.mypy.overrides]]
 module = [
-    "clickwheel.actions",
-    "clickwheel.artwork",
-    "clickwheel.cli",
-    "clickwheel.library",
-    "clickwheel.scrobble",
-    "clickwheel.mcp._runtime",
     "clickwheel.mcp.tools.*",
 ]
 ignore_errors = true

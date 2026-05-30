@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from mutagen import File as MutagenFile
+from mutagen import FileType
 from mutagen.flac import FLAC
 from mutagen.mp3 import MP3
 from mutagen.mp4 import MP4
@@ -57,7 +59,7 @@ def scan_file(path: Path) -> dict | None:
 
 
 def find_audio_files(
-    music_dir: Path, progress_callback: callable | None = None
+    music_dir: Path, progress_callback: Callable[[int], None] | None = None
 ) -> list[Path]:
     """Recursively find all audio files in the given directory."""
     seen: set[Path] = set()
@@ -100,7 +102,7 @@ def _parse_year(values: list | None) -> int | None:
         return None
 
 
-def _get_album_art(path: Path, audio: MutagenFile) -> dict | None:
+def _get_album_art(path: Path, audio: FileType) -> dict | None:
     """Check for embedded album art and return dimensions if found."""
     try:
         raw_audio = MutagenFile(str(path))
@@ -201,14 +203,16 @@ def _write_mp4_metadata(
     mp4 = MP4(str(path))
     if mp4.tags is None:
         mp4.add_tags()
+    tags = mp4.tags
+    assert tags is not None  # add_tags() above guarantees a tag block
 
     art_done = year_done = False
-    if art and "covr" not in mp4.tags:
+    if art and "covr" not in tags:
         fmt = MP4Cover.FORMAT_PNG if art[:8] == _PNG_MAGIC else MP4Cover.FORMAT_JPEG
-        mp4.tags["covr"] = [MP4Cover(art, imageformat=fmt)]
+        tags["covr"] = [MP4Cover(art, imageformat=fmt)]
         art_done = True
     if year:
-        mp4.tags["\xa9day"] = [str(year)]
+        tags["\xa9day"] = [str(year)]
         year_done = True
     if art_done or year_done:
         mp4.save()

@@ -13,7 +13,13 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 from mcp.server.fastmcp import FastMCP
-from mcp.types import CallToolResult, Icon, TextContent, ToolAnnotations
+from mcp.types import (
+    CallToolResult,
+    ContentBlock,
+    Icon,
+    TextContent,
+    ToolAnnotations,
+)
 
 from clickwheel.config import Config, load_config
 from clickwheel.db import Database
@@ -362,6 +368,7 @@ def render(text: str, data: object | None = None) -> CallToolResult:
     """
     import json
 
+    content: list[ContentBlock]
     if data is None:
         sc: dict = {}
         content = [TextContent(type="text", text=text)]

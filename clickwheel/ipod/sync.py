@@ -39,11 +39,13 @@ def copy_tracks_to_ipod(
     tracks: list[dict],
     ipod_mount: Path,
     progress_callback=None,
-) -> list[tuple[dict, str]]:
+) -> tuple[list[tuple[dict, str]], list[dict]]:
     """Copy track files to iPod Music directory.
 
-    Returns list of (track_dict, ipod_relative_path) tuples for tracks
-    that were successfully copied.
+    Returns ``(copied, failed)`` where ``copied`` is a list of
+    (track_dict, ipod_relative_path) tuples for tracks that were
+    successfully copied, and ``failed`` is the list of track dicts that
+    could not be copied.
     """
     music_dir = ipod_mount / "iPod_Control" / "Music"
     music_dir.mkdir(parents=True, exist_ok=True)
