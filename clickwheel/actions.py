@@ -74,6 +74,13 @@ class LibraryNotFoundError(ClickwheelError):
     """Music library directory doesn't exist."""
 
 
+class LibraryStorageOfflineError(LibraryNotFoundError):
+    """The music library's network share is unreachable and couldn't be
+    automatically remounted (the NAS is likely asleep or off the network).
+
+    Subclasses LibraryNotFoundError so existing handlers still catch it."""
+
+
 class PlaylistNotFoundError(ClickwheelError):
     """Named playlist doesn't exist."""
 
@@ -523,9 +530,14 @@ def library_health(cfg: Config, db: Database) -> dict:
         "SELECT COUNT(*) FROM tracks WHERE missing_since IS NULL"
     ).fetchone()[0]
 
+    # Bounded probe rather than a bare is_dir(): a stale network mount makes
+    # is_dir() block in the kernel, which would hang this (remote-callable)
+    # health tool. probe_live() decides within a timeout and never hangs.
+    from clickwheel.mount import probe_live
+
     return {
         "library_dir": str(cfg.music_dir),
-        "library_dir_exists": cfg.music_dir.is_dir(),
+        "library_dir_exists": probe_live(cfg.music_dir),
         "total_tracks": total_count,
         "missing_tracks": missing_count,
         "last_scan_at": last_scan_ts,
@@ -1095,6 +1107,33 @@ def calc_size_of_paths(db: Database, paths: list[str]) -> int:
 # ---------------------------------------------------------------------------
 
 
+def ensure_library_available(cfg: Config) -> None:
+    """Make sure the music library's network share is mounted and responsive,
+    remounting a stale/dropped SMB share when possible.
+
+    Use this instead of a bare ``cfg.music_dir.is_dir()`` check before any
+    operation that reads or writes library files: ``is_dir()`` blocks in the
+    kernel on a stale mount, so a tool call fired remotely (e.g. from the
+    Claude app while away) would hang instead of recovering. This probes with
+    a timeout and, on macOS, force-remounts a dropped network share so the
+    operation can proceed. Raises LibraryStorageOfflineError if the share
+    can't be reached at all (the NAS is asleep / off the network).
+    """
+    from clickwheel.mount import MountStatus, ensure_mounted
+
+    res = ensure_mounted(
+        cfg.music_dir,
+        mount_url=cfg.library_mount_url,
+        auto_remount=cfg.library_auto_remount,
+    )
+    if res.status is MountStatus.OFFLINE:
+        raise LibraryStorageOfflineError(
+            f"Music library at {cfg.music_dir} isn't mounted and couldn't be "
+            f"reconnected — the NAS may be asleep or off the network. "
+            f"({res.detail})"
+        )
+
+
 def require_ipod(cfg: Config) -> dict:
     """Find and read the iPod database. Raises IpodNotFoundError if missing."""
     from clickwheel.ipod import find_ipod, read_ipod
@@ -1290,11 +1329,7 @@ def sync_playlist(
     from clickwheel.ipod import get_ipod_playlists
     from clickwheel.ipod.sync import copy_tracks_to_ipod, write_ipod_db
 
-    if not cfg.music_dir.is_dir():
-        raise LibraryNotFoundError(
-            f"Music library at {cfg.music_dir} isn't mounted. "
-            "Mount the share before syncing."
-        )
+    ensure_library_available(cfg)
 
     if diff is None:
         diff = compute_diff(cfg, db, playlist_name)
@@ -1453,11 +1488,7 @@ def add_tracks_to_ipod(
     from clickwheel.ipod import get_ipod_tracks
     from clickwheel.ipod.sync import copy_tracks_to_ipod, write_ipod_db
 
-    if not cfg.music_dir.is_dir():
-        raise LibraryNotFoundError(
-            f"Music library at {cfg.music_dir} isn't mounted. "
-            "Mount the share before adding tracks."
-        )
+    ensure_library_available(cfg)
 
     # Resolve paths → full track records via the library DB.
     tracks: list[dict] = []
@@ -1990,6 +2021,11 @@ def sync_playlist_to_plex(
     _require_plex_config(cfg)
 
     tracks = get_playlist(db, playlist_name)  # raises PlaylistNotFoundError
+
+    # Plex sync writes the import M3U onto the NAS share, so the share must be
+    # mounted and live — remount it if it dropped (this is the one realistic
+    # "away" op that depends on the library storage).
+    ensure_library_available(cfg)
 
     plex = _connect_plex(cfg)
     try:

@@ -19,6 +19,8 @@ DEFAULT_AUTO_SCAN_STALENESS_MINUTES = 1440
 # Config file keys mapped to env var names
 _YAML_TO_ENV = {
     "music_dir": "MUSIC_DIR",
+    "library_mount_url": "CLICKWHEEL_LIBRARY_MOUNT_URL",
+    "library_auto_remount": "CLICKWHEEL_LIBRARY_AUTO_REMOUNT",
     "ipod_mount": "IPOD_MOUNT",
     "ipod_capacity_gb": "IPOD_CAPACITY_GB",
     "lastfm_api_key": "LASTFM_API_KEY",
@@ -46,6 +48,13 @@ _YAML_TO_ENV = {
 class Config:
     music_dir: Path
     project_dir: Path
+    # Network-share auto-recovery: when the SMB mount backing music_dir goes
+    # stale (Mac slept, NAS rebooted), clickwheel force-remounts it before a
+    # file-touching op instead of hanging. library_mount_url is an explicit
+    # smb://… fallback for the fully-unmounted case (the stale case recovers
+    # the source from the live `mount` entry). See clickwheel/mount.py.
+    library_mount_url: str = ""
+    library_auto_remount: bool = True
     ipod_mount: Path = field(default_factory=lambda: Path(DEFAULT_IPOD_MOUNT))
     ipod_capacity_gb: int = DEFAULT_IPOD_CAPACITY_GB
     lastfm_api_key: str = ""
@@ -103,6 +112,11 @@ def load_config() -> Config:
     return Config(
         music_dir=Path(music_dir),
         project_dir=data_dir,
+        library_mount_url=os.environ.get("CLICKWHEEL_LIBRARY_MOUNT_URL", ""),
+        library_auto_remount=os.environ.get(
+            "CLICKWHEEL_LIBRARY_AUTO_REMOUNT", "true"
+        ).lower()
+        not in ("false", "0", "no"),
         ipod_mount=Path(os.environ.get("IPOD_MOUNT", DEFAULT_IPOD_MOUNT)),
         ipod_capacity_gb=int(
             os.environ.get("IPOD_CAPACITY_GB", DEFAULT_IPOD_CAPACITY_GB)

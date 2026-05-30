@@ -29,6 +29,9 @@ from clickwheel.config import Config
 @pytest.fixture
 def plex_cfg(tmp_path: Path) -> Config:
     """A Config with Plex enabled and pointed at a fake server."""
+    # Create music_dir so the library-mount preflight (ensure_library_available)
+    # sees a live mount and proceeds to the Plex logic under test.
+    (tmp_path / "music").mkdir(exist_ok=True)
     return Config(
         music_dir=tmp_path / "music",
         project_dir=tmp_path,
