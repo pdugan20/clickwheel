@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/) and
 [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [0.16.0](https://github.com/pdugan20/clickwheel/compare/v0.15.1...v0.16.0) (2026-05-30)
+
+
+### Features
+
+* **mcp:** remote access — streamable-http transport + favicon + runbook ([#48](https://github.com/pdugan20/clickwheel/issues/48)) ([489cb4f](https://github.com/pdugan20/clickwheel/commit/489cb4fbdd2fde89c37ac668580245bae920e8b7))
+
+
+### Documentation
+
+* add mintlify docs site with generated, drift-checked reference ([#52](https://github.com/pdugan20/clickwheel/issues/52)) ([ddc5981](https://github.com/pdugan20/clickwheel/commit/ddc59815a2ea569714c23859baf2ea3af6cafa94))
+* bring trackers current after merging [#48](https://github.com/pdugan20/clickwheel/issues/48) + [#52](https://github.com/pdugan20/clickwheel/issues/52) ([#54](https://github.com/pdugan20/clickwheel/issues/54)) ([8ef174a](https://github.com/pdugan20/clickwheel/commit/8ef174a3c348eca0e27bdc6dff97efc7b0f7af48))
+* **project:** pause docs-site; record Mintlify→Starlight pivot ([#55](https://github.com/pdugan20/clickwheel/issues/55)) ([2ed4ef9](https://github.com/pdugan20/clickwheel/commit/2ed4ef9c66b8ceaf3166f35cc344c02fe3f7a3fa))
+
 ## [0.15.1](https://github.com/pdugan20/clickwheel/compare/v0.15.0...v0.15.1) (2026-05-29)
 
 
