@@ -1,4 +1,4 @@
-.PHONY: dev lint typecheck format test build clean check-all dev-web build-web lint-web format-web
+.PHONY: dev lint typecheck format test build clean check-all dev-web build-web lint-web format-web docs-reference docs docs-links
 
 dev:
 	uv sync --extra dev --extra mcp
@@ -25,6 +25,20 @@ format:
 
 format-web:
 	cd web && npm run format
+
+# Regenerate the CLI + MCP tool reference (docs-mintlify/reference/) from source.
+# CI ("Docs Reference Freshness") fails if the committed output drifts.
+docs-reference:
+	uv run --extra mcp python scripts/gen-cli-reference.py
+	uv run --extra mcp python scripts/gen-mcp-reference.py
+
+# Live-preview the docs site (needs the Mintlify CLI: npm i -g mint).
+docs:
+	cd docs-mintlify && mint dev
+
+# Check the docs for broken links (same as CI).
+docs-links:
+	cd docs-mintlify && npx mint@latest broken-links
 
 test:
 	uv run pytest tests/ -v

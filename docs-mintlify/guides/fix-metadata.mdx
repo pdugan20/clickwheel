@@ -1,0 +1,37 @@
+---
+title: Repair metadata
+description: Fix album artists, fetch art, year, and genres — in place.
+---
+
+`fix` repairs your library's metadata so albums group correctly and show art on
+the iPod. It writes back to your files **in place** — never moving or renaming
+them.
+
+```bash
+clickwheel fix
+```
+
+## What it does
+
+A three-step native pipeline:
+
+1. **Repair album artist** — so compilations and multi-artist albums group
+   correctly.
+2. **MusicBrainz** — fetch missing cover art and release year.
+3. **Last.fm** — fetch genres.
+
+All three steps are index-driven (no filesystem walks for already-clean state)
+and cache both positive *and* negative results in SQLite, so re-running on an
+unchanged library does **zero** network work.
+
+## Refreshing
+
+```bash
+clickwheel fix --refresh-mb        # re-fetch MusicBrainz art/year
+clickwheel fix --refresh-genres    # re-fetch Last.fm genres
+```
+
+<Note>
+  No external dependencies beyond the base install — `fix` uses native
+  MusicBrainz/Cover Art Archive + pylast-driven genre lookups.
+</Note>

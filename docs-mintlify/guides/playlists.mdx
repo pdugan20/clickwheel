@@ -1,0 +1,35 @@
+---
+title: Build and edit playlists
+description: Curate named playlists for the iPod (and Plex/Apple Music).
+---
+
+Playlists are named, saved collections stored in clickwheel's catalog. They show
+up under Music → Playlists on the iPod once synced.
+
+## Create and edit
+
+```bash
+clickwheel playlist                 # list saved playlists
+clickwheel edit                     # interactive add/remove artists, set description
+clickwheel edit --add "Big Thief"   # non-interactive (scriptable)
+clickwheel edit --remove "Wilco"
+clickwheel delete <name>            # delete a playlist (with confirmation)
+```
+
+## Put a playlist on the iPod
+
+```bash
+clickwheel sync   # syncs your selected playlist to the device
+```
+
+See [Sync to iPod](/guides/sync-to-ipod) for the full flow.
+
+## Two concepts, don't conflate them
+
+- **Adding music to the device** — you just want tracks browsable by
+  artist/album. No named playlist needed.
+- **A curated playlist** — a named collection that appears under Music →
+  Playlists on the iPod.
+
+The same playlists can also be pushed to [Plex/Plexamp](/guides/plex) and
+[Apple Music](/guides/apple-music).

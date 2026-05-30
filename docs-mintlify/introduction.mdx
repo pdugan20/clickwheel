@@ -1,0 +1,49 @@
+---
+title: clickwheel
+description: Sync your music library to a classic iPod from a modern Mac — with optional Claude/MCP control.
+---
+
+**clickwheel** is a Python command-line tool for keeping a classic iPod loaded
+from a modern Mac. It indexes your local music library, lets you curate exactly
+what goes on the device, writes the iPod database directly (no iTunes/Music.app
+sync dance), and can scrobble what you listen to back to Last.fm.
+
+It also ships an optional **MCP server**, so you can drive your library and iPod
+conversationally from Claude — "what's on my iPod?", "add Big Thief", "build a
+45-minute late-night mix and sync it."
+
+## What it does
+
+- **Index** your library into a fast local SQLite catalog (`scan`).
+- **Curate** a subset for the iPod with an interactive picker (`select`).
+- **Sync** that subset to the device, writing the iTunesDB + artwork directly
+  (`sync`).
+- **Repair metadata** — album artist, year, cover art (MusicBrainz), and genres
+  (Last.fm) — in place, without moving your files (`fix`).
+- **Integrate** with Plex/Plexamp, Apple Music, and Last.fm.
+- **Talk to Claude** about all of the above via the MCP server.
+
+## Who it's for
+
+Anyone with a music library on a Mac and a classic iPod they still love. It's
+single-tenant by design: your library and your iPod live on **your** machine,
+and clickwheel works with them in place.
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Install, index your library, and load your iPod in a few commands.
+  </Card>
+  <Card title="MCP server" icon="robot" href="/concepts/mcp-server">
+    Drive clickwheel from Claude — locally or from your phone.
+  </Card>
+  <Card title="CLI reference" icon="terminal" href="/reference/cli">
+    Every command and flag (generated from the source).
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/concepts/architecture">
+    How the pieces fit, and why it's Mac-as-source-of-truth.
+  </Card>
+</CardGroup>
+
+<Note>
+  clickwheel is open source: [github.com/pdugan20/clickwheel](https://github.com/pdugan20/clickwheel).
+</Note>

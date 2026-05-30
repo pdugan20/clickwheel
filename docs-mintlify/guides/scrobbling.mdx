@@ -1,0 +1,31 @@
+---
+title: Scrobble to Last.fm
+description: Submit your iPod listens to Last.fm.
+---
+
+clickwheel reads play counts off the iPod and submits them to Last.fm.
+
+## First-time setup
+
+```bash
+clickwheel scrobble --auth
+```
+
+This walks you through authorizing clickwheel with your Last.fm account. Add
+your API credentials to `~/.clickwheel/config.yaml` — see
+[Configuration](/reference/configuration).
+
+## Submit listens
+
+```bash
+clickwheel scrobble
+```
+
+clickwheel pulls recent plays from the iPod and submits them, caching what's
+already been sent so you don't double-scrobble. From the MCP server, the
+`get_pending_scrobbles` and `submit_scrobbles` tools do the same (with a
+`dry_run` option).
+
+<Tip>
+  Scrobble before a big re-sync so play history isn't lost when tracks change.
+</Tip>

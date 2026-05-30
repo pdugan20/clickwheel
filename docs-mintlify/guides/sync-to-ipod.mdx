@@ -1,0 +1,37 @@
+---
+title: Sync music to your iPod
+description: Load and update a classic iPod from your library.
+---
+
+clickwheel writes the iPod database (iTunesDB + artwork) directly — no
+iTunes/Music.app sync.
+
+## Load a subset
+
+```bash
+clickwheel select   # interactive picker; saves your choice as a playlist
+clickwheel diff     # preview adds/removes
+clickwheel sync     # write it to the device
+clickwheel eject    # safely unmount
+```
+
+`select` auto-scans first if the catalog is stale, so new music shows up.
+
+## Add more later
+
+Re-run `select` to adjust the set, or use [playlists](/guides/playlists) for
+named collections. `sync` is **additive** — it copies missing tracks and updates
+the database without deleting anything you didn't explicitly remove.
+
+## Inspect the device
+
+```bash
+clickwheel ls       # what's currently on the iPod
+```
+
+## Notes
+
+- **FLAC is skipped** (unsupported by stock firmware).
+- Classic iPods spin down and may auto-dismount when idle — if a command can't
+  find the device, nudge it awake (touch the wheel, or replug) and retry.
+- Always `eject` before unplugging.
