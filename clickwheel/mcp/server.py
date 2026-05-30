@@ -88,8 +88,8 @@ class ServeConfig:
     port: int = DEFAULT_HTTP_PORT
     path: str = DEFAULT_HTTP_PATH
     # Extra Host header values to allowlist beyond the local bind — the public
-    # hostname(s) the tunnel forwards (e.g. "clickwheel.fm"). Without these the
-    # SDK's DNS-rebinding protection rejects tunneled requests with HTTP 421.
+    # hostname(s) the tunnel forwards (e.g. "mcp.example.com"). Without these
+    # the SDK's DNS-rebinding protection rejects tunneled requests with HTTP 421.
     allowed_hosts: list[str] = field(default_factory=list)
     allowed_origins: list[str] = field(default_factory=list)
 
@@ -146,7 +146,7 @@ def _resolve_transport(argv: list[str]) -> ServeConfig:
         action="append",
         default=[],
         metavar="HOST",
-        help="Public Host header value to allow (e.g. clickwheel.fm). Repeatable. "
+        help="Public Host header value to allow (e.g. mcp.example.com). Repeatable. "
         "Required behind a tunnel or requests are rejected with HTTP 421.",
     )
     serve.add_argument(
@@ -154,7 +154,7 @@ def _resolve_transport(argv: list[str]) -> ServeConfig:
         action="append",
         default=[],
         metavar="ORIGIN",
-        help="Origin header value to allow (e.g. https://clickwheel.fm). Repeatable.",
+        help="Origin header value to allow (e.g. https://mcp.example.com). Repeatable.",
     )
     args = parser.parse_args(argv)
 

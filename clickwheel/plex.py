@@ -105,9 +105,9 @@ def plex_to_local_path(plex_path: str, remap_local: str, remap_plex: str) -> str
 
     Inverse of `local_to_plex_path`. Used when pulling a Plex playlist
     back into clickwheel: each track in the Plex playlist exposes the
-    file path *as Plex sees it* (e.g. `/share/CACHEDEV1_DATA/...`),
-    which has to be translated to the SMB-mounted path
-    (e.g. `/Volumes/Public/...`) before we can match it against the
+    file path *as Plex sees it* (e.g. `/share/CACHEDEV1_DATA/Music/...`
+    on a QNAP), which has to be translated to the SMB-mounted path
+    (e.g. `/Volumes/Music/...`) before we can match it against the
     SQLite index.
 
     Same rules as the forward direction: both remaps empty -> identity;

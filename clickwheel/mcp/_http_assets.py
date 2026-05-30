@@ -2,7 +2,7 @@
 
 The Claude connector-list icon is rendered from Google's favicon service
 keyed off the connector's domain
-(``https://www.google.com/s2/favicons?domain=clickwheel.fm``), NOT from the
+(``https://www.google.com/s2/favicons?domain=mcp.example.com``), NOT from the
 MCP ``icons`` field. Google's crawler fetches ``/favicon.ico`` (and parses any
 ``<link rel="icon">`` on ``/``), so the HTTP transport serves the rasterized
 clickwheel mark at those paths.
