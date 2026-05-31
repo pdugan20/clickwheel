@@ -78,7 +78,18 @@
               "reference/cli/lastfm"
             ]
           },
-          "reference/mcp-tools",
+          {
+            "group": "MCP",
+            "pages": [
+              "reference/mcp-tools",
+              "reference/mcp-tools/library",
+              "reference/mcp-tools/playlists",
+              "reference/mcp-tools/ipod",
+              "reference/mcp-tools/plex",
+              "reference/mcp-tools/apple-music",
+              "reference/mcp-tools/lastfm"
+            ]
+          },
           "reference/configuration"
         ]
       }
