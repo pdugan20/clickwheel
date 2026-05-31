@@ -35,7 +35,7 @@ from clickwheel.mcp.models import (
 
 @mcp.tool(title="List playlists", annotations=READ_ONLY)
 def list_playlists() -> Annotated[CallToolResult, list[PlaylistSummary]]:
-    """All saved playlists (the curated, named collections — workout
+    """All saved playlists (the curated, named collections like workout
     mix, road trip, etc.) with track counts, total size in bytes, and
     last-updated timestamps.
 
@@ -74,7 +74,7 @@ def get_playlist(
 ) -> Annotated[CallToolResult, PlaylistDetail]:
     """Summary of one playlist: total track count, total size, and the
     artist breakdown (with track count + size per artist). Does NOT return
-    the full track list — use `list_playlist_tracks` to page through tracks.
+    the full track list. Use `list_playlist_tracks` to page through tracks.
 
     Errors if the playlist doesn't exist.
 
@@ -118,7 +118,7 @@ def list_playlist_tracks(
 ) -> Annotated[CallToolResult, list[FullTrack]]:
     """Paginated list of tracks in a saved playlist, in playlist order.
     Returns full track records (artist, title, album, path, duration,
-    file_size, format) — the `path` values are needed if you're going to
+    file_size, format). The `path` values are needed if you're going to
     pass them to `update_playlist`.
 
     When to use: showing the user specific tracks in a playlist, or
@@ -149,7 +149,7 @@ def create_playlist(
         Field(
             description=(
                 "Absolute file paths from the library. Get these from "
-                "list_tracks_by_album or search_tracks — never invent paths."
+                "list_tracks_by_album or search_tracks. Never invent paths."
             ),
         ),
     ],
@@ -164,9 +164,9 @@ def create_playlist(
         ),
     ] = None,
 ) -> Annotated[CallToolResult, CreatePlaylistResult]:
-    """Create a new named playlist (a curated collection — workout mix,
+    """Create a new named playlist (a curated collection like workout mix,
     road trip, etc.) with the given track paths. Errors if a playlist
-    with the same name already exists — use `update_playlist` to replace
+    with the same name already exists. Use `update_playlist` to replace
     contents instead.
 
     Use this for the "make me a playlist" / "build a curated mix" flow
@@ -270,7 +270,7 @@ def set_playlist_description(
 def delete_playlist(
     name: Annotated[str, Field(description="Playlist name.")],
 ) -> Annotated[CallToolResult, DeletePlaylistResult]:
-    """Permanently delete a saved playlist. Cannot be undone — the playlist
+    """Permanently delete a saved playlist. Cannot be undone. The playlist
     record is removed; the underlying music files are untouched.
 
     Flagged `destructiveHint=true`, so MCP clients (Claude Code etc.) gate

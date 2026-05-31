@@ -961,7 +961,7 @@ def plex_pull_cmd(
     Useful for recovering hand-curated playlists after a clean install
     (Plex retains them server-side; clickwheel's SQLite did not). Each
     Plex track's file path is translated back to clickwheel's view via
-    the configured remap and looked up in the index — only matched
+    the configured remap and looked up in the index, only matched
     tracks land in the new playlist; unmatched ones are listed below
     so you know what to chase.
     """
@@ -1881,7 +1881,7 @@ def apple_delete_cmd(
 
     macOS-only. Music.app must be launchable (it is on every recent
     Mac, but the user must be signed in to the same Apple ID as the
-    playlist). Deletes EVERY playlist matching the name — useful for
+    playlist). Deletes EVERY playlist matching the name, useful for
     cleaning up duplicates from earlier failed pushes.
     """
     _check_macos()

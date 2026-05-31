@@ -262,7 +262,7 @@ def pull_playlist_from_plex(
         bool,
         Field(
             description=(
-                "Required to pull a smart playlist — materializes a snapshot "
+                "Required to pull a smart playlist. Materializes a snapshot "
                 "rather than mirroring the live query."
             )
         ),
