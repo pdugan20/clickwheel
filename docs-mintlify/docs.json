@@ -7,10 +7,7 @@
     "light": "/logo/light.png",
     "dark": "/logo/dark.png"
   },
-  "favicon": {
-    "light": "/favicon.svg",
-    "dark": "/favicon-dark.svg"
-  },
+  "favicon": "/favicon.svg",
   "appearance": {
     "default": "system"
   },
@@ -68,15 +65,10 @@
       },
       {
         "tab": "Reference",
-        "groups": [
-          {
-            "group": "Reference",
-            "pages": [
-              "reference/cli",
-              "reference/mcp-tools",
-              "reference/configuration"
-            ]
-          }
+        "pages": [
+          "reference/cli",
+          "reference/mcp-tools",
+          "reference/configuration"
         ]
       }
     ]

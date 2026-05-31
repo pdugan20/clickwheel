@@ -34,6 +34,7 @@ DOMAINS = {
 HEADER = """\
 ---
 title: MCP tool reference
+sidebarTitle: MCP tools
 description: Every tool the clickwheel MCP server exposes.
 ---
 

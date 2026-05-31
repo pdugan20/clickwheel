@@ -2,7 +2,9 @@
 """Generate the CLI command reference from the Typer app.
 
 Writes docs-mintlify/reference/cli.mdx by introspecting clickwheel's Typer/Click
-command tree — so the reference can't drift from the actual commands. Run via
+command tree, so the reference can't drift from the actual commands. Recurses
+into sub-apps (e.g. `plex`, `apple`) and groups commands by their Typer
+`rich_help_panel` (the same grouping shown in `clickwheel --help`). Run via
 `make docs-reference`; CI ("Docs Reference Freshness") regenerates and fails if
 the committed output differs.
 
@@ -20,9 +22,15 @@ from clickwheel.cli import app
 
 OUT = pathlib.Path("docs-mintlify/reference/cli.mdx")
 
+# Section order in the rendered page; panels not listed here are appended,
+# sorted, after these.
+SECTION_ORDER = ["Library", "Playlists", "iPod", "Plex", "Apple Music", "Last.fm"]
+FALLBACK_SECTION = "Other"
+
 HEADER = """\
 ---
 title: CLI reference
+sidebarTitle: CLI
 description: Every clickwheel command and option.
 ---
 
@@ -41,7 +49,8 @@ def _format_default(param: click.Parameter) -> str:
     return f"`{param.default}`"
 
 
-def _params_table(cmd: click.Command, ctx: click.Context) -> list[str]:
+def _params_table(cmd: click.Command) -> list[str]:
+    ctx = click.Context(cmd, info_name=cmd.name)
     rows: list[str] = []
     for p in cmd.get_params(ctx):
         if p.name == "help":
@@ -61,21 +70,54 @@ def _params_table(cmd: click.Command, ctx: click.Context) -> list[str]:
     ]
 
 
-def render() -> str:
-    command = typer.main.get_command(app)
-    ctx = click.Context(command, info_name="clickwheel")
-    lines: list[str] = [HEADER]
+def _collect(
+    group: click.Group, prefix: str, inherited: str
+) -> list[tuple[str, str, click.Command]]:
+    """Return (section, command path, leaf command), recursing into sub-groups.
 
-    commands: dict[str, click.Command] = getattr(command, "commands", {})
-    for name in sorted(commands):
-        sub = commands[name]
+    A sub-group's subcommands inherit the group's panel as their section.
+    """
+    leaves: list[tuple[str, str, click.Command]] = []
+    for name, sub in group.commands.items():
         if sub.hidden:
             continue
-        lines.append(f"\n## `clickwheel {name}`\n")
-        help_text = (sub.help or sub.short_help or "").strip()
-        if help_text:
-            lines.append(help_text + "\n")
-        lines.extend(_params_table(sub, ctx))
+        path = f"{prefix}{name}"
+        section = getattr(sub, "rich_help_panel", None) or inherited or FALLBACK_SECTION
+        # Typer's TyperGroup doesn't reliably pass isinstance(click.Group), so
+        # detect sub-apps by the presence of a populated `.commands` dict.
+        if getattr(sub, "commands", None):
+            leaves.extend(_collect(sub, f"{path} ", section))
+        else:
+            leaves.append((section, path, sub))
+    return leaves
+
+
+def render() -> str:
+    root = typer.main.get_command(app)
+    leaves = _collect(root, "", FALLBACK_SECTION)
+
+    by_section: dict[str, list[tuple[str, click.Command]]] = {}
+    for section, path, cmd in leaves:
+        by_section.setdefault(section, []).append((path, cmd))
+
+    ordered = [s for s in SECTION_ORDER if s in by_section]
+    ordered += sorted(s for s in by_section if s not in SECTION_ORDER)
+
+    lines: list[str] = [HEADER]
+    for section in ordered:
+        lines.append(f"\n## {section}\n")
+        # Heading shows the leaf name (the section header supplies the
+        # Plex/Apple context); the synopsis keeps the full invocation path.
+        for path, cmd in sorted(by_section[section], key=lambda pc: pc[1].name):
+            lines.append(f"### `{cmd.name}`\n")
+            ctx = click.Context(cmd, info_name=cmd.name)
+            pieces = " ".join(cmd.collect_usage_pieces(ctx))
+            synopsis = f"clickwheel {path}" + (f" {pieces}" if pieces else "")
+            lines.extend(["```bash", synopsis, "```", ""])
+            help_text = (cmd.help or cmd.short_help or "").strip()
+            if help_text:
+                lines.append(help_text + "\n")
+            lines.extend(_params_table(cmd))
     return "\n".join(lines).rstrip() + "\n"
 
 

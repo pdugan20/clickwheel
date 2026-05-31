@@ -84,7 +84,7 @@ def main(
     """clickwheel — sync your music library to a classic iPod."""
 
 
-@app.command()
+@app.command(rich_help_panel="Library")
 def scan(
     full: bool = typer.Option(
         False, "--full", "-f", help="Rescan everything from scratch"
@@ -153,7 +153,7 @@ def scan(
     dim("Run `clickwheel select` to pick music for your iPod.")
 
 
-@app.command()
+@app.command(rich_help_panel="Library")
 def fix(
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Show what would be done without making changes"
@@ -191,7 +191,7 @@ def fix(
     _run_fix(cfg, target, refresh_mb=refresh_mb, refresh_genres=refresh_genres)
 
 
-@app.command()
+@app.command(rich_help_panel="iPod")
 def select(
     playlist_name: str = typer.Option("ipod", "--name", "-n", help="Playlist name"),
     description: str = typer.Option(
@@ -268,7 +268,7 @@ def select(
     db.close()
 
 
-@app.command()
+@app.command(rich_help_panel="Playlists")
 def playlist(
     name: str = typer.Argument(None, help="Playlist name to show details"),
 ) -> None:
@@ -338,7 +338,7 @@ def playlist(
     db.close()
 
 
-@app.command()
+@app.command(rich_help_panel="Playlists")
 def delete(
     playlist_name: str = typer.Argument(..., help="Playlist to delete"),
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
@@ -366,7 +366,7 @@ def delete(
     db.close()
 
 
-@app.command()
+@app.command(rich_help_panel="Playlists")
 def heal(
     playlist_name: str = typer.Argument(..., help="Playlist to heal"),
     no_scan: bool = typer.Option(
@@ -421,7 +421,7 @@ def heal(
     db.close()
 
 
-@app.command()
+@app.command(rich_help_panel="Playlists")
 def edit(
     playlist_name: str = typer.Argument("ipod", help="Playlist to edit"),
     add: list[str] = typer.Option([], "--add", "-a", help="Artist to add"),
@@ -603,7 +603,7 @@ def edit(
     db.close()
 
 
-@app.command()
+@app.command(rich_help_panel="iPod")
 def diff(
     playlist_name: str = typer.Argument("ipod", help="Playlist to diff against iPod"),
     no_scan: bool = typer.Option(
@@ -657,7 +657,7 @@ def diff(
     db.close()
 
 
-@app.command()
+@app.command(rich_help_panel="iPod")
 def sync(
     playlist_name: str = typer.Argument("ipod", help="Playlist to sync"),
     dry_run: bool = typer.Option(
@@ -799,7 +799,7 @@ def sync(
     db.close()
 
 
-@app.command(name="sync-plex")
+@app.command(name="sync-plex", rich_help_panel="Plex")
 def sync_plex(
     playlist_name: str = typer.Argument(
         None,
@@ -879,7 +879,7 @@ plex_app = typer.Typer(
     help="Plex integration commands.",
     no_args_is_help=True,
 )
-app.add_typer(plex_app, name="plex")
+app.add_typer(plex_app, name="plex", rich_help_panel="Plex")
 
 
 @plex_app.command(name="doctor")
@@ -1023,7 +1023,7 @@ def plex_pull_cmd(
             dim(f"  ... and {len(result.unmatched_details) - 20} more.")
 
 
-@app.command()
+@app.command(rich_help_panel="iPod")
 def ls() -> None:
     """Show what's on your iPod."""
     _check_macos()
@@ -1060,7 +1060,7 @@ def ls() -> None:
     status(f"\n{len(tracks)} tracks, {len(artists)} artists, {_fmt_size(total_size)}")
 
 
-@app.command()
+@app.command(rich_help_panel="iPod")
 def eject() -> None:
     """Safely disconnect the iPod."""
     _check_macos()
@@ -1077,7 +1077,7 @@ def eject() -> None:
     confirm("iPod ejected. Safe to unplug.")
 
 
-@app.command()
+@app.command(rich_help_panel="Last.fm")
 def scrobble(
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Show plays without submitting"
@@ -1513,7 +1513,7 @@ apple_app = typer.Typer(
     help="Apple Music integration commands.",
     no_args_is_help=True,
 )
-app.add_typer(apple_app, name="apple")
+app.add_typer(apple_app, name="apple", rich_help_panel="Apple Music")
 
 
 @apple_app.command(name="auth")
@@ -1671,7 +1671,7 @@ def apple_push_cmd(
     """Create a playlist in your Apple Music account from a clickwheel playlist.
 
     Runs the matcher first, then pushes the matched tracks via
-    `POST /v1/me/library/playlists`. Iclupow-confidence matches are skipped
+    `POST /v1/me/library/playlists`. Low-confidence matches are skipped
     by default; pass --include-low after a `clickwheel apple match` review
     if you want them in.
     """
