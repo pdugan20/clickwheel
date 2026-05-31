@@ -183,16 +183,17 @@ Adopted:
 - Generated, drift-checked reference; `sidebarTitle`; a real `description` per page
 - Contextual menu (Copy page / View as Markdown / Open in Claude or ChatGPT) via
   the `docs.json` `contextual` block
+- Feedback thumbs (`docs.json` `feedback`); suggest-edit/raise-issue skipped
+  because the connected repo is the generated mirror, not the source
+- CLI Examples per command (curated `scripts/cli_examples.py`); MCP "Try asking"
+  prompts per domain (`scripts/mcp_examples.py`)
+- Reusable snippets (`snippets/`) for shared boilerplate (e.g. the Allow/Deny
+  gating note across guides)
+- Mermaid diagrams (architecture data-flow)
 - `llms.txt` / `llms-full.txt` (auto-generated)
 
 Queued:
 
-- [ ] Feedback widget: thumbs, suggest-edit (opens a GitHub PR), and raise-issue,
-      via the `docs.json` `feedback` block
-- [ ] Examples per command/tool: the most-read part of a CLI reference
-      (clig.dev). A short invocation plus expected output
-- [ ] Reusable snippets (`snippets/`) to dedupe repeated boilerplate
-- [ ] Mermaid diagram for the architecture data-flow (replace the ASCII art)
 - [ ] Code block titles and `<CodeGroup>` where useful
 - [ ] Branded OG/social image and card icons (fold into the visual pass)
 - [ ] Analytics (GA4 / PostHog), optional, only if usage data is wanted
