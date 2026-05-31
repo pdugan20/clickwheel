@@ -169,7 +169,39 @@ here so biblio inherits a consistent system:
 
 ---
 
+## 8. Mintlify features to leverage
+
+Best-practice features beyond the core components, with clickwheel's adoption
+status. Apply the same set to biblio.
+
+Adopted:
+
+- `<ParamField>` for params (type/required/default badges; descriptions wrap as
+  paragraphs instead of cramped table cells)
+- Synopsis line per command (`clickwheel <cmd> [OPTIONS] ...`)
+- Per-group reference pages (CLI + MCP) with an overview landing
+- Generated, drift-checked reference; `sidebarTitle`; a real `description` per page
+- Contextual menu (Copy page / View as Markdown / Open in Claude or ChatGPT) via
+  the `docs.json` `contextual` block
+- `llms.txt` / `llms-full.txt` (auto-generated)
+
+Queued:
+
+- [ ] Feedback widget: thumbs, suggest-edit (opens a GitHub PR), and raise-issue,
+      via the `docs.json` `feedback` block
+- [ ] Examples per command/tool: the most-read part of a CLI reference
+      (clig.dev). A short invocation plus expected output
+- [ ] Reusable snippets (`snippets/`) to dedupe repeated boilerplate
+- [ ] Mermaid diagram for the architecture data-flow (replace the ASCII art)
+- [ ] Code block titles and `<CodeGroup>` where useful
+- [ ] Branded OG/social image and card icons (fold into the visual pass)
+- [ ] Analytics (GA4 / PostHog), optional, only if usage data is wanted
+
+---
+
 ## Open decisions
 
-- **Design direction** for clickwheel (then biblio) — palette, logo treatment,
-  hero. Pending owner input. ✍️
+- **Landing hero:** lead the page with a real visual (deferred to the visual
+  polish pass). Otherwise the design direction is locked: maple theme, accent
+  `#4A82EF` light / `#C4DCFF` dark, play/pause wordmark logo, adaptive
+  click-wheel favicon.
