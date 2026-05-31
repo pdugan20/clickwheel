@@ -1,30 +1,95 @@
 ---
 title: Apple Music
-description: Sync clickwheel playlists to Apple Music and import them back.
+description: Push clickwheel playlists to your Apple Music library and pull them back via MusicKit.
 ---
 
-clickwheel can create playlists in your Apple Music library from clickwheel
-playlists, and import Apple Music playlists back into clickwheel.
+clickwheel syncs playlists to and from your Apple Music account through the
+official MusicKit API. Playlists propagate to your other Apple devices via
+iCloud Music Library.
 
-## Configure
+<Note>
+  Apple Music sync needs a **paid Apple Developer Program** membership to create
+  the MusicKit key. The other integrations don't.
+</Note>
 
-Apple Music uses a MusicKit developer token (a `.p8` key + Key ID + Team ID).
-Add them to `~/.clickwheel/config.yaml` — see [Configuration](/reference/configuration).
-Run the `apple_music_health` probe (config, `.p8`, dev token, user token, iCloud
-Music Library state) before your first push to catch setup issues early.
+## Setup
 
-## Push and pull
+<Steps>
+  <Step title="Install the Apple Music extra">
+    ```bash
+    pipx inject clickwheel 'clickwheel[applemusic]'
+    ```
+  </Step>
 
-- **Push** — create an Apple Music library playlist from a clickwheel playlist.
-  The matcher (ISRC → catalog fuzzy → your library if iCloud Music Library is
-  on) runs first; low-confidence matches are skipped unless you opt in. The new
-  playlist syncs to your other Apple devices via iCloud Music Library.
-- **Pull** — import an Apple Music playlist into clickwheel, resolving each Apple
-  track to a local file. Handy when you curated on your iPhone and want it on the
-  iPod.
-- **Delete** — Apple's REST API can't delete library playlists, so clickwheel
-  drives Music.app via AppleScript (macOS-only) to remove them; the deletion
-  propagates via iCloud Music Library.
+  <Step title="Create a MusicKit key">
+    At [developer.apple.com → Keys](https://developer.apple.com/account/resources/authkeys/list),
+    create a key with **Media Services (MusicKit)** enabled and download the
+    `.p8`.
 
-All available as MCP tools (`sync_playlist_to_apple_music`,
-`pull_playlist_from_apple_music`, `delete_apple_music_playlist`, …).
+    <Warning>
+      Apple lets you download the `.p8` **only once**, at creation. Back it up
+      immediately (e.g. to a password manager) — if you lose it you must
+      regenerate.
+    </Warning>
+  </Step>
+
+  <Step title="Configure clickwheel">
+    ```yaml
+    # ~/.clickwheel/config.yaml
+    apple_music_enabled: true
+    apple_music_storefront: us
+    apple_music_key_id: <Key ID, 10 chars>
+    apple_music_team_id: <Team ID, top-right of developer.apple.com>
+    apple_music_key_file: /Users/you/.clickwheel/AuthKey_<KEYID>.p8
+    ```
+
+    `chmod 600` the `.p8`.
+  </Step>
+
+  <Step title="Authorize and verify">
+    ```bash
+    clickwheel apple auth     # one-time browser sign-in; mints a user token
+    clickwheel apple doctor   # nine-stage end-to-end probe
+    ```
+
+    `auth` opens MusicKit JS in your browser; sign in with your Apple ID. The
+    doctor checks config, the `.p8`, both tokens, iCloud Music Library state, and
+    storefront — per-stage detail tells you what to fix.
+  </Step>
+</Steps>
+
+## Push, pull, delete
+
+```bash
+clickwheel apple list            # your Apple Music library playlists
+clickwheel apple match <name>    # preview how tracks resolve (no writes)
+clickwheel apple push <name>     # create the playlist in Apple Music
+clickwheel apple pull <name>     # import an Apple Music playlist into clickwheel
+clickwheel apple delete <name>   # remove an Apple Music playlist (macOS only)
+```
+
+- **Push** resolves each track via a match ladder — ISRC tag → catalog fuzzy
+  search (title/artist/album weighted) → your library when iCloud Music Library
+  is on. Low-confidence matches are skipped unless you pass `--include-low`.
+  Resolved IDs cache in SQLite, so repeat pushes skip the network.
+- **Pull** is the reverse — useful when you curated on your iPhone and want it on
+  the iPod.
+- **Delete** drives Music.app via AppleScript, because Apple's REST API
+  [refuses to delete library playlists](https://developer.apple.com/forums/thread/107807).
+  macOS-only; the deletion propagates through iCloud Music Library.
+
+<Accordion title="Two tokens, briefly">
+  MusicKit needs a **developer token** (a JWT clickwheel signs locally with your
+  `.p8`, re-signed on demand) and a **Music User Token** (long-lived, minted in
+  the browser by `apple auth`). Catalog reads need only the developer token;
+  anything touching your library needs both. If you already have a pre-signed JWT
+  from another project, set `APPLE_MUSIC_DEVELOPER_TOKEN` and the
+  `.p8`/Key ID/Team ID become optional.
+</Accordion>
+
+## From Claude
+
+MCP tools: `apple_music_health`, `list_apple_music_playlists`,
+`sync_playlist_to_apple_music`, `pull_playlist_from_apple_music`,
+`delete_apple_music_playlist` — see the [MCP tool reference](/reference/mcp-tools).
+The write tools are gated by your client's Allow/Deny prompt.

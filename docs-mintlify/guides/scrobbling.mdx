@@ -1,19 +1,45 @@
 ---
 title: Scrobble to Last.fm
-description: Submit your iPod listens to Last.fm.
+description: Submit your iPod's listen history to Last.fm.
 ---
 
-clickwheel reads play counts off the iPod and submits them to Last.fm.
+clickwheel reads play counts off the iPod and submits them to Last.fm. It's
+opt-in — nothing leaves your Mac until you add credentials. No extra to install;
+Last.fm support is in the base package.
 
-## First-time setup
+## Setup
 
-```bash
-clickwheel scrobble --auth
-```
+<Steps>
+  <Step title="Get API credentials">
+    Create an API account at
+    [last.fm/api/account/create](https://www.last.fm/api/account/create). Any
+    application name works ("clickwheel" is conventional). You'll get an **API
+    key** and a **shared secret**.
+  </Step>
 
-This walks you through authorizing clickwheel with your Last.fm account. Add
-your API credentials to `~/.clickwheel/config.yaml` — see
-[Configuration](/reference/configuration).
+  <Step title="Configure">
+    ```yaml
+    # ~/.clickwheel/config.yaml
+    lastfm_api_key: your_api_key
+    lastfm_username: your_lastfm_username
+    ```
+
+    Keep the secret in `~/.clickwheel/.env` (mode `600`), out of YAML:
+
+    ```bash
+    LASTFM_API_SECRET=your_shared_secret
+    ```
+  </Step>
+
+  <Step title="Authorize once">
+    ```bash
+    clickwheel scrobble --auth
+    ```
+
+    A browser opens to Last.fm — click **Allow**. clickwheel writes a session key
+    into your config; future runs use it without prompting.
+  </Step>
+</Steps>
 
 ## Submit listens
 
@@ -22,10 +48,23 @@ clickwheel scrobble
 ```
 
 clickwheel pulls recent plays from the iPod and submits them, caching what's
-already been sent so you don't double-scrobble. From the MCP server, the
-`get_pending_scrobbles` and `submit_scrobbles` tools do the same (with a
-`dry_run` option).
+already been sent so you never double-scrobble. The iPod must be plugged in for
+clickwheel to read its play cache.
 
 <Tip>
-  Scrobble before a big re-sync so play history isn't lost when tracks change.
+  Scrobble **before** a big re-sync, so play history isn't lost when tracks
+  change on the device.
 </Tip>
+
+<Note>
+  The same `lastfm_api_key` powers genre lookups in
+  [`clickwheel fix`](/guides/fix-metadata) (read-only — no session key needed).
+  If you only want genre tagging and never plan to scrobble, stop after the API
+  key is in place and skip `--auth`.
+</Note>
+
+## From Claude
+
+MCP tools: `get_pending_scrobbles` (preview, with a `dry_run` option) and
+`submit_scrobbles` (gated by your client's Allow/Deny prompt). See the
+[MCP tool reference](/reference/mcp-tools).

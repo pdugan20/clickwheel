@@ -28,10 +28,9 @@ plex_playlist_dir: '' # default: ${music_dir}/.clickwheel-playlists
 plex_path_remap_local: '' # only needed when Plex runs on a different host (e.g. a NAS)
 plex_path_remap_plex: ''
 # plex_token: ...   # prefer CLICKWHEEL_PLEX_TOKEN env var over inline YAML
-
-# Database location (rarely changed)
-db_path: ~/.clickwheel/library.db # default
 ```
+
+The catalog lives at `~/.clickwheel/clickwheel.db` (SQLite). Its location is not configurable.
 
 ## How auto-scan works
 
@@ -85,4 +84,4 @@ See [`docs/plex.md`](plex.md) for the install, token retrieval, path remap (NAS 
 
 ## Database location
 
-clickwheel stores its index in `~/.clickwheel/library.db` (SQLite, WAL mode). Override with `db_path` in config or `DB_PATH` env var. The database is safe to delete — running `clickwheel scan` rebuilds it from your music directory.
+clickwheel stores its index at `~/.clickwheel/clickwheel.db` (SQLite, WAL mode). The location is fixed (not configurable). The database is safe to delete — running `clickwheel scan` rebuilds it from your music directory.

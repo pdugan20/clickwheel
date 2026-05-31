@@ -5,10 +5,22 @@ description: Fix album artists, fetch art, year, and genres — in place.
 
 `fix` repairs your library's metadata so albums group correctly and show art on
 the iPod. It writes back to your files **in place** — never moving or renaming
-them.
+them (other tools like Plex read the same files, so paths stay stable).
 
 ```bash
-clickwheel fix
+clickwheel fix                         # whole library
+clickwheel fix "Artist - Album Name"   # just one folder
+```
+
+A run reports what it touched and skips anything the catalog already knows is
+complete:
+
+```text
+fix: 642 albums in catalog
+  albumartist  ·  repaired 18
+  musicbrainz  ·  art +27  year +14   (cached: 601)
+  genres       ·  tagged 33           (cached: 596)
+done in 9.4s · 0 files moved
 ```
 
 ## What it does
@@ -30,6 +42,10 @@ unchanged library does **zero** network work.
 clickwheel fix --refresh-mb        # re-fetch MusicBrainz art/year
 clickwheel fix --refresh-genres    # re-fetch Last.fm genres
 ```
+
+The genre step needs a Last.fm API key — the same one
+[scrobbling](/guides/scrobbling) uses (read-only, no `--auth` required). Without
+it, genres are skipped with a warning and the other steps still run.
 
 <Note>
   No external dependencies beyond the base install — `fix` uses native

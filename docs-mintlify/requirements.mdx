@@ -1,0 +1,65 @@
+---
+title: Requirements
+description: What you need to run clickwheel — supported Macs, iPods, and audio formats.
+---
+
+clickwheel is a local, single-tenant tool: it runs on your Mac and works with
+your library and iPod in place. Here's what it expects.
+
+## System
+
+<CardGroup cols={2}>
+  <Card title="macOS" icon="apple">
+    iPod sync relies on macOS disk utilities to mount and write the device.
+    clickwheel is macOS-only.
+  </Card>
+  <Card title="Python 3.11+" icon="python">
+    Installed as a CLI via [pipx](https://pipx.pypa.io/). Python 3.11, 3.12,
+    3.13, and 3.14 are tested in CI.
+  </Card>
+</CardGroup>
+
+## Supported iPods
+
+clickwheel writes the **iTunesDB** database format used by the classic
+click-wheel iPod line, with **stock Apple firmware**, connected over **USB**.
+
+<Note>
+  **iPod touch and other iOS devices are not supported** — they don't use the
+  iTunesDB format clickwheel writes. This tool is for the click-wheel era.
+</Note>
+
+By default clickwheel expects the device mounted at `/Volumes/IPOD`. If yours
+mounts elsewhere, set `ipod_mount` (or the `IPOD_MOUNT` env var) — see
+[Configuration](/reference/configuration). The default capacity assumption is
+64 GB; set `ipod_capacity_gb` to match your device.
+
+## Audio formats
+
+| Format | On the iPod? | Notes |
+| --- | --- | --- |
+| MP3, AAC/M4A, ALAC | Yes | Played natively by stock firmware. |
+| FLAC | **Skipped** | Stock firmware can't play FLAC. clickwheel excludes it from sync rather than silently transcoding — your library keeps its FLACs, they just don't go on the device. |
+
+## Optional integrations
+
+All off by default; opt in per integration:
+
+- **MCP server** — drive clickwheel from Claude. Needs the `[mcp]` extra
+  (`pipx inject clickwheel 'clickwheel[mcp]'`). See [MCP server](/concepts/mcp-server).
+- **Plex / Plexamp**, **Apple Music**, **Last.fm** — see their guides under
+  How-to. Each needs its own credentials.
+
+The `fix` command (metadata repair via MusicBrainz + Last.fm) runs on the base
+install — **no extra required**.
+
+## Network-stored libraries
+
+If your `music_dir` lives on a network share (SMB/NAS), clickwheel handles a
+stale mount by force-remounting before a file-touching operation instead of
+hanging. You can provide an explicit `smb://` fallback via `library_mount_url`.
+See [Configuration](/reference/configuration).
+
+<Card title="Next: Quickstart" icon="rocket" href="/quickstart">
+  Install, index your library, and load your iPod.
+</Card>

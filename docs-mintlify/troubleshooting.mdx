@@ -1,0 +1,107 @@
+---
+title: Troubleshooting
+description: Fixes for the common snags — iPod not detected, stale libraries, sync surprises.
+---
+
+Most issues fall into a handful of buckets. Find yours below.
+
+## iPod and sync
+
+<AccordionGroup>
+  <Accordion title="A command can't find the iPod / says 'not connected'">
+    Classic iPods spin down and may auto-dismount when idle, so a command that
+    ran a minute ago can suddenly not find the device.
+
+    1. Nudge it awake — touch the wheel, or unplug and replug the USB cable.
+    2. Confirm it's mounted: it should appear at `/Volumes/IPOD` (Finder, or
+       `ls /Volumes`).
+    3. If it mounts under a different name, set `ipod_mount` (or `IPOD_MOUNT`) to
+       that path — see [Configuration](/reference/configuration).
+
+    Then re-run the command.
+  </Accordion>
+
+  <Accordion title="sync seemed to run but didn't remove anything">
+    That's by design — `sync` is **additive**. It copies missing tracks and
+    updates the database, but never deletes tracks you didn't explicitly remove
+    from the playlist. Run `clickwheel diff` first to preview exactly what will
+    change.
+  </Accordion>
+
+  <Accordion title="Some tracks didn't make it onto the device">
+    The most common cause is **FLAC** — stock iPod firmware can't play it, so
+    clickwheel skips FLAC during sync. Check the track's format; if you want it
+    on the iPod, you'll need a playable copy (MP3/AAC/ALAC). See
+    [Requirements](/requirements).
+  </Accordion>
+
+  <Accordion title="The iPod won't unmount, or files look corrupted after unplugging">
+    Always run `clickwheel eject` before disconnecting. Pulling the cable while
+    the iTunesDB is mid-write can corrupt the database. If that happens, the
+    iPod's own Settings → Reset can restore it, then re-`sync`.
+  </Accordion>
+</AccordionGroup>
+
+## Library and scanning
+
+<AccordionGroup>
+  <Accordion title="'Music folder not configured'">
+    clickwheel didn't find a `music_dir`. Create `~/.clickwheel/config.yaml`
+    with at least:
+
+    ```yaml
+    music_dir: /Users/you/Music
+    ```
+
+    Or set the `MUSIC_DIR` environment variable. See the
+    [Quickstart](/quickstart).
+  </Accordion>
+
+  <Accordion title="A command hangs when my music is on a NAS / network share">
+    When the SMB mount backing `music_dir` goes stale (Mac slept, NAS rebooted),
+    clickwheel force-remounts it before touching files rather than hanging
+    indefinitely. If your share is fully unmounted, give clickwheel an explicit
+    fallback so it can bring it back:
+
+    ```yaml
+    library_mount_url: smb://nas.local/Music
+    ```
+
+    Auto-remount is on by default (`library_auto_remount: true`).
+  </Accordion>
+
+  <Accordion title="New music isn't showing up">
+    `scan` is incremental. The interactive commands (`select`, `edit`, `diff`,
+    `sync`) auto-scan via a cheap probe plus a 24h fallback timer, so new
+    artist/album folders are usually picked up automatically. To force a full
+    refresh, run `clickwheel scan`. Use `--no-scan` to skip the auto-scan.
+  </Accordion>
+</AccordionGroup>
+
+## MCP server
+
+<AccordionGroup>
+  <Accordion title="Claude shows stale library data">
+    The MCP server **never auto-scans** — tool calls always serve cached catalog
+    data so a conversation never blocks on a multi-minute library walk. After
+    you add music, run `clickwheel scan` in a terminal to refresh the catalog,
+    then ask again. See [MCP server](/concepts/mcp-server).
+  </Accordion>
+
+  <Accordion title="Remote access returns HTTP 421">
+    The SDK's DNS-rebinding protection rejects requests whose host it doesn't
+    recognize. When running behind a tunnel, pass `--allowed-host` with your
+    domain:
+
+    ```bash
+    clickwheel-mcp serve --http --allowed-host clickwheel.fm
+    ```
+
+    See [Remote / mobile access](/guides/remote-mcp).
+  </Accordion>
+</AccordionGroup>
+
+## Still stuck?
+
+Open an issue with the command you ran and its output:
+[github.com/pdugan20/clickwheel/issues](https://github.com/pdugan20/clickwheel/issues).

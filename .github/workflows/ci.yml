@@ -109,12 +109,13 @@ jobs:
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:
           enable-cache: true
-      - name: Regenerate the CLI + MCP reference from source
+      - name: Regenerate the CLI + MCP reference + changelog from source
         run: |
           uv run --locked --extra mcp python scripts/gen-cli-reference.py
           uv run --locked --extra mcp python scripts/gen-mcp-reference.py
+          uv run --locked python scripts/gen-changelog.py
       - name: Fail if the generated reference drifted from the code
-        run: git diff --exit-code docs-mintlify/reference/cli.mdx docs-mintlify/reference/mcp-tools.mdx
+        run: git diff --exit-code docs-mintlify/reference/cli.mdx docs-mintlify/reference/mcp-tools.mdx docs-mintlify/changelog.mdx
 
   docs-links:
     name: Docs Links

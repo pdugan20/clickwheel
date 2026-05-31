@@ -1,6 +1,6 @@
 {
   "$schema": "https://mintlify.com/schema.json",
-  "theme": "almond",
+  "theme": "maple",
   "name": "clickwheel",
   "description": "Sync your music library to a classic iPod from a modern Mac — with optional Claude/MCP control.",
   "logo": {
@@ -35,7 +35,7 @@
         "groups": [
           {
             "group": "Getting started",
-            "pages": ["introduction", "quickstart"]
+            "pages": ["introduction", "quickstart", "requirements"]
           },
           {
             "group": "How-to guides",
@@ -58,8 +58,8 @@
             ]
           },
           {
-            "group": "Updates",
-            "pages": ["changelog"]
+            "group": "Help",
+            "pages": ["troubleshooting", "changelog"]
           }
         ]
       },

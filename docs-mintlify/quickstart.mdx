@@ -3,67 +3,95 @@ title: Quickstart
 description: Install clickwheel, index your library, and load your iPod.
 ---
 
-This walks you from zero to a freshly-loaded iPod.
-
-## 1. Install
-
-clickwheel installs as a CLI with [pipx](https://pipx.pypa.io/):
-
-```bash
-pipx install clickwheel
-```
+This walks you from zero to a freshly-loaded iPod. It takes about five minutes,
+plus however long the first library scan runs.
 
 <Note>
-  Requires Python 3.11+ and macOS. For the optional MCP server, also run
-  `pipx inject clickwheel 'clickwheel[mcp]'` — see [MCP server](/concepts/mcp-server).
+  Before you start: you need **macOS**, **Python 3.11+**, and a **classic iPod**
+  with stock firmware. See [Requirements](/requirements) for supported models
+  and known limits.
 </Note>
 
-## 2. Point it at your music
+<Steps>
+  <Step title="Install clickwheel">
+    clickwheel installs as a CLI with [pipx](https://pipx.pypa.io/):
 
-clickwheel reads its settings from `~/.clickwheel/config.yaml`. Set your music
-directory:
+    ```bash
+    pipx install clickwheel
+    ```
 
-```yaml
-music_dir: /Users/you/Music
-```
+    For the optional MCP server (drive clickwheel from Claude), also inject the
+    extra — see [MCP server](/concepts/mcp-server):
 
-See [Configuration](/reference/configuration) for every option (and the env-var
-overrides).
+    ```bash
+    pipx inject clickwheel 'clickwheel[mcp]'
+    ```
+  </Step>
 
-## 3. Index your library
+  <Step title="Point it at your music">
+    clickwheel reads its settings from `~/.clickwheel/config.yaml`. Create it and
+    set your music directory:
 
-```bash
-clickwheel scan
-```
+    ```bash
+    mkdir -p ~/.clickwheel
+    cat > ~/.clickwheel/config.yaml << 'EOF'
+    music_dir: /Users/you/Music
+    EOF
+    ```
 
-`scan` is read-only — it reads tags and writes a local SQLite catalog. Nothing
-in your library is modified. Re-runs are incremental.
+    See [Configuration](/reference/configuration) for every option and the
+    env-var overrides.
+  </Step>
 
-## 4. Pick what goes on the iPod
+  <Step title="Index your library">
+    ```bash
+    clickwheel scan
+    ```
 
-Plug in your iPod, then:
+    `scan` is **read-only** — it reads tags and writes a local SQLite catalog.
+    Nothing in your library is modified, and re-runs are incremental. A first
+    scan of a large library can take a few minutes.
 
-```bash
-clickwheel select
-```
+    ```text
+    Scanning /Users/you/Music ...
+    Indexed 8,412 tracks · 642 albums · 318 artists (12.3s)
+    47 tracks missing album art · 31 missing year — run `clickwheel fix`
+    ```
+  </Step>
 
-An interactive checkbox picker lets you choose artists/albums for the device.
-Your selection is saved as a playlist you can re-sync later.
+  <Step title="Pick what goes on the iPod">
+    Plug in your iPod, wait for it to mount, then:
 
-## 5. Sync
+    ```bash
+    clickwheel select
+    ```
 
-```bash
-clickwheel diff   # preview what will change
-clickwheel sync   # push it to the iPod
-clickwheel eject  # safely unmount
-```
+    An interactive checkbox picker lets you choose artists and albums for the
+    device. Your selection is saved as a playlist you can re-sync later.
 
-`sync` writes the iPod database and artwork directly and copies any missing
-tracks. It's additive — it won't delete tracks you didn't ask it to.
+    <Tip>
+      Want everything browsable by artist instead of a curated set? See
+      [Sync to iPod](/guides/sync-to-ipod) — you don't always need a named
+      playlist.
+    </Tip>
+  </Step>
 
-<Warning>
-  FLAC files are skipped — stock iPod firmware doesn't play them.
-</Warning>
+  <Step title="Preview, sync, and eject">
+    ```bash
+    clickwheel diff   # preview what will change
+    clickwheel sync   # push it to the iPod
+    clickwheel eject  # safely unmount
+    ```
+
+    `sync` writes the iPod database and artwork directly and copies any missing
+    tracks. It's **additive** — it won't delete tracks you didn't ask it to.
+
+    <Warning>
+      FLAC files are skipped — stock iPod firmware doesn't play them. Always
+      `eject` before unplugging.
+    </Warning>
+  </Step>
+</Steps>
 
 ## Next steps
 

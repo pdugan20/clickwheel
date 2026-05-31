@@ -33,21 +33,29 @@ A few behaviors worth knowing:
 
 ## Connecting
 
-**Claude Code:**
+<Tabs>
+  <Tab title="Claude Code">
+    ```bash
+    claude mcp add clickwheel clickwheel-mcp --scope user
+    ```
+  </Tab>
+  <Tab title="Claude Desktop">
+    Add to `claude_desktop_config.json`:
 
-```bash
-claude mcp add clickwheel clickwheel-mcp --scope user
-```
-
-**Claude Desktop** — add to `claude_desktop_config.json`:
-
-```json
-{ "mcpServers": { "clickwheel": { "command": "clickwheel-mcp" } } }
-```
-
-**From your phone (the Claude app):** the server can run over Streamable HTTP
-behind a Cloudflare Tunnel, so you can reach it remotely. See
-[Remote / mobile access](/guides/remote-mcp).
+    ```json
+    {
+      "mcpServers": {
+        "clickwheel": { "command": "clickwheel-mcp" }
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Mobile / claude.ai">
+    The server can run over Streamable HTTP behind a Cloudflare Tunnel, so the
+    Claude apps (including your phone) can reach it remotely. See
+    [Remote / mobile access](/guides/remote-mcp).
+  </Tab>
+</Tabs>
 
 ## Transports
 
