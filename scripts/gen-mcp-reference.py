@@ -17,6 +17,8 @@ from __future__ import annotations
 import pathlib
 
 # Importing the server registers every tool on the shared FastMCP instance.
+from mcp_examples import PROMPTS
+
 from clickwheel.mcp import server as _server  # noqa: F401
 from clickwheel.mcp._runtime import mcp
 
@@ -92,6 +94,10 @@ def _params(schema: dict) -> list[str]:
 
 def _render_section(tools: list, label: str) -> str:
     lines = [_header(label)]
+    prompts = PROMPTS.get(label)
+    if prompts:
+        lines.append("\n**Try asking Claude**\n")
+        lines.extend(f'- _"{p}"_' for p in prompts)
     for tool in sorted(tools, key=lambda t: t.name):
         lines.append(f"\n## `{tool.name}`\n")
         desc = _first_paragraph(tool.description)

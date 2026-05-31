@@ -3,6 +3,8 @@ title: Plex / Plexamp
 description: Mirror clickwheel playlists into a Plex music library, and pull them back.
 ---
 
+import McpGating from '/snippets/mcp-gating.mdx'
+
 If you run Plex, clickwheel can push the same playlists into your Plex music
 library so Plexamp and Plex web see them alongside your iPod, and pull Plex
 playlists back into clickwheel. It's bidirectional.
@@ -83,5 +85,6 @@ materializes a snapshot).
 
 The same flows are MCP tools: `plex_health`, `list_plex_playlists`,
 `sync_playlist_to_plex`, `pull_playlist_from_plex`, see the
-[MCP tool reference](/reference/mcp-tools). The two write tools are gated by your
-client's Allow/Deny prompt.
+[MCP tool reference](/reference/mcp-tools).
+
+<McpGating />

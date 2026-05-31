@@ -3,6 +3,8 @@ title: Scrobble to Last.fm
 description: Submit your iPod's listen history to Last.fm.
 ---
 
+import McpGating from '/snippets/mcp-gating.mdx'
+
 clickwheel reads play counts off the iPod and submits them to Last.fm. It's
 opt-in. Nothing leaves your Mac until you add credentials. No extra to install;
 Last.fm support is in the base package.
@@ -66,5 +68,6 @@ clickwheel to read its play cache.
 ## From Claude
 
 MCP tools: `get_pending_scrobbles` (preview, with a `dry_run` option) and
-`submit_scrobbles` (gated by your client's Allow/Deny prompt). See the
-[MCP tool reference](/reference/mcp-tools).
+`submit_scrobbles`. See the [MCP tool reference](/reference/mcp-tools).
+
+<McpGating />

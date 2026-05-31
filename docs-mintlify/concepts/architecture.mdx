@@ -20,12 +20,12 @@ MCP server layered on top of the same core logic.
 
 ## The data flow
 
-```text
-your music files ──scan──▶ SQLite catalog ──select──▶ playlist
-                                                          │
-                                                   diff / sync
-                                                          ▼
-                                                   iPod (iTunesDB)
+```mermaid
+flowchart LR
+    files["Music files"] -->|scan| db[("SQLite catalog")]
+    db -->|"select / edit"| pl["Playlist"]
+    pl -->|"diff / sync"| ipod["iPod (iTunesDB)"]
+    db -.->|"fix (writes tags back)"| files
 ```
 
 - **`scan`** reads tags and populates SQLite. It never writes to your files.
