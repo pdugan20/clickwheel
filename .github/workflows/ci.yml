@@ -115,7 +115,7 @@ jobs:
           uv run --locked --extra mcp python scripts/gen-mcp-reference.py
           uv run --locked python scripts/gen-changelog.py
       - name: Fail if the generated reference drifted from the code
-        run: git diff --exit-code docs-mintlify/reference/cli.mdx docs-mintlify/reference/mcp-tools.mdx docs-mintlify/changelog.mdx
+        run: git diff --exit-code docs-mintlify/reference/cli/ docs-mintlify/reference/mcp-tools.mdx docs-mintlify/changelog.mdx
 
   docs-links:
     name: Docs Links
