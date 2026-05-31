@@ -12,11 +12,11 @@ place. There's no cloud service holding your data. The catalog is built from
 your local files; the iPod is a USB-mounted volume the tool writes directly.
 
 This is why "multi-user clickwheel" isn't a thing a hosted service could
-provide — each person's library and iPod are physically bound to their own Mac.
+provide: each person's library and iPod are physically bound to their own Mac.
 Even the [remote/mobile MCP access](/guides/remote-mcp) keeps the Mac as the
 source of truth and simply exposes the existing local server through a tunnel.
 
-## Metadata is fixed in place — never moved
+## Metadata is fixed in place, never moved
 
 The [`fix`](/guides/fix-metadata) command repairs tags, art, and genres by
 writing back to the original files. It **never moves or renames** them, because
@@ -35,7 +35,7 @@ FLACs; they just don't go on the iPod.
 
 ## Manual refresh for the MCP server
 
-The MCP server never auto-scans — chat tool calls always serve cached catalog
+The MCP server never auto-scans: chat tool calls always serve cached catalog
 data, so a conversation never blocks on a multi-minute library walk. You refresh
 by running `clickwheel scan` when you've added music. (The interactive CLI
 commands *do* auto-scan, via a cheap probe plus a fallback timer.)

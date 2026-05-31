@@ -1,6 +1,6 @@
 ---
 title: Configuration
-description: Every clickwheel setting — the config file, env-var overrides, and how auto-scan decides to re-index.
+description: Every clickwheel setting, the config file, env-var overrides, and how auto-scan decides to re-index.
 ---
 
 clickwheel reads runtime settings from **`~/.clickwheel/config.yaml`**.
@@ -35,12 +35,12 @@ library_auto_remount: true          # force-remount a stale share before touchin
 library_mount_url: smb://nas.local/Music  # explicit fallback for the fully-unmounted case
 
 # --- Integrations (all off by default; see the guides) ----------------------
-# Last.fm — see /guides/scrobbling
+# Last.fm, see /guides/scrobbling
 lastfm_api_key: your_key
 lastfm_api_secret: your_secret
 lastfm_username: your_username
 
-# Plex / Plexamp — see /guides/plex
+# Plex / Plexamp, see /guides/plex
 plex_enabled: false
 plex_url: http://192.168.1.10:32400
 plex_library_name: Music            # default: 'Music'
@@ -48,7 +48,7 @@ plex_path_remap_local: ''           # only when Plex runs on another host (e.g. 
 plex_path_remap_plex: ''
 # plex_token: ...   # prefer the CLICKWHEEL_PLEX_TOKEN env var over inline YAML
 
-# Apple Music — see /guides/apple-music
+# Apple Music, see /guides/apple-music
 apple_music_enabled: false
 apple_music_storefront: us          # default: 'us'
 apple_music_key_id: ''
@@ -58,7 +58,7 @@ apple_music_key_file: ''            # path to your .p8 private key
 
 <Note>
   Keep secrets (Plex token, Last.fm secret, Apple Music key) in environment
-  variables rather than inline YAML — see the override table below.
+  variables rather than inline YAML, see the override table below.
 </Note>
 
 ## Environment variable overrides
@@ -85,10 +85,10 @@ Every key maps to an env var that overrides the file value:
 `select`, `edit`, `diff`, and `sync` check whether the catalog is stale before
 running, using a **two-tier** strategy:
 
-1. **Cheap probe** — stats `music_dir` and its top-level folders (~5s on SMB). If
+1. **Cheap probe**: stats `music_dir` and its top-level folders (~5s on SMB). If
    a child folder is newer than the last full scan, the library changed (new
    artist/album) and a full re-scan runs.
-2. **24-hour fallback** — even if the probe sees no change, a full re-scan runs
+2. **24-hour fallback**: even if the probe sees no change, a full re-scan runs
    once `auto_scan_staleness_minutes` has elapsed. This catches a new track
    added inside an existing album folder, which the probe can't see.
 
@@ -105,7 +105,7 @@ command costs little.
   <Accordion title="When you must scan manually">
     The probe can't see metadata-only edits inside files. After
     `clickwheel fix` or any external tag editor, run `clickwheel scan` so the
-    catalog picks up the new tags. The **MCP server never auto-scans** — run
+    catalog picks up the new tags. The **MCP server never auto-scans**: run
     `clickwheel scan` in a terminal and the next chat session sees the change.
   </Accordion>
 </AccordionGroup>
@@ -125,5 +125,5 @@ The MCP server reads these from the environment (it doesn't use the YAML file):
 ## Where data lives
 
 clickwheel stores its catalog at **`~/.clickwheel/clickwheel.db`** (SQLite). The
-location isn't configurable. The database is safe to delete — `clickwheel scan`
+location isn't configurable. The database is safe to delete, `clickwheel scan`
 rebuilds it from your music directory.

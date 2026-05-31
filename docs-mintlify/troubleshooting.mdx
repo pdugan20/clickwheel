@@ -1,6 +1,6 @@
 ---
 title: Troubleshooting
-description: Fixes for the common snags — iPod not detected, stale libraries, sync surprises.
+description: Fixes for common snags like iPod not detected, stale libraries, and sync surprises.
 ---
 
 Most issues fall into a handful of buckets. Find yours below.
@@ -12,24 +12,24 @@ Most issues fall into a handful of buckets. Find yours below.
     Classic iPods spin down and may auto-dismount when idle, so a command that
     ran a minute ago can suddenly not find the device.
 
-    1. Nudge it awake — touch the wheel, or unplug and replug the USB cable.
+    1. Nudge it awake: touch the wheel, or unplug and replug the USB cable.
     2. Confirm it's mounted: it should appear at `/Volumes/IPOD` (Finder, or
        `ls /Volumes`).
     3. If it mounts under a different name, set `ipod_mount` (or `IPOD_MOUNT`) to
-       that path — see [Configuration](/reference/configuration).
+       that path, see [Configuration](/reference/configuration).
 
     Then re-run the command.
   </Accordion>
 
   <Accordion title="sync seemed to run but didn't remove anything">
-    That's by design — `sync` is **additive**. It copies missing tracks and
+    That's by design. `sync` is **additive**. It copies missing tracks and
     updates the database, but never deletes tracks you didn't explicitly remove
     from the playlist. Run `clickwheel diff` first to preview exactly what will
     change.
   </Accordion>
 
   <Accordion title="Some tracks didn't make it onto the device">
-    The most common cause is **FLAC** — stock iPod firmware can't play it, so
+    The most common cause is **FLAC**: stock iPod firmware can't play it, so
     clickwheel skips FLAC during sync. Check the track's format; if you want it
     on the iPod, you'll need a playable copy (MP3/AAC/ALAC). See
     [Requirements](/requirements).
@@ -82,7 +82,7 @@ Most issues fall into a handful of buckets. Find yours below.
 
 <AccordionGroup>
   <Accordion title="Claude shows stale library data">
-    The MCP server **never auto-scans** — tool calls always serve cached catalog
+    The MCP server **never auto-scans**: tool calls always serve cached catalog
     data so a conversation never blocks on a multi-minute library walk. After
     you add music, run `clickwheel scan` in a terminal to refresh the catalog,
     then ask again. See [MCP server](/concepts/mcp-server).

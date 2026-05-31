@@ -1,6 +1,6 @@
 ---
 title: Plex / Plexamp
-description: Mirror clickwheel playlists into a Plex music library — and pull them back.
+description: Mirror clickwheel playlists into a Plex music library, and pull them back.
 ---
 
 If you run Plex, clickwheel can push the same playlists into your Plex music
@@ -24,7 +24,7 @@ playlists back into clickwheel. It's bidirectional.
     plex_library_name: Music
     ```
 
-    Keep the token out of YAML — put it in `~/.clickwheel/.env` (mode `600`):
+    Keep the token out of YAML: put it in `~/.clickwheel/.env` (mode `600`):
 
     ```bash
     CLICKWHEEL_PLEX_TOKEN=...
@@ -56,16 +56,16 @@ clickwheel plex pull <name>     # import a Plex playlist into clickwheel
 ```
 
 **Push** reports `pushed` (lines sent) and `resolved` (lines Plex matched). A gap
-means Plex hasn't scanned those files yet — trigger a Plex library scan and
+means Plex hasn't scanned those files yet, trigger a Plex library scan and
 re-run. Re-syncing overwrites clickwheel's prior managed copy but leaves a
 same-named playlist *you* made in Plex alone.
 
-**Pull** is handy after a fresh install or Mac wipe — when Plex still has your
+**Pull** is handy after a fresh install or Mac wipe, when Plex still has your
 playlists but clickwheel's catalog is empty. Smart playlists are dynamic Plex
 queries, so pull refuses them unless you pass `--include-smart` (which
 materializes a snapshot).
 
-<Accordion title="Path remap — when Plex sees your files at a different path">
+<Accordion title="Path remap: when Plex sees your files at a different path">
   clickwheel and Plex can mount the same library at different paths (e.g.
   clickwheel over SMB, Plex on the NAS's local filesystem). The remap swaps one
   prefix for another:
@@ -82,6 +82,6 @@ materializes a snapshot).
 ## From Claude
 
 The same flows are MCP tools: `plex_health`, `list_plex_playlists`,
-`sync_playlist_to_plex`, `pull_playlist_from_plex` — see the
+`sync_playlist_to_plex`, `pull_playlist_from_plex`, see the
 [MCP tool reference](/reference/mcp-tools). The two write tools are gated by your
 client's Allow/Deny prompt.

@@ -10,12 +10,12 @@ MCP server layered on top of the same core logic.
 
 | Module | Role |
 | --- | --- |
-| `cli.py` | Typer command definitions — the CLI entry point and display layer. |
+| `cli.py` | Typer command definitions, the CLI entry point and display layer. |
 | `actions.py` | Pure-logic functions shared by the CLI and the MCP server. No Rich/typer; errors are a typed `ClickwheelError` hierarchy. |
-| `db.py` | SQLite catalog — tracks, playlists, scrobble cache, MusicBrainz + genre caches. |
+| `db.py` | SQLite catalog: tracks, playlists, scrobble cache, MusicBrainz + genre caches. |
 | `library.py` | Music-file scanning via mutagen. |
 | `scrobble.py` | Last.fm scrobbling (pylast). |
-| `ipod/` | Vendored iOpenPodv2 — reads/writes the binary iTunesDB + ArtworkDB. |
+| `ipod/` | Vendored iOpenPodv2, reads/writes the binary iTunesDB + ArtworkDB. |
 | `mcp/` | Optional MCP server (gated by the `[mcp]` extra). |
 
 ## The data flow
@@ -32,15 +32,15 @@ your music files ──scan──▶ SQLite catalog ──select──▶ playli
 - **`select`/`edit`** build playlists in SQLite.
 - **`sync`** reads a playlist and writes the iPod database + artwork, copying
   missing audio.
-- **`fix`** is the one path that writes *into* your library — repairing metadata
+- **`fix`** is the one path that writes *into* your library, repairing metadata
   in place (it never moves or renames files, because Plex reads the same library).
 
 ## Two surfaces, one core
 
 The CLI and the MCP server are both thin adapters over `actions.py`:
 
-- **CLI** — a *display* adapter (Rich tables, spinners, interactive pickers).
-- **MCP** — an *RPC* adapter (structured tool results for Claude).
+- **CLI**: a *display* adapter (Rich tables, spinners, interactive pickers).
+- **MCP**: an *RPC* adapter (structured tool results for Claude).
 
 New library/iPod features land in `actions.py` first, then get a thin wrapper in
 each surface. This is why the two never drift apart.

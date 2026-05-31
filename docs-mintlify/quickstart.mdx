@@ -21,7 +21,7 @@ plus however long the first library scan runs.
     ```
 
     For the optional MCP server (drive clickwheel from Claude), also inject the
-    extra — see [MCP server](/concepts/mcp-server):
+    extra, see [MCP server](/concepts/mcp-server):
 
     ```bash
     pipx inject clickwheel 'clickwheel[mcp]'
@@ -48,14 +48,14 @@ plus however long the first library scan runs.
     clickwheel scan
     ```
 
-    `scan` is **read-only** — it reads tags and writes a local SQLite catalog.
+    `scan` is **read-only**: it reads tags and writes a local SQLite catalog.
     Nothing in your library is modified, and re-runs are incremental. A first
     scan of a large library can take a few minutes.
 
     ```text
     Scanning /Users/you/Music ...
     Indexed 8,412 tracks · 642 albums · 318 artists (12.3s)
-    47 tracks missing album art · 31 missing year — run `clickwheel fix`
+    47 tracks missing album art · 31 missing year. Run `clickwheel fix`
     ```
   </Step>
 
@@ -71,7 +71,7 @@ plus however long the first library scan runs.
 
     <Tip>
       Want everything browsable by artist instead of a curated set? See
-      [Sync to iPod](/guides/sync-to-ipod) — you don't always need a named
+      [Sync to iPod](/guides/sync-to-ipod), you don't always need a named
       playlist.
     </Tip>
   </Step>
@@ -84,10 +84,10 @@ plus however long the first library scan runs.
     ```
 
     `sync` writes the iPod database and artwork directly and copies any missing
-    tracks. It's **additive** — it won't delete tracks you didn't ask it to.
+    tracks. It's **additive**: it won't delete tracks you didn't ask it to.
 
     <Warning>
-      FLAC files are skipped — stock iPod firmware doesn't play them. Always
+      FLAC files are skipped: stock iPod firmware doesn't play them. Always
       `eject` before unplugging.
     </Warning>
   </Step>

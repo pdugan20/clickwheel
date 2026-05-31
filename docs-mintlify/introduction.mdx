@@ -1,27 +1,31 @@
 ---
-title: clickwheel
-description: Sync your music library to a classic iPod from a modern Mac — with optional Claude/MCP control.
+title: Welcome to clickwheel
+sidebarTitle: Welcome
+description: Sync your music library to a classic iPod from a modern Mac, with optional Claude/MCP control.
 ---
 
-**clickwheel** is a Python command-line tool for keeping a classic iPod loaded
-from a modern Mac. It indexes your local music library, lets you curate exactly
-what goes on the device, writes the iPod database directly (no iTunes/Music.app
-sync dance), and can scrobble what you listen to back to Last.fm.
-
-It also ships an optional **MCP server**, so you can drive your library and iPod
-conversationally from Claude — "what's on my iPod?", "add Big Thief", "build a
-45-minute late-night mix and sync it."
+**clickwheel** turns your local music library into playlists and pushes them to
+a classic **iPod**, **Plexamp**, or **Apple Music**. All from a modern Mac, no
+iTunes required.
 
 ## What it does
 
-- **Index** your library into a fast local SQLite catalog (`scan`).
-- **Curate** a subset for the iPod with an interactive picker (`select`).
-- **Sync** that subset to the device, writing the iTunesDB + artwork directly
-  (`sync`).
-- **Repair metadata** — album artist, year, cover art (MusicBrainz), and genres
-  (Last.fm) — in place, without moving your files (`fix`).
-- **Integrate** with Plex/Plexamp, Apple Music, and Last.fm.
-- **Talk to Claude** about all of the above via the MCP server.
+- **Build [playlists](/guides/playlists)** from your local library: named,
+  curated collections, or just load an iPod browsable by artist and album.
+- **Push them where you listen**: a classic [iPod](/guides/sync-to-ipod)
+  (writing the iTunesDB + artwork directly), [Plexamp](/guides/plex) via Plex,
+  or [Apple Music](/guides/apple-music). Pull them back, too.
+- **Clean up [metadata](/guides/fix-metadata) in place**: album artist, year,
+  cover art (MusicBrainz), and genres (Last.fm), without moving your files.
+- **[Scrobble](/guides/scrobbling)** your iPod listens to Last.fm.
+
+## How to use it
+
+- **As a [CLI](/reference/cli)**: scan your library, curate playlists with an
+  interactive picker, and sync them to a device or service from your terminal.
+- **As an [MCP server](/concepts/mcp-server)**: do all of it conversationally
+  from Claude: _"build a 45-minute late-night mix and put it on my iPod,"_
+  _"what's on my iPod?,"_ _"push my road-trip playlist to Plexamp."_
 
 ## Who it's for
 
@@ -34,7 +38,7 @@ and clickwheel works with them in place.
     Install, index your library, and load your iPod in a few commands.
   </Card>
   <Card title="MCP server" icon="robot" href="/concepts/mcp-server">
-    Drive clickwheel from Claude — locally or from your phone.
+    Drive clickwheel from Claude, locally or from your phone.
   </Card>
   <Card title="CLI reference" icon="terminal" href="/reference/cli">
     Every command and flag (generated from the source).

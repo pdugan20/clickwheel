@@ -1,0 +1,8 @@
+/* clickwheel docs: custom styles.
+   NOTE: minimal/testing only; the full visual-polish pass comes later. */
+
+/* Shrink the navbar wordmark logo. Default navbar logo height is ~28px. */
+img[src*="/logo/"] {
+  height: 1.15rem !important;
+  width: auto !important;
+}

@@ -28,7 +28,7 @@ iCloud Music Library.
 
     <Warning>
       Apple lets you download the `.p8` **only once**, at creation. Back it up
-      immediately (e.g. to a password manager) — if you lose it you must
+      immediately (e.g. to a password manager), if you lose it you must
       regenerate.
     </Warning>
   </Step>
@@ -54,7 +54,7 @@ iCloud Music Library.
 
     `auth` opens MusicKit JS in your browser; sign in with your Apple ID. The
     doctor checks config, the `.p8`, both tokens, iCloud Music Library state, and
-    storefront — per-stage detail tells you what to fix.
+    storefront. Per-stage detail tells you what to fix.
   </Step>
 </Steps>
 
@@ -68,11 +68,11 @@ clickwheel apple pull <name>     # import an Apple Music playlist into clickwhee
 clickwheel apple delete <name>   # remove an Apple Music playlist (macOS only)
 ```
 
-- **Push** resolves each track via a match ladder — ISRC tag → catalog fuzzy
+- **Push** resolves each track via a match ladder: ISRC tag → catalog fuzzy
   search (title/artist/album weighted) → your library when iCloud Music Library
   is on. Low-confidence matches are skipped unless you pass `--include-low`.
   Resolved IDs cache in SQLite, so repeat pushes skip the network.
-- **Pull** is the reverse — useful when you curated on your iPhone and want it on
+- **Pull** is the reverse, useful when you curated on your iPhone and want it on
   the iPod.
 - **Delete** drives Music.app via AppleScript, because Apple's REST API
   [refuses to delete library playlists](https://developer.apple.com/forums/thread/107807).
@@ -91,5 +91,5 @@ clickwheel apple delete <name>   # remove an Apple Music playlist (macOS only)
 
 MCP tools: `apple_music_health`, `list_apple_music_playlists`,
 `sync_playlist_to_apple_music`, `pull_playlist_from_apple_music`,
-`delete_apple_music_playlist` — see the [MCP tool reference](/reference/mcp-tools).
+`delete_apple_music_playlist`, see the [MCP tool reference](/reference/mcp-tools).
 The write tools are gated by your client's Allow/Deny prompt.

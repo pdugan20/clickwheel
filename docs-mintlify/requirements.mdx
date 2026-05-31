@@ -1,6 +1,6 @@
 ---
 title: Requirements
-description: What you need to run clickwheel — supported Macs, iPods, and audio formats.
+description: What you need to run clickwheel, including supported Macs, iPods, and audio formats.
 ---
 
 clickwheel is a local, single-tenant tool: it runs on your Mac and works with
@@ -25,12 +25,12 @@ clickwheel writes the **iTunesDB** database format used by the classic
 click-wheel iPod line, with **stock Apple firmware**, connected over **USB**.
 
 <Note>
-  **iPod touch and other iOS devices are not supported** — they don't use the
+  **iPod touch and other iOS devices are not supported.** They don't use the
   iTunesDB format clickwheel writes. This tool is for the click-wheel era.
 </Note>
 
 By default clickwheel expects the device mounted at `/Volumes/IPOD`. If yours
-mounts elsewhere, set `ipod_mount` (or the `IPOD_MOUNT` env var) — see
+mounts elsewhere, set `ipod_mount` (or the `IPOD_MOUNT` env var), see
 [Configuration](/reference/configuration). The default capacity assumption is
 64 GB; set `ipod_capacity_gb` to match your device.
 
@@ -39,19 +39,19 @@ mounts elsewhere, set `ipod_mount` (or the `IPOD_MOUNT` env var) — see
 | Format | On the iPod? | Notes |
 | --- | --- | --- |
 | MP3, AAC/M4A, ALAC | Yes | Played natively by stock firmware. |
-| FLAC | **Skipped** | Stock firmware can't play FLAC. clickwheel excludes it from sync rather than silently transcoding — your library keeps its FLACs, they just don't go on the device. |
+| FLAC | **Skipped** | Stock firmware can't play FLAC. clickwheel excludes it from sync rather than silently transcoding. Your library keeps its FLACs, they just don't go on the device. |
 
 ## Optional integrations
 
 All off by default; opt in per integration:
 
-- **MCP server** — drive clickwheel from Claude. Needs the `[mcp]` extra
+- **MCP server**: drive clickwheel from Claude. Needs the `[mcp]` extra
   (`pipx inject clickwheel 'clickwheel[mcp]'`). See [MCP server](/concepts/mcp-server).
-- **Plex / Plexamp**, **Apple Music**, **Last.fm** — see their guides under
+- **Plex / Plexamp**, **Apple Music**, **Last.fm**: see their guides under
   How-to. Each needs its own credentials.
 
 The `fix` command (metadata repair via MusicBrainz + Last.fm) runs on the base
-install — **no extra required**.
+install, **no extra required**.
 
 ## Network-stored libraries
 

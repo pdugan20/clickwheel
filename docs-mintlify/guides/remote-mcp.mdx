@@ -5,7 +5,7 @@ description: Use clickwheel from the Claude apps, including your phone.
 
 The MCP server runs on your Mac. To reach it from the **Claude mobile app** (or
 claude.ai anywhere), you expose the local server to the internet through a
-**Cloudflare Tunnel**, protected by **Cloudflare Access** — keeping the Mac as
+**Cloudflare Tunnel**, protected by **Cloudflare Access**, keeping the Mac as
 the source of truth.
 
 <Note>
@@ -24,7 +24,7 @@ Claude app ──HTTPS──▶ Cloudflare (Access auth) ──tunnel──▶ y
   `127.0.0.1` (the tunnel is the only ingress).
 - A **Cloudflare Tunnel** routes `clickwheel.fm` → the local server.
 - **Cloudflare Access** (Zero Trust) gates it to your email and natively handles
-  the MCP OAuth flow — no OAuth code required.
+  the MCP OAuth flow, no OAuth code required.
 
 ## Setup (summary)
 
@@ -42,14 +42,14 @@ In short:
 
 ## Adding the connector
 
-You **add the connector on claude.ai (web)** — Settings → Connectors → Add
+You **add the connector on claude.ai (web)**: Settings → Connectors → Add
 custom connector → your MCP URL. Complete the Cloudflare Access login. It then
 becomes usable in the **mobile app** (you can't add connectors from the phone,
 only use ones added on the web).
 
 ## What works from mobile
 
-- **Library + playlist** tools — fully (they hit the local catalog).
-- **Plex / Apple Music / Last.fm** — whenever the Mac can reach them.
-- **iPod** tools — only when the iPod is docked to the Mac; otherwise they fail
+- **Library + playlist** tools: fully (they hit the local catalog).
+- **Plex / Apple Music / Last.fm**: whenever the Mac can reach them.
+- **iPod** tools: only when the iPod is docked to the Mac; otherwise they fail
   gracefully.

@@ -4,7 +4,7 @@ description: Submit your iPod's listen history to Last.fm.
 ---
 
 clickwheel reads play counts off the iPod and submits them to Last.fm. It's
-opt-in — nothing leaves your Mac until you add credentials. No extra to install;
+opt-in. Nothing leaves your Mac until you add credentials. No extra to install;
 Last.fm support is in the base package.
 
 ## Setup
@@ -36,7 +36,7 @@ Last.fm support is in the base package.
     clickwheel scrobble --auth
     ```
 
-    A browser opens to Last.fm — click **Allow**. clickwheel writes a session key
+    A browser opens to Last.fm. Click **Allow**. clickwheel writes a session key
     into your config; future runs use it without prompting.
   </Step>
 </Steps>
@@ -58,7 +58,7 @@ clickwheel to read its play cache.
 
 <Note>
   The same `lastfm_api_key` powers genre lookups in
-  [`clickwheel fix`](/guides/fix-metadata) (read-only — no session key needed).
+  [`clickwheel fix`](/guides/fix-metadata) (read-only, no session key needed).
   If you only want genre tagging and never plan to scrobble, stop after the API
   key is in place and skip `--auth`.
 </Note>
