@@ -189,12 +189,19 @@ Adopted:
   prompts per domain (`scripts/mcp_examples.py`)
 - Reusable snippets (`snippets/`) for shared boilerplate (e.g. the Allow/Deny
   gating note across guides)
-- Mermaid diagrams (architecture data-flow)
+- Code block titles for config and `.env` blocks (filename in the title bar)
 - `llms.txt` / `llms-full.txt` (auto-generated)
+
+Decided against (for now):
+
+- **Mermaid diagrams.** Tried it; the shapes/containers/arrows read too generic
+  for the visual bar, and it can't be styled to "designed" quality. Diagrams are
+  parked in [DEFERRED.md](DEFERRED.md) to add back as polished SVGs in the visual
+  pass.
 
 Queued:
 
-- [ ] Code block titles and `<CodeGroup>` where useful
+- [ ] `<CodeGroup>` (tabbed code) where useful
 - [ ] Branded OG/social image and card icons (fold into the visual pass)
 - [ ] Analytics (GA4 / PostHog), optional, only if usage data is wanted
 

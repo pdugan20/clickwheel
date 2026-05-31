@@ -31,6 +31,19 @@ pull an item back into [TRACKER.md](TRACKER.md) when its reason no longer holds.
 - **Docs analytics / search analytics.**
   _Reason:_ Mintlify provides basics out of the box; custom analytics is premature.
 
+## Diagrams to design (polished visuals)
+
+Plain-text and Mermaid diagrams were pulled (too generic for the visual bar).
+Add back as polished, designed visuals (a styled SVG or image) during the visual
+pass. The prose bullets stay in place meanwhile, so nothing is lost.
+
+- **Architecture data-flow** (`concepts/architecture.mdx`, "The data flow"):
+  Music files →(scan)→ SQLite catalog →(select / edit)→ Playlist →(diff / sync)→
+  iPod (iTunesDB); `fix` writes tags back into the library files.
+- **Remote / mobile access flow** (`guides/remote-mcp.mdx`, "How it works"):
+  Claude app →(HTTPS)→ Cloudflare (Access auth) →(tunnel)→ Mac running
+  `clickwheel-mcp serve --http`.
+
 ## Explicitly NOT in this project (separate track)
 
 - Finishing the **remote-access round**: launchd persistence, connector
