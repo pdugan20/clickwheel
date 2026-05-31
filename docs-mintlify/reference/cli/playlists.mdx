@@ -17,6 +17,13 @@ clickwheel delete [OPTIONS] PLAYLIST_NAME
 
 Delete a saved playlist.
 
+**Examples**
+
+```bash
+# Delete a playlist (asks to confirm)
+clickwheel delete road-trip
+```
+
 
 <ParamField path="playlist_name" type="string" required>
   Playlist to delete
@@ -33,6 +40,19 @@ clickwheel edit [OPTIONS] [PLAYLIST_NAME]
 ```
 
 Add or remove artists from a playlist.
+
+**Examples**
+
+```bash
+# Add an artist
+clickwheel edit road-trip --add "Big Thief"
+
+# Remove an artist
+clickwheel edit road-trip --remove "Wilco"
+
+# Set the description
+clickwheel edit road-trip -d "Windows down"
+```
 
 
 <ParamField path="playlist_name" type="string" default="ipod">
@@ -67,6 +87,13 @@ Uses the missing-since flag set by `clickwheel scan`. Run a scan
 first if you want freshness; pass --no-scan to skip the autoscan
 if you've already scanned recently.
 
+**Examples**
+
+```bash
+# Drop references to files no longer on disk
+clickwheel heal road-trip
+```
+
 
 <ParamField path="playlist_name" type="string" required>
   Playlist to heal
@@ -83,6 +110,16 @@ clickwheel playlist [OPTIONS] [NAME]
 ```
 
 Show your saved playlists.
+
+**Examples**
+
+```bash
+# List saved playlists
+clickwheel playlist
+
+# Show one playlist's tracks
+clickwheel playlist road-trip
+```
 
 
 <ParamField path="name" type="string">

@@ -19,6 +19,13 @@ Probe your Plex config end-to-end. Reports each stage (config,
 plexapi install, server connect, music section lookup, sample-track
 resolution) so failures point at exactly what's broken.
 
+**Examples**
+
+```bash
+# Diagnose the Plex connection (five stages)
+clickwheel plex doctor
+```
+
 
 ## `list`
 
@@ -32,6 +39,13 @@ Manual playlists are safe to pull back into clickwheel via
 `clickwheel plex pull <name>`. Smart playlists are dynamically
 computed by Plex; pulling one freezes a snapshot and requires
 `--include-smart`.
+
+**Examples**
+
+```bash
+# List Plex audio playlists
+clickwheel plex list
+```
 
 
 ## `pull`
@@ -48,6 +62,13 @@ Plex track's file path is translated back to clickwheel's view via
 the configured remap and looked up in the index, only matched
 tracks land in the new playlist; unmatched ones are listed below
 so you know what to chase.
+
+**Examples**
+
+```bash
+# Import a Plex playlist into clickwheel
+clickwheel plex pull road-trip
+```
 
 
 <ParamField path="name" type="string" required>
@@ -69,6 +90,16 @@ clickwheel sync-plex [OPTIONS] [PLAYLIST_NAME]
 ```
 
 Push playlist(s) to your Plex music library.
+
+**Examples**
+
+```bash
+# Push one playlist to Plex
+clickwheel sync-plex road-trip
+
+# Push every clickwheel playlist
+clickwheel sync-plex --all
+```
 
 
 <ParamField path="playlist_name" type="string">

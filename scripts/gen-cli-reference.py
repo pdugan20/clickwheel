@@ -19,6 +19,7 @@ import pathlib
 
 import click
 import typer.main
+from cli_examples import EXAMPLES
 
 from clickwheel.cli import app
 
@@ -82,6 +83,22 @@ def _param_fields(cmd: click.Command) -> list[str]:
     return out
 
 
+def _examples_block(path: str) -> list[str]:
+    """Render the curated Examples block for a command, if any."""
+    examples = EXAMPLES.get(path)
+    if not examples:
+        return []
+    out = ["**Examples**", "", "```bash"]
+    for i, (command, comment) in enumerate(examples):
+        if i:
+            out.append("")
+        if comment:
+            out.append(f"# {comment}")
+        out.append(command)
+    out.extend(["```", ""])
+    return out
+
+
 def _collect(
     group: click.Group, prefix: str, inherited: str
 ) -> list[tuple[str, str, click.Command]]:
@@ -117,6 +134,7 @@ def _render_section(commands: list[tuple[str, click.Command]], section: str) -> 
         help_text = (cmd.help or cmd.short_help or "").strip()
         if help_text:
             lines.append(help_text + "\n")
+        lines.extend(_examples_block(path))
         lines.extend(_param_fields(cmd))
     return "\n".join(lines).rstrip() + "\n"
 

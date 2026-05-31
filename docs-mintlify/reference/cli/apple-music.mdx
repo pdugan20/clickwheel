@@ -23,6 +23,13 @@ user token back to clickwheel. The token is saved to
 ~/.clickwheel/.env as APPLE_MUSIC_USER_TOKEN. One-time per Mac
 per Apple ID (the token is long-lived but can be revoked).
 
+**Examples**
+
+```bash
+# One-time browser authorization
+clickwheel apple auth
+```
+
 
 ## `delete`
 
@@ -60,6 +67,13 @@ clickwheel apple doctor [OPTIONS]
 Probe Apple Music end-to-end (config, .p8, dev token, user token,
 storefront, iCloud Music Library state). Mirrors `plex doctor`.
 
+**Examples**
+
+```bash
+# End-to-end Apple Music probe
+clickwheel apple doctor
+```
+
 
 ## `list`
 
@@ -86,6 +100,13 @@ Read-only against your Apple Music account (no playlist is created)
 but populates the local match cache so a subsequent `apple push`
 is fast. Tracks below `--min-confidence` are surfaced as
 'low-confidence' so you can eyeball them before pushing.
+
+**Examples**
+
+```bash
+# Preview how tracks resolve (no writes)
+clickwheel apple match road-trip
+```
 
 
 <ParamField path="name" type="string" required>
@@ -114,6 +135,13 @@ your SQLite index → fuzzy composite score. Unmatched rows are
 surfaced so you know what to chase (typically files Apple has
 that clickwheel hasn't scanned).
 
+**Examples**
+
+```bash
+# Import an Apple Music playlist
+clickwheel apple pull road-trip
+```
+
 
 <ParamField path="name" type="string" required>
   Apple Music playlist to import.
@@ -139,6 +167,16 @@ Runs the matcher first, then pushes the matched tracks via
 `POST /v1/me/library/playlists`. Low-confidence matches are skipped
 by default; pass --include-low after a `clickwheel apple match` review
 if you want them in.
+
+**Examples**
+
+```bash
+# Create the playlist in Apple Music
+clickwheel apple push road-trip
+
+# Include low-confidence matches
+clickwheel apple push road-trip --include-low
+```
 
 
 <ParamField path="name" type="string" required>
