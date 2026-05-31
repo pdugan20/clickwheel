@@ -19,8 +19,7 @@ playlists back into clickwheel. It's bidirectional.
   </Step>
 
   <Step title="Configure your server">
-    ```yaml
-    # ~/.clickwheel/config.yaml
+    ```yaml title="~/.clickwheel/config.yaml"
     plex_enabled: true
     plex_url: http://192.168.1.10:32400
     plex_library_name: Music
@@ -28,7 +27,7 @@ playlists back into clickwheel. It's bidirectional.
 
     Keep the token out of YAML: put it in `~/.clickwheel/.env` (mode `600`):
 
-    ```bash
+    ```bash title="~/.clickwheel/.env"
     CLICKWHEEL_PLEX_TOKEN=...
     ```
 

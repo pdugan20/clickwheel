@@ -20,15 +20,14 @@ Last.fm support is in the base package.
   </Step>
 
   <Step title="Configure">
-    ```yaml
-    # ~/.clickwheel/config.yaml
+    ```yaml title="~/.clickwheel/config.yaml"
     lastfm_api_key: your_api_key
     lastfm_username: your_lastfm_username
     ```
 
     Keep the secret in `~/.clickwheel/.env` (mode `600`), out of YAML:
 
-    ```bash
+    ```bash title="~/.clickwheel/.env"
     LASTFM_API_SECRET=your_shared_secret
     ```
   </Step>
