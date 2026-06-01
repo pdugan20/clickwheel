@@ -24,7 +24,7 @@ with **stock firmware**, over **USB**. The **iPod Classic** is the primary,
 tested target; other models from the same era that use the same format should
 work too:
 
-- **iPod Classic** (2007 to 2009)
+- **iPod Classic**
 - **iPod** 4th and 5th gen, including photo and video
 - **iPod mini**
 - **iPod nano**, 1st through 5th gen
@@ -33,22 +33,19 @@ Not sure which you have? See Apple's [Identify your iPod
 model](https://support.apple.com/en-us/103823).
 
 <Note>
-  **iPod touch and other iOS devices aren't supported**, nor are the touchscreen
-  nano 6th and 7th gen (their firmware uses a different on-device database).
-  clickwheel is for the click-wheel era.
+  **iPod touch and iOS devices aren't supported**, nor the touchscreen nano
+  6th/7th gen (different on-device database).
 </Note>
 
-By default clickwheel expects the device mounted at `/Volumes/IPOD`. If yours
-mounts elsewhere, set `ipod_mount` (or the `IPOD_MOUNT` env var), see
-[Configuration](/reference/configuration). The default capacity assumption is
-64 GB; set `ipod_capacity_gb` to match your device.
+clickwheel expects the iPod at `/Volumes/IPOD` and assumes 64 GB. Override with
+`ipod_mount` and `ipod_capacity_gb`, see [Configuration](/reference/configuration).
 
 ## Audio formats
 
 | Format | On the iPod? | Notes |
 | --- | --- | --- |
 | MP3, AAC/M4A, ALAC | Yes | Played natively by stock firmware. |
-| FLAC | **Skipped** | Stock firmware can't play it, so it's excluded from sync. Your FLACs stay in your library. |
+| FLAC | Skipped | Stock firmware can't play it, so it's excluded from sync. Your FLACs stay in your library. |
 
 ## Optional integrations
 
