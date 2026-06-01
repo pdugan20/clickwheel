@@ -19,7 +19,8 @@ the source of truth.
 
 - `clickwheel-mcp serve --http` runs the server over Streamable HTTP, bound to
   `127.0.0.1` (the tunnel is the only ingress).
-- A **Cloudflare Tunnel** routes `clickwheel.fm` → the local server.
+- A **Cloudflare Tunnel** routes your domain (say `mcp.example.com`) → the local
+  server.
 - **Cloudflare Access** (Zero Trust) gates it to your email and natively handles
   the MCP OAuth flow, no OAuth code required.
 
@@ -29,7 +30,7 @@ The full, copy-pasteable runbook lives in the repo at
 [`docs/mcp/deploy/README.md`](https://github.com/pdugan20/clickwheel/blob/main/docs/mcp/deploy/README.md).
 In short:
 
-1. Run the server: `clickwheel-mcp serve --http --allowed-host clickwheel.fm`.
+1. Run the server: `clickwheel-mcp serve --http --allowed-host mcp.example.com`.
    (The `--allowed-host` is required behind a tunnel, or the SDK's DNS-rebinding
    protection rejects requests with HTTP 421.)
 2. Create a Cloudflare Tunnel and route your domain to `http://127.0.0.1:8000`.
