@@ -5,6 +5,67 @@ All notable changes to this project will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/) and
 [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [0.17.0](https://github.com/pdugan20/clickwheel/compare/v0.16.0...v0.17.0) (2026-06-01)
+
+
+### Features
+
+* auto-remount a dropped library share instead of hanging ([#61](https://github.com/pdugan20/clickwheel/issues/61)) ([9ed6916](https://github.com/pdugan20/clickwheel/commit/9ed6916ae848216de68f024b60e05e236e519151))
+* complete the mypy ratchet — full type coverage, zero exemptions ([#60](https://github.com/pdugan20/clickwheel/issues/60)) ([d5e8c86](https://github.com/pdugan20/clickwheel/commit/d5e8c8697d6a8023a54524d882a17350c7b3a8ea))
+* **playlist:** track-level add/remove for saved playlists ([31052be](https://github.com/pdugan20/clickwheel/commit/31052be1c0ee2226fe203af73d18bc04ea313666))
+* **playlist:** track-level add/remove for saved playlists ([f530e4a](https://github.com/pdugan20/clickwheel/commit/f530e4aab29c3bcfee8c4a7c259215240324bf70)), closes [#63](https://github.com/pdugan20/clickwheel/issues/63)
+
+
+### Documentation
+
+* add sidebar icons, fix the logo flash, surface quickstart steps in the TOC ([143b635](https://github.com/pdugan20/clickwheel/commit/143b63579a65ba29184028938f05c5a60ad5f5b8))
+* **apple-music:** collapse 'From Claude' to a one-line cross-link ([ecb0a37](https://github.com/pdugan20/clickwheel/commit/ecb0a372c8d7a344d67a6afa9d6d64bc73041f78))
+* **architecture:** add autoscan.py to the module table ([c63e3b8](https://github.com/pdugan20/clickwheel/commit/c63e3b84dac519309eb84b95b029a9a220d98333))
+* deepen guides, add troubleshooting + requirements, automate changelog ([94b7c1b](https://github.com/pdugan20/clickwheel/commit/94b7c1b743fc8da9ddc71c3d00ffadbea26749b1))
+* **design:** shorten section headings, merge read-only principles, short sidebar title ([b9655ca](https://github.com/pdugan20/clickwheel/commit/b9655cabb18049e4218e629607badd935237d5a6))
+* drop drift-prone perf figures and hardcoded tool counts ([9e3b184](https://github.com/pdugan20/clickwheel/commit/9e3b1844deffd54b43ddaa7ad499b5c783513737))
+* **fix-metadata:** surface the Last.fm key prereq, fix the target arg, trim jargon ([b315435](https://github.com/pdugan20/clickwheel/commit/b3154351de1c98976e896febbc0424e5863612ee))
+* genericize remaining clickwheel.fm examples to mcp.example.com ([142ce06](https://github.com/pdugan20/clickwheel/commit/142ce064754745f8154a393428f957499e3e5977))
+* **integrations:** point 'From Claude' at the per-domain MCP tool reference ([bc3d856](https://github.com/pdugan20/clickwheel/commit/bc3d85632014e505721754a2f70571a28af7f716))
+* keep the changelog icon in gen-changelog so regeneration matches ([083088d](https://github.com/pdugan20/clickwheel/commit/083088d92d5a786a56e4147445e6e312be823a55))
+* **mcp-server:** fold gating reassurance into the behavior bullet, drop the orphaned snippet ([7fdf2bb](https://github.com/pdugan20/clickwheel/commit/7fdf2bbc113741bfb7b269d986978e7ec44cfc6d))
+* **mcp:** record the Managed-OAuth connector fix; mark remote access working ([#56](https://github.com/pdugan20/clickwheel/issues/56)) ([07bfcd7](https://github.com/pdugan20/clickwheel/commit/07bfcd77544dfea2214301ce8fe3b62e413066a8))
+* **og:** light social card on a subtle light-gray background ([8874034](https://github.com/pdugan20/clickwheel/commit/88740341938732f79045bf83a5dfc64e69dc0500))
+* **playbook:** capture the content/polish pass conventions, process, and Mintlify gotchas ([ad60938](https://github.com/pdugan20/clickwheel/commit/ad60938c5d0222f2e1790961149f28499b73b7e2))
+* **playlists:** align commands, shorten the track path, rework two-concepts ([61fc7e4](https://github.com/pdugan20/clickwheel/commit/61fc7e4577de4bc1565eb8d1e5286a4943b79cc5))
+* **plex:** inline the token env var, trim the token tip and push/pull prose ([2942d0e](https://github.com/pdugan20/clickwheel/commit/2942d0ef68ddc2776a863b53df41548b4ceb55f4))
+* **project:** correct docs-site status — holding on Mintlify, not pivoted ([#58](https://github.com/pdugan20/clickwheel/issues/58)) ([6a63635](https://github.com/pdugan20/clickwheel/commit/6a63635805e75bd75a52e50cb851642c84ce72c4))
+* **project:** mark feedback, examples, snippets, mermaid adopted in playbook ([246a292](https://github.com/pdugan20/clickwheel/commit/246a2929aa8e07570573c538ccf6201c369ad163))
+* pull the generic diagrams; park polished versions in DEFERRED ([cb9bb3f](https://github.com/pdugan20/clickwheel/commit/cb9bb3f7c493f9fe592c5102980ef814a92e0487))
+* **quickstart:** drop the eject Warning box (command still in the step) ([0cd0f38](https://github.com/pdugan20/clickwheel/commit/0cd0f382fa51e138f4ef78f029b2040f7d1fde2d))
+* **quickstart:** link the package name to PyPI on the install step ([005d71c](https://github.com/pdugan20/clickwheel/commit/005d71cdfa5f7406621f18038cfa3d1f09a72415))
+* **quickstart:** tighten the install path and trim chrome ([b03ad6d](https://github.com/pdugan20/clickwheel/commit/b03ad6d0da39ecaec2e17bffe2dd8a2fb43bfa06))
+* **readme:** point to the docs site, add docs badge, retire duplicated guides ([417fb3b](https://github.com/pdugan20/clickwheel/commit/417fb3b35e6402c8d5aaaf9bc51c0222430ec49b))
+* **reference:** add curated Examples to CLI commands ([703d8e8](https://github.com/pdugan20/clickwheel/commit/703d8e8a605d4d3da351995611b038d4267ddc61))
+* **reference:** align overview cards; pointer once per overview ([cbd9031](https://github.com/pdugan20/clickwheel/commit/cbd903173973b2a7144fd57b7579e5a98bdc284c))
+* **reference:** group CLI by service, recurse sub-apps, add synopses ([3d3e636](https://github.com/pdugan20/clickwheel/commit/3d3e6363a246269edff08a278739815346756855))
+* **reference:** MCP prompt examples, gating snippet, mermaid architecture ([50412c4](https://github.com/pdugan20/clickwheel/commit/50412c460a3207d1e16ad11c410690d89757dcb1))
+* **reference:** rebuild Configuration page ([b78d85b](https://github.com/pdugan20/clickwheel/commit/b78d85bac096918db57b28f3b3d85d65a13a74e9))
+* **reference:** render params as ParamField; strip em dashes from descriptions ([2c163d6](https://github.com/pdugan20/clickwheel/commit/2c163d61df8324c2fc995aade91b9425d23b7a87))
+* **reference:** split CLI reference into per-group pages ([1b2b430](https://github.com/pdugan20/clickwheel/commit/1b2b4303de6d25d0379e730b787922b4ead1f942))
+* **reference:** split MCP tools into per-domain pages ([7e0979a](https://github.com/pdugan20/clickwheel/commit/7e0979a687bb2c3319fb85bc2d81039a8df8a7cb))
+* **reference:** trim verbose CLI/MCP descriptions; refresh sample data ([fe94ef7](https://github.com/pdugan20/clickwheel/commit/fe94ef75a37a9ba5f3e72a55ed30d15111de0bf6))
+* reframe the Welcome page around the iPod ([4524221](https://github.com/pdugan20/clickwheel/commit/4524221dea816ceb408713fbaecf662092881f2d))
+* regroup the Guides nav by topic ([4c33fca](https://github.com/pdugan20/clickwheel/commit/4c33fca9dd388dd997159bbc9abab8ec9ddb425d))
+* **remote-mcp:** genericize the example domain to mcp.example.com ([6ace806](https://github.com/pdugan20/clickwheel/commit/6ace8068c87afeaedd5645ae4b44ae536262d53e))
+* rename remote-mcp 'Setup (summary)' to 'Setup'; clean up the deploy runbook ([6490f2e](https://github.com/pdugan20/clickwheel/commit/6490f2e3cb4fa8eb6441dd7456fc2b03fa75594c))
+* **requirements:** drop the Classic year, unbold Skipped, trim the Note and mount/capacity lines ([87b749a](https://github.com/pdugan20/clickwheel/commit/87b749ae6e665dc01f5d40bc8061f8515c50858b))
+* **requirements:** list supported iPods, trim, and shed non-requirements ([1d3ac38](https://github.com/pdugan20/clickwheel/commit/1d3ac38d8565921d0608f261dc0c083d2ec9d352))
+* **requirements:** make Optional integrations a what-it-needs table ([2b74de5](https://github.com/pdugan20/clickwheel/commit/2b74de5d5ba5ab382a18ad9cedcf393f2f8028d4))
+* **scrobbling:** tighten the lead, demote the shared-key note, collapse 'From Claude' ([dd45dd0](https://github.com/pdugan20/clickwheel/commit/dd45dd06abb4a2db40de3d8d553c055ed3a4e082))
+* **scrobbling:** use a blue Note for the re-sync caution (Warning reserved for irreversible) ([5e78949](https://github.com/pdugan20/clickwheel/commit/5e7894965693ef68b1d740cc37d9a87d8fd017a9))
+* **site:** enable contextual menu + feedback thumbs; track feature checklist ([bbfb75c](https://github.com/pdugan20/clickwheel/commit/bbfb75cfc39c1c0186bfcbdf2af6a0b804860279))
+* **site:** maple theme, branded logo + favicon, iPod accent, copy polish ([2f7a485](https://github.com/pdugan20/clickwheel/commit/2f7a485a695235c1b58026a9d4cb85e75dea8382))
+* **sync-to-ipod:** rewrite the lead and retire the Notes section ([b4a2dc9](https://github.com/pdugan20/clickwheel/commit/b4a2dc9da280e933c04f6ada6731ab0ba6da4b21))
+* title config and .env code blocks with their filenames ([153cefb](https://github.com/pdugan20/clickwheel/commit/153cefb697ceab61d039be887ad6d361a2166361))
+* **troubleshooting:** add an Integrations bucket pointing at the doctors ([02b0f01](https://github.com/pdugan20/clickwheel/commit/02b0f0107de1fd3fd51d21310e0eb0b5a1b1a70c))
+* **welcome:** add an iPod hero image with rounded corners ([06e02d6](https://github.com/pdugan20/clickwheel/commit/06e02d6800856f07a1ef429ab5d9c891ca5bb43c))
+
 ## [0.16.0](https://github.com/pdugan20/clickwheel/compare/v0.15.1...v0.16.0) (2026-05-30)
 
 
