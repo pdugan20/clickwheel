@@ -1,5 +1,6 @@
 ---
 title: Build and edit playlists
+icon: "list-music"
 description: Curate named playlists for the iPod (and Plex/Apple Music).
 ---
 
@@ -9,20 +10,19 @@ up under Music → Playlists on the iPod once synced.
 ## Create and edit
 
 ```bash
-clickwheel playlist                 # list saved playlists
-clickwheel edit                     # interactive: add/remove artists or songs, set description
-clickwheel edit --add "Nirvana"   # non-interactive (scriptable)
-clickwheel edit --remove "Beastie Boys"
-clickwheel delete <name>            # delete a playlist (with confirmation)
+clickwheel playlist                      # list saved playlists
+clickwheel edit                          # open the interactive editor
+clickwheel edit --add "Nirvana"          # add an artist (scriptable)
+clickwheel edit --remove "Beastie Boys"  # remove an artist
+clickwheel delete <name>                 # delete a playlist
 ```
 
 You can edit by **artist** or by **individual song**. The interactive editor
 offers "Add songs" / "Remove songs" (search, then check the tracks you want).
-The same is scriptable with track paths:
+The same is scriptable with a track's full library path:
 
 ```bash
-clickwheel edit "road trip" --add-track "/Volumes/Music/Nirvana/Nevermind/02 In Bloom.m4a"
-clickwheel edit "road trip" --remove-track "/Volumes/Music/Beastie Boys/Ill Communication/01 Sure Shot.mp3"
+clickwheel edit "road trip" --add-track "~/Music/Nirvana/Nevermind/In Bloom.m4a"
 ```
 
 ## Put a playlist on the iPod
@@ -33,12 +33,14 @@ clickwheel sync   # syncs your selected playlist to the device
 
 See [Sync to iPod](/guides/sync-to-ipod) for the full flow.
 
-## Two concepts, don't conflate them
+## Playlists vs. loading the device
 
-- **Adding music to the device**: you just want tracks browsable by
-  artist/album. No named playlist needed.
-- **A curated playlist**: a named collection that appears under Music →
-  Playlists on the iPod.
+Two different things, easy to mix up:
 
-The same playlists can also be pushed to [Plex/Plexamp](/guides/plex) and
+- **Just adding music**: you want tracks browsable by artist and album on the
+  iPod. No named playlist needed, see [Sync to iPod](/guides/sync-to-ipod).
+- **A playlist**: a named collection that shows up under Music → Playlists on
+  the device.
+
+These playlists can also go to [Plex/Plexamp](/guides/plex) and
 [Apple Music](/guides/apple-music).
