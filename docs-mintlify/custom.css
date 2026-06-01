@@ -9,3 +9,9 @@ img[src*="/logo/"] {
   width: auto !important;
   aspect-ratio: 436 / 54;
 }
+
+/* Round content/hero images (e.g. the Welcome iPod banner) to match the
+   maple welcome image. Scoped to /images/ so the navbar logo is untouched. */
+img[src*="/images/"] {
+  border-radius: 1rem;
+}
