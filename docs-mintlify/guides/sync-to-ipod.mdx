@@ -1,10 +1,11 @@
 ---
 title: Sync music to your iPod
+icon: "music"
 description: Load and update a classic iPod from your library.
 ---
 
-clickwheel writes the iPod database (iTunesDB + artwork) directly. No
-iTunes/Music.app sync.
+clickwheel loads and updates a classic iPod by writing its database (iTunesDB +
+artwork) directly, no iTunes required.
 
 ## Load a subset
 
@@ -28,10 +29,3 @@ the database without deleting anything you didn't explicitly remove.
 ```bash
 clickwheel ls       # what's currently on the iPod
 ```
-
-## Notes
-
-- **FLAC is skipped** (unsupported by stock firmware).
-- Classic iPods spin down and may auto-dismount when idle, so if a command can't
-  find the device, nudge it awake (touch the wheel, or replug) and retry.
-- Always `eject` before unplugging.

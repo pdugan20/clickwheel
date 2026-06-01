@@ -60,3 +60,10 @@ requirement). Add to Troubleshooting when that page gets its content pass:
 > file-touching operation instead of hanging. You can provide an explicit
 > `smb://` fallback via `library_mount_url`. See
 > [Configuration](/reference/configuration).
+
+Also moved off the Sync to iPod guide (it's device troubleshooting, not part of
+the sync flow):
+
+> **iPod not detected.** Classic iPods spin down and may auto-dismount when
+> idle. If a command can't find the device, nudge it awake (touch the wheel, or
+> replug) and retry.
