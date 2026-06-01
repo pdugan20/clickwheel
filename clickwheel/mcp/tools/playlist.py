@@ -21,6 +21,7 @@ from clickwheel.mcp._runtime import (
 )
 from clickwheel.mcp.models import (
     AddArtistToPlaylistResult,
+    AddTracksToPlaylistResult,
     CreatePlaylistResult,
     DeletePlaylistResult,
     FullTrack,
@@ -28,6 +29,7 @@ from clickwheel.mcp.models import (
     PlaylistDetail,
     PlaylistSummary,
     RemoveArtistFromPlaylistResult,
+    RemoveTracksFromPlaylistResult,
     SetPlaylistDescriptionResult,
     UpdatePlaylistResult,
 )
@@ -376,4 +378,95 @@ def remove_artist_from_playlist(
                 f"Removed {format_count(removed, 'track')} by {artist} "
                 f"from '{playlist}'."
             )
+        return render(text, data)
+
+
+@mcp.tool(title="Add tracks to playlist", annotations=MUTATION)
+def add_tracks_to_playlist(
+    playlist: Annotated[str, Field(description="Playlist name (created if missing).")],
+    track_paths: Annotated[
+        list[str],
+        Field(
+            description=(
+                "Absolute file paths from the library, in the order they "
+                "should be appended. Get these from list_tracks_by_album, "
+                "list_playlist_tracks, or search_tracks. Never invent paths."
+            ),
+        ),
+    ],
+) -> Annotated[CallToolResult, AddTracksToPlaylistResult]:
+    """Append specific tracks to a saved playlist, preserving the given
+    order. Creates the playlist if it doesn't exist. Tracks already in the
+    playlist, FLAC files, and files flagged missing on disk are silently
+    skipped. Returns the number of tracks actually added.
+
+    This is the song-level counterpart to `add_artist_to_playlist` — use it
+    when the user wants to add individual songs ("add this track to my
+    road-trip playlist") rather than an artist's whole catalog. To put music
+    directly on the device without a curated playlist artifact, use
+    `add_tracks_to_ipod` instead.
+
+    Errors with PathsNotFoundError if any path isn't in the library index —
+    suggest `clickwheel scan` or double-check the paths.
+
+    When to use: the user names specific songs to add to a playlist.
+
+    After this: `sync_playlist_to_ipod` to push the change.
+    """
+    with open_session() as (_cfg, db):
+        added = actions.add_tracks_to_playlist(db, playlist, track_paths)
+        data = {
+            "added": added,
+            "playlist": playlist,
+            "requested": len(track_paths),
+        }
+        if added == 0:
+            text = (
+                f"No tracks added to '{playlist}' — they're already in it, "
+                "FLAC, or missing on disk."
+            )
+        else:
+            text = (
+                f"Added {format_count(added, 'track')} to '{playlist}'. "
+                "Sync with `sync_playlist_to_ipod`."
+            )
+        return render(text, data)
+
+
+@mcp.tool(title="Remove tracks from playlist", annotations=MUTATION)
+def remove_tracks_from_playlist(
+    playlist: Annotated[str, Field(description="Playlist name.")],
+    track_paths: Annotated[
+        list[str],
+        Field(
+            description=(
+                "Absolute file paths to remove. Get these from "
+                "list_playlist_tracks. Never invent paths."
+            ),
+        ),
+    ],
+) -> Annotated[CallToolResult, RemoveTracksFromPlaylistResult]:
+    """Remove specific tracks from a saved playlist by path. Returns the
+    number of references removed (0 if none of the paths were in the
+    playlist). The playlist record stays even if it ends up empty.
+
+    The song-level counterpart to `remove_artist_from_playlist` — use it
+    when the user wants to drop individual songs rather than an artist's
+    whole catalog.
+
+    Errors with PathsNotFoundError if any path isn't in the library index.
+
+    When to use: the user names specific songs to drop from a playlist.
+    """
+    with open_session() as (_cfg, db):
+        removed = actions.remove_tracks_from_playlist(db, playlist, track_paths)
+        data = {
+            "removed": removed,
+            "playlist": playlist,
+            "requested": len(track_paths),
+        }
+        if removed == 0:
+            text = f"None of those tracks were in '{playlist}' — nothing removed."
+        else:
+            text = f"Removed {format_count(removed, 'track')} from '{playlist}'."
         return render(text, data)

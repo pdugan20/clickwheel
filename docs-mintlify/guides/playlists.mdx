@@ -10,10 +10,19 @@ up under Music → Playlists on the iPod once synced.
 
 ```bash
 clickwheel playlist                 # list saved playlists
-clickwheel edit                     # interactive add/remove artists, set description
+clickwheel edit                     # interactive: add/remove artists or songs, set description
 clickwheel edit --add "Nirvana"   # non-interactive (scriptable)
 clickwheel edit --remove "Beastie Boys"
 clickwheel delete <name>            # delete a playlist (with confirmation)
+```
+
+You can edit by **artist** or by **individual song**. The interactive editor
+offers "Add songs" / "Remove songs" (search, then check the tracks you want).
+The same is scriptable with track paths:
+
+```bash
+clickwheel edit "road trip" --add-track "/Volumes/Music/Nirvana/Nevermind/02 In Bloom.m4a"
+clickwheel edit "road trip" --remove-track "/Volumes/Music/Beastie Boys/Ill Communication/01 Sure Shot.mp3"
 ```
 
 ## Put a playlist on the iPod

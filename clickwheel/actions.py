@@ -1074,6 +1074,57 @@ def remove_artist_from_playlist(db: Database, playlist: str, artist: str) -> int
     return db.remove_artist_from_playlist(playlist, artist)
 
 
+def _assert_paths_indexed(db: Database, paths: list[str]) -> None:
+    """Raise PathsNotFoundError if any path isn't in the library index.
+
+    Mirrors the validation `add_tracks_to_ipod` does so callers (CLI,
+    MCP) get the same "run a scan / check for typos" guidance when a
+    path doesn't resolve. FLAC and missing-on-disk tracks are *in* the
+    index, so they pass here — the DB layer skips them on insert.
+    """
+    unknown = [
+        p
+        for p in paths
+        if db.conn.execute("SELECT 1 FROM tracks WHERE path = ?", (p,)).fetchone()
+        is None
+    ]
+    if unknown:
+        raise PathsNotFoundError(
+            f"{len(unknown)} of {len(paths)} paths aren't in the library "
+            "index. Run `clickwheel scan` if you've added music since the "
+            "last scan, or check the paths for typos.",
+            unknown,
+        )
+
+
+def add_tracks_to_playlist(db: Database, playlist: str, track_paths: list[str]) -> int:
+    """Append specific tracks to a saved playlist, preserving order.
+
+    Creates the playlist if it doesn't exist. Duplicates already in the
+    playlist, FLAC files, and tracks flagged missing on disk are silently
+    skipped. Returns the number of tracks actually added.
+
+    Raises PathsNotFoundError if any path isn't in the library index.
+    """
+    _assert_paths_indexed(db, track_paths)
+    return db.add_tracks_to_playlist(playlist, track_paths)
+
+
+def remove_tracks_from_playlist(
+    db: Database, playlist: str, track_paths: list[str]
+) -> int:
+    """Remove specific tracks from a saved playlist.
+
+    Returns the number of references removed (0 if the playlist doesn't
+    exist or none of the paths were in it). The playlist record stays even
+    if it ends up empty.
+
+    Raises PathsNotFoundError if any path isn't in the library index.
+    """
+    _assert_paths_indexed(db, track_paths)
+    return db.remove_tracks_from_playlist(playlist, track_paths)
+
+
 def collect_tracks_for_artist(db: Database, artist: str) -> list[str]:
     """All track paths for a single artist, ordered by album/track.
 

@@ -39,7 +39,7 @@ clickwheel delete road-trip
 clickwheel edit [OPTIONS] [PLAYLIST_NAME]
 ```
 
-Add or remove artists from a playlist.
+Add or remove artists or individual tracks from a playlist.
 
 **Examples**
 
@@ -65,6 +65,14 @@ clickwheel edit road-trip -d "Windows down"
 
 <ParamField path="--remove, -r" type="string" default="[]">
   Artist to remove
+</ParamField>
+
+<ParamField path="--add-track" type="string" default="[]">
+  Track path to add (repeatable)
+</ParamField>
+
+<ParamField path="--remove-track" type="string" default="[]">
+  Track path to remove (repeatable)
 </ParamField>
 
 <ParamField path="--description, -d" type="string">

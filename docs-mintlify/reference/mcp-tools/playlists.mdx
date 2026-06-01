@@ -28,6 +28,19 @@ Add every track by `artist` to `playlist` (skipping duplicates). Creates the pla
   Artist name (exact match).
 </ParamField>
 
+## `add_tracks_to_playlist`
+
+Append specific tracks to a saved playlist, preserving the given order. Creates the playlist if it doesn't exist. Tracks already in the playlist, FLAC files, and files flagged missing on disk are silently skipped. Returns the number of tracks actually added.
+
+
+<ParamField path="playlist" type="string" required>
+  Playlist name (created if missing).
+</ParamField>
+
+<ParamField path="track_paths" type="string[]" required>
+  Absolute file paths from the library, in the order they should be appended. Get these from list_tracks_by_album, list_playlist_tracks, or search_tracks. Never invent paths.
+</ParamField>
+
 ## `create_playlist`
 
 Create a new named playlist with the given track paths. Errors if one with the same name already exists; use `update_playlist` to replace contents instead.
@@ -105,6 +118,19 @@ Remove every track by `artist` from `playlist`. Returns the number of tracks rem
 
 <ParamField path="artist" type="string" required>
   Artist name (exact match).
+</ParamField>
+
+## `remove_tracks_from_playlist`
+
+Remove specific tracks from a saved playlist by path. Returns the number of references removed (0 if none of the paths were in the playlist). The playlist record stays even if it ends up empty.
+
+
+<ParamField path="playlist" type="string" required>
+  Playlist name.
+</ParamField>
+
+<ParamField path="track_paths" type="string[]" required>
+  Absolute file paths to remove. Get these from list_playlist_tracks. Never invent paths.
 </ParamField>
 
 ## `set_playlist_description`

@@ -426,6 +426,12 @@ def edit(
     playlist_name: str = typer.Argument("ipod", help="Playlist to edit"),
     add: list[str] = typer.Option([], "--add", "-a", help="Artist to add"),
     remove: list[str] = typer.Option([], "--remove", "-r", help="Artist to remove"),
+    add_track: list[str] = typer.Option(
+        [], "--add-track", help="Track path to add (repeatable)"
+    ),
+    remove_track: list[str] = typer.Option(
+        [], "--remove-track", help="Track path to remove (repeatable)"
+    ),
     description: str = typer.Option(
         "", "--description", "-d", help="Set the playlist description"
     ),
@@ -433,14 +439,15 @@ def edit(
         False, "--no-scan", help="Skip automatic library scan"
     ),
 ) -> None:
-    """Add or remove artists from a playlist."""
+    """Add or remove artists or individual tracks from a playlist."""
     cfg = load_config()
     db = Database(cfg.db_path)
     if not no_scan:
         maybe_auto_scan(cfg, db)
 
-    # Non-interactive mode: --add / --remove / --description flags
-    if add or remove or description:
+    # Non-interactive mode: --add / --remove / --add-track / --remove-track
+    # / --description flags
+    if add or remove or add_track or remove_track or description:
         capacity = cfg.ipod_capacity_bytes
 
         for artist in add:
@@ -456,6 +463,36 @@ def edit(
                 info(f"- {artist}: {removed} tracks removed")
             else:
                 warn(f"'{artist}' not in playlist.")
+
+        if add_track:
+            try:
+                added = actions.add_tracks_to_playlist(db, playlist_name, add_track)
+            except actions.PathsNotFoundError as exc:
+                error(str(exc))
+                for p in exc.unknown_paths:
+                    warn(f"  {p}")
+                db.close()
+                raise typer.Exit(1) from None
+            if added:
+                confirm(f"+ {added} track(s) added")
+            else:
+                warn("No tracks added (already in playlist, FLAC, or missing).")
+
+        if remove_track:
+            try:
+                removed = actions.remove_tracks_from_playlist(
+                    db, playlist_name, remove_track
+                )
+            except actions.PathsNotFoundError as exc:
+                error(str(exc))
+                for p in exc.unknown_paths:
+                    warn(f"  {p}")
+                db.close()
+                raise typer.Exit(1) from None
+            if removed:
+                info(f"- {removed} track(s) removed")
+            else:
+                warn("No matching tracks were in the playlist.")
 
         if description:
             try:
@@ -512,6 +549,8 @@ def edit(
             choices=[
                 "Add artists",
                 "Remove artists",
+                "Add songs",
+                "Remove songs",
                 "Show current playlist",
                 "Done",
             ],
@@ -584,6 +623,64 @@ def edit(
                     )
                     current_names.discard(name)
                     info(f"Removed {name} ({removed} tracks)")
+
+        if action == "Add songs":
+            query = questionary.text(
+                "Search for songs to add (artist, album, or title):"
+            ).ask()
+            if not query:
+                continue
+            results = actions.search_tracks(db, query, limit=100)
+            in_playlist = {t["path"] for t in db.get_playlist(playlist_name)}
+            available = [t for t in results if t["path"] not in in_playlist]
+            if not available:
+                warn("No matching songs found (or all already in the playlist).")
+                continue
+            choices = [
+                questionary.Choice(
+                    title=(
+                        f"{t['artist']} — {t['title']}  "
+                        f"({t['album']}, {_fmt_size(t['file_size'] or 0)})"
+                    ),
+                    value=t["path"],
+                )
+                for t in available
+            ]
+            to_add = questionary.checkbox(
+                "Select songs to add (space to toggle, enter to confirm):",
+                choices=choices,
+            ).ask()
+            if to_add:
+                added = actions.add_tracks_to_playlist(db, playlist_name, to_add)
+                current_names = {
+                    a["name"] for a in actions.get_playlist_artists(db, playlist_name)
+                }
+                confirm(f"+ {added} song(s) added")
+
+        if action == "Remove songs":
+            tracks = db.get_playlist(playlist_name)
+            if not tracks:
+                warn("Playlist is empty.")
+                continue
+            choices = [
+                questionary.Choice(
+                    title=f"{t['artist']} — {t['title']}  ({t['album']})",
+                    value=t["path"],
+                )
+                for t in tracks
+            ]
+            to_remove = questionary.checkbox(
+                "Select songs to remove (space to toggle, enter to confirm):",
+                choices=choices,
+            ).ask()
+            if to_remove:
+                removed = actions.remove_tracks_from_playlist(
+                    db, playlist_name, to_remove
+                )
+                current_names = {
+                    a["name"] for a in actions.get_playlist_artists(db, playlist_name)
+                }
+                info(f"Removed {removed} song(s)")
 
         playlist_size = actions.get_playlist_size(db, playlist_name)
         _print_capacity_bar(playlist_size, capacity)
