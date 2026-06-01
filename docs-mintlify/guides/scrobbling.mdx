@@ -4,11 +4,9 @@ icon: "lastfm"
 description: Submit your iPod's listen history to Last.fm.
 ---
 
-import McpGating from '/snippets/mcp-gating.mdx'
-
 clickwheel reads play counts off the iPod and submits them to Last.fm. It's
-opt-in. Nothing leaves your Mac until you add credentials. No extra to install;
-Last.fm support is in the base package.
+opt-in, nothing leaves your Mac until you add credentials, and it needs no extra
+package.
 
 ## Setup
 
@@ -58,16 +56,12 @@ clickwheel to read its play cache.
   change on the device.
 </Tip>
 
-<Note>
-  The same `lastfm_api_key` powers genre lookups in
-  [`clickwheel fix`](/guides/fix-metadata) (read-only, no session key needed).
-  If you only want genre tagging and never plan to scrobble, stop after the API
-  key is in place and skip `--auth`.
-</Note>
+The same `lastfm_api_key` also powers genre lookups in
+[`clickwheel fix`](/guides/fix-metadata) (read-only, no session key needed). If
+you only want genre tagging and never plan to scrobble, stop after the API key
+is in place and skip `--auth`.
 
 ## From Claude
 
-MCP tools: `get_pending_scrobbles` (preview, with a `dry_run` option) and
-`submit_scrobbles`. See the [MCP tool reference](/reference/mcp-tools).
-
-<McpGating />
+You can also drive this from Claude, the MCP server exposes the same scrobble
+actions. See [MCP server](/concepts/mcp-server).
