@@ -4,8 +4,6 @@ icon: "itunes-note"
 description: Push clickwheel playlists to your Apple Music library and pull them back via MusicKit.
 ---
 
-import McpGating from '/snippets/mcp-gating.mdx'
-
 clickwheel syncs playlists to and from your Apple Music account through the
 official MusicKit API. Playlists propagate to your other Apple devices via
 iCloud Music Library.
@@ -91,8 +89,5 @@ clickwheel apple delete <name>   # remove an Apple Music playlist (macOS only)
 
 ## From Claude
 
-MCP tools: `apple_music_health`, `list_apple_music_playlists`,
-`sync_playlist_to_apple_music`, `pull_playlist_from_apple_music`,
-`delete_apple_music_playlist`, see the [MCP tool reference](/reference/mcp-tools).
-
-<McpGating />
+You can also drive this from Claude, the MCP server exposes the same Apple Music
+actions. See [MCP server](/concepts/mcp-server).
