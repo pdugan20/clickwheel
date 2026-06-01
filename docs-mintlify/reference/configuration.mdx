@@ -1,11 +1,10 @@
 ---
 title: Configuration
-description: Every clickwheel setting, the config file, env-var overrides, and how auto-scan decides to re-index.
+description: clickwheel's settings, their defaults and env-var overrides, plus auto-scan and where data lives.
 ---
 
-clickwheel reads runtime settings from **`~/.clickwheel/config.yaml`**.
-Every setting can also be supplied as an **environment variable**, which takes
-priority over the file. Only `music_dir` is required.
+clickwheel reads runtime settings from **`~/.clickwheel/config.yaml`**. Only
+`music_dir` is required.
 
 ## Minimal config
 
@@ -13,84 +12,44 @@ priority over the file. Only `music_dir` is required.
 music_dir: /Users/you/Music
 ```
 
-## Full annotated config
+## Settings
 
-```yaml title="~/.clickwheel/config.yaml"
-# --- Required ---------------------------------------------------------------
-music_dir: /Volumes/Music/Library   # root of your music library (scanned by `scan`)
+Environment variables override the config file. Each is the setting name in
+`UPPER_CASE` (e.g. `MUSIC_DIR`), except the `library_*` settings, which add a
+`CLICKWHEEL_` prefix.
 
-# --- iPod -------------------------------------------------------------------
-ipod_mount: /Volumes/IPOD           # where the device mounts (default: /Volumes/IPOD)
-ipod_capacity_gb: 64                # used for fit estimates (default: 64)
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `music_dir` | _(required)_ | Root of your music library (scanned by `scan`). |
+| `ipod_mount` | `/Volumes/IPOD` | Where the iPod mounts. |
+| `ipod_capacity_gb` | `64` | iPod capacity, used for fit estimates. |
+| `auto_scan` | `true` | Auto-scan the library before interactive commands (see below). |
+| `auto_scan_staleness_minutes` | `1440` | Fallback re-scan timer; 1440 = 24h. |
+| `library_auto_remount` | `true` | Force-remount a stale SMB/NAS share before touching files. |
+| `library_mount_url` | _(unset)_ | Explicit `smb://` fallback for when the share is fully unmounted. |
 
-# --- Library auto-scan (see "How auto-scan works" below) --------------------
-auto_scan: true                     # default: true
-auto_scan_staleness_minutes: 1440   # fallback timer; default 1440 = 24h
+## Integration settings
 
-# --- Network-share libraries (SMB/NAS) --------------------------------------
-library_auto_remount: true          # force-remount a stale share before touching files
-library_mount_url: smb://nas.local/Music  # explicit fallback for the fully-unmounted case
+Plex, Apple Music, and Last.fm each add their own settings (server URLs, tokens,
+API keys, path remap). Set them up in their guides, and keep secrets in
+`~/.clickwheel/.env` rather than in `config.yaml`:
 
-# --- Integrations (all off by default; see the guides) ----------------------
-# Last.fm, see /guides/scrobbling
-lastfm_api_key: your_key
-lastfm_api_secret: your_secret
-lastfm_username: your_username
-
-# Plex / Plexamp, see /guides/plex
-plex_enabled: false
-plex_url: http://192.168.1.10:32400
-plex_library_name: Music            # default: 'Music'
-plex_path_remap_local: ''           # only when Plex runs on another host (e.g. a NAS)
-plex_path_remap_plex: ''
-# plex_token: ...   # prefer the CLICKWHEEL_PLEX_TOKEN env var over inline YAML
-
-# Apple Music, see /guides/apple-music
-apple_music_enabled: false
-apple_music_storefront: us          # default: 'us'
-apple_music_key_id: ''
-apple_music_team_id: ''
-apple_music_key_file: ''            # path to your .p8 private key
-```
-
-<Note>
-  Keep secrets (Plex token, Last.fm secret, Apple Music key) in environment
-  variables rather than inline YAML, see the override table below.
-</Note>
-
-## Environment variable overrides
-
-Every key maps to an env var that overrides the file value:
-
-| Config key | Environment variable |
-| --- | --- |
-| `music_dir` | `MUSIC_DIR` |
-| `ipod_mount` | `IPOD_MOUNT` |
-| `ipod_capacity_gb` | `IPOD_CAPACITY_GB` |
-| `auto_scan` | `AUTO_SCAN` |
-| `auto_scan_staleness_minutes` | `AUTO_SCAN_STALENESS_MINUTES` |
-| `library_auto_remount` | `CLICKWHEEL_LIBRARY_AUTO_REMOUNT` |
-| `library_mount_url` | `CLICKWHEEL_LIBRARY_MOUNT_URL` |
-| `lastfm_api_key` / `_api_secret` / `_username` / `_session_key` | `LASTFM_API_KEY` / `_API_SECRET` / `_USERNAME` / `_SESSION_KEY` |
-| `plex_enabled` / `_url` / `_token` / `_library_name` | `CLICKWHEEL_PLEX_ENABLED` / `_URL` / `_TOKEN` / `_LIBRARY_NAME` |
-| `plex_path_remap_local` / `_plex` | `CLICKWHEEL_PLEX_PATH_REMAP_LOCAL` / `_PLEX` |
-| `apple_music_enabled` / `_storefront` | `CLICKWHEEL_APPLE_MUSIC_ENABLED` / `_STOREFRONT` |
-| `apple_music_key_id` / `_team_id` / `_key_file` | `APPLE_MUSIC_KEY_ID` / `_TEAM_ID` / `_KEY_FILE` |
+- [Plex / Plexamp](/guides/plex)
+- [Apple Music](/guides/apple-music)
+- [Last.fm scrobbling](/guides/scrobbling)
 
 ## How auto-scan works
 
-`select`, `edit`, `diff`, and `sync` check whether the catalog is stale before
-running, using a **two-tier** strategy:
+`select`, `edit`, `diff`, and `sync` auto-scan when the catalog looks stale, via
+a cheap two-tier check:
 
-1. **Cheap probe**: stats `music_dir` and its top-level folders (~5s on SMB). If
-   a child folder is newer than the last full scan, the library changed (new
-   artist/album) and a full re-scan runs.
-2. **24-hour fallback**: even if the probe sees no change, a full re-scan runs
-   once `auto_scan_staleness_minutes` has elapsed. This catches a new track
-   added inside an existing album folder, which the probe can't see.
+1. **Probe** (~5s on SMB): re-scans if a top-level folder in `music_dir` is newer
+   than the last scan (a new artist or album).
+2. **Fallback**: re-scans anyway once `auto_scan_staleness_minutes` has elapsed
+   (default 24h), catching tracks added inside existing albums that the probe
+   can't see.
 
-The probe is roughly 40× faster than a full SMB walk, so auto-scanning on every
-command costs little.
+The probe is ~40× faster than a full walk, so it costs little.
 
 <AccordionGroup>
   <Accordion title="Skip or tune it">
@@ -109,18 +68,22 @@ command costs little.
 
 ## MCP server environment
 
-The MCP server reads these from the environment (it doesn't use the YAML file):
+The MCP server is configured by environment variables (not the YAML file), all
+prefixed `CLICKWHEEL_MCP_`. The default transport is **stdio** for local desktop
+clients, which needs none of these; the rest configure the **HTTP** transport
+for remote access (see [Remote / mobile access](/guides/remote-mcp)). The HTTP
+server binds `127.0.0.1:8000/mcp` by default; the `HOST`, `PORT`, and `PATH`
+vars override that if needed.
 
-| Variable | What it does |
-| --- | --- |
-| `CLICKWHEEL_MCP_TRANSPORT` | `http` to serve Streamable HTTP (otherwise stdio). |
-| `CLICKWHEEL_MCP_HOST` / `_PORT` / `_PATH` | HTTP bind and path (default `127.0.0.1:8000/mcp`). |
-| `CLICKWHEEL_MCP_ALLOWED_HOSTS` | Public Host header(s) to allow behind a tunnel (e.g. `clickwheel.fm`). |
-| `CLICKWHEEL_MCP_ALLOWED_ORIGINS` | Origin header(s) to allow. |
-| `CLICKWHEEL_MCP_LOG_LEVEL` | Server log level (written to stderr). |
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `TRANSPORT` | stdio | Set to `http` to serve Streamable HTTP. |
+| `ALLOWED_HOSTS` | _(unset)_ | Host header(s) to allow behind a tunnel (e.g. `clickwheel.fm`). |
+| `ALLOWED_ORIGINS` | _(unset)_ | Origin header(s) to allow. |
+| `LOG_LEVEL` | `WARNING` | Server log level (written to stderr). |
 
 ## Where data lives
 
 clickwheel stores its catalog at **`~/.clickwheel/clickwheel.db`** (SQLite). The
-location isn't configurable. The database is safe to delete, `clickwheel scan`
+location isn't configurable. The database is safe to delete; `clickwheel scan`
 rebuilds it from your music directory.
