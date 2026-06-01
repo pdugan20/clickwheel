@@ -49,21 +49,3 @@ pass. The prose bullets stay in place meanwhile, so nothing is lost.
 - Finishing the **remote-access round**: launchd persistence, connector
   live-test (phone + iPod), merging #48. Tracked in
   `docs/mcp/remote-mobile-access-tracker.md`; resumed after the docs site.
-
-## Parked for the Troubleshooting page
-
-Moved off the Requirements page (it's an operational edge case, not a
-requirement). Add to Troubleshooting when that page gets its content pass:
-
-> **Network-stored libraries.** If your `music_dir` lives on a network share
-> (SMB/NAS), clickwheel handles a stale mount by force-remounting before a
-> file-touching operation instead of hanging. You can provide an explicit
-> `smb://` fallback via `library_mount_url`. See
-> [Configuration](/reference/configuration).
-
-Also moved off the Sync to iPod guide (it's device troubleshooting, not part of
-the sync flow):
-
-> **iPod not detected.** Classic iPods spin down and may auto-dismount when
-> idle. If a command can't find the device, nudge it awake (touch the wheel, or
-> replug) and retry.
