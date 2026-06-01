@@ -9,8 +9,8 @@ the iPod. It writes back to your files **in place**, never moving or renaming
 them (other tools like Plex read the same files, so paths stay stable).
 
 ```bash
-clickwheel fix                         # whole library
-clickwheel fix "Artist - Album Name"   # just one folder
+clickwheel fix            # whole library
+clickwheel fix "Nirvana"  # just one artist
 ```
 
 A run reports what it touched and skips anything the catalog already knows is
@@ -26,29 +26,27 @@ done · 0 files moved
 
 ## What it does
 
-A three-step native pipeline:
+A three-step pipeline:
 
 1. **Repair album artist**: so compilations and multi-artist albums group
    correctly.
 2. **MusicBrainz**: fetch missing cover art and release year.
-3. **Last.fm**: fetch genres.
+3. **Last.fm**: fetch genres (needs a Last.fm API key).
 
 All three steps are index-driven (no filesystem walks for already-clean state)
 and cache both positive *and* negative results in SQLite, so re-running on an
-unchanged library does **zero** network work.
+unchanged library does **zero** network work. It all runs on the base install,
+no extra packages required.
+
+The genre step uses the same Last.fm API key as
+[scrobbling](/guides/scrobbling) (read-only, no `--auth` required). Without it,
+genres are skipped with a warning and the other steps still run.
 
 ## Refreshing
+
+Cached results are reused on every run. To force a re-fetch:
 
 ```bash
 clickwheel fix --refresh-mb        # re-fetch MusicBrainz art/year
 clickwheel fix --refresh-genres    # re-fetch Last.fm genres
 ```
-
-The genre step needs a Last.fm API key, the same one
-[scrobbling](/guides/scrobbling) uses (read-only, no `--auth` required). Without
-it, genres are skipped with a warning and the other steps still run.
-
-<Note>
-  No external dependencies beyond the base install: `fix` uses native
-  MusicBrainz/Cover Art Archive + pylast-driven genre lookups.
-</Note>
