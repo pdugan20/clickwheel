@@ -35,8 +35,7 @@ from clickwheel.mcp.models import (
 
 @mcp.tool(title="List playlists", annotations=READ_ONLY)
 def list_playlists() -> Annotated[CallToolResult, list[PlaylistSummary]]:
-    """All saved playlists (the curated, named collections like workout
-    mix, road trip, etc.) with track counts, total size in bytes, and
+    """All saved playlists with track counts, total size in bytes, and
     last-updated timestamps.
 
     These are clickwheel-side drafts. A playlist that has been pushed
@@ -164,9 +163,8 @@ def create_playlist(
         ),
     ] = None,
 ) -> Annotated[CallToolResult, CreatePlaylistResult]:
-    """Create a new named playlist (a curated collection like workout mix,
-    road trip, etc.) with the given track paths. Errors if a playlist
-    with the same name already exists. Use `update_playlist` to replace
+    """Create a new named playlist with the given track paths. Errors if one
+    with the same name already exists; use `update_playlist` to replace
     contents instead.
 
     Use this for the "make me a playlist" / "build a curated mix" flow
@@ -298,7 +296,7 @@ def add_artist_to_playlist(
     Creates the playlist if it doesn't already exist. Returns the number
     of tracks actually added.
 
-    When to use: the user says "add Big Thief to my road-trip playlist" or
+    When to use: the user says "add Nirvana to my road-trip playlist" or
     similar.
 
     After this: `sync_playlist_to_ipod` to push the change.
@@ -365,7 +363,7 @@ def remove_artist_from_playlist(
     """Remove every track by `artist` from `playlist`. Returns the number
     of tracks removed (0 if the artist wasn't in the playlist).
 
-    When to use: the user says "drop Big Thief from my road-trip playlist".
+    When to use: the user says "drop Nirvana from my road-trip playlist".
     The playlist record stays even if it ends up empty.
     """
     with open_session() as (_cfg, db):

@@ -560,8 +560,7 @@ async def add_artist_to_ipod(
     ctx: Context,
 ) -> Annotated[CallToolResult, AddArtistToIpodResult]:
     """Push every track by an artist to the iPod's library, no playlist
-    artifact. Convenience wrapper over `add_tracks_to_ipod` that resolves
-    the artist's tracks via the library index.
+    artifact.
 
     Use for "add all the Beatles to my iPod" style requests. Same
     semantics as `add_tracks_to_ipod`: tracks land in the main library,
@@ -908,18 +907,11 @@ def remove_ipod_playlist(
 
 @mcp.tool(title="Eject iPod", annotations=MUTATION)
 def eject_ipod() -> Annotated[CallToolResult, EjectResult]:
-    """Safely unmount the iPod via `diskutil eject`. Idempotent: if no
-    iPod is currently mounted, returns `{"ejected": False,
-    "already_unmounted": True}` rather than raising. This handles the
-    classic iPod's normal post-sync auto-disconnect. After the device
-    finishes writing its iTunesDB, its firmware flips the screen back
-    to the menu and tells macOS it's safe to remove, at which point
-    the volume dismounts automatically. So by the time the user asks
-    you to eject, the iPod may already be gone. That's expected; tell
-    the user the iPod auto-disconnected and they're safe to unplug.
-    Other things that can cause an idle disconnect: macOS Music.app
-    auto-eject after activity, USB selective-suspend on battery, the
-    iPod's own drive-spindown power-saving.
+    """Safely unmount the iPod via `diskutil eject`. Idempotent: if the
+    iPod is already unmounted, returns `{"ejected": False,
+    "already_unmounted": True}` instead of raising. Classic iPods often
+    auto-disconnect after a sync, so it may already be gone; that's
+    expected, so tell the user it's safe to unplug.
 
     Errors:
     - EjectFailedError if diskutil exits non-zero (typical cause: a

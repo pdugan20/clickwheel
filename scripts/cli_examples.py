@@ -16,7 +16,7 @@ EXAMPLES: dict[str, list[tuple[str, str | None]]] = {
     ],
     "fix": [
         ("clickwheel fix", "Repair the whole library: album art, year, genres"),
-        ('clickwheel fix "Radiohead"', "Just one artist folder"),
+        ('clickwheel fix "Nirvana"', "Just one artist folder"),
         ("clickwheel fix --refresh-genres", "Re-fetch genres, ignoring the cache"),
     ],
     # Playlists
@@ -25,8 +25,8 @@ EXAMPLES: dict[str, list[tuple[str, str | None]]] = {
         ("clickwheel playlist road-trip", "Show one playlist's tracks"),
     ],
     "edit": [
-        ('clickwheel edit road-trip --add "Big Thief"', "Add an artist"),
-        ('clickwheel edit road-trip --remove "Wilco"', "Remove an artist"),
+        ('clickwheel edit road-trip --add "Nirvana"', "Add an artist"),
+        ('clickwheel edit road-trip --remove "Beastie Boys"', "Remove an artist"),
         ('clickwheel edit road-trip -d "Windows down"', "Set the description"),
     ],
     "delete": [

@@ -910,13 +910,7 @@ def plex_doctor_cmd() -> None:
 
 @plex_app.command(name="list")
 def plex_list_cmd() -> None:
-    """List every audio playlist on your Plex server, with kind and size.
-
-    Manual playlists are safe to pull back into clickwheel via
-    `clickwheel plex pull <name>`. Smart playlists are dynamically
-    computed by Plex; pulling one freezes a snapshot and requires
-    `--include-smart`.
-    """
+    """List every audio playlist on your Plex server, with kind and size."""
     cfg = load_config()
     try:
         with spinner("Reading Plex playlists..."):
@@ -958,12 +952,9 @@ def plex_pull_cmd(
 ) -> None:
     """Pull a playlist from Plex back into clickwheel's local store.
 
-    Useful for recovering hand-curated playlists after a clean install
-    (Plex retains them server-side; clickwheel's SQLite did not). Each
-    Plex track's file path is translated back to clickwheel's view via
-    the configured remap and looked up in the index, only matched
-    tracks land in the new playlist; unmatched ones are listed below
-    so you know what to chase.
+    For recovering hand-curated playlists after a clean install (Plex keeps
+    them server-side; clickwheel's catalog didn't). Tracks are matched against
+    your library; unmatched ones are reported so you can chase them.
     """
     cfg = load_config()
     db = Database(cfg.db_path)
@@ -1520,11 +1511,9 @@ app.add_typer(apple_app, name="apple", rich_help_panel="Apple Music")
 def apple_auth_cmd() -> None:
     """Run the Music User Token authorization flow.
 
-    Opens your browser to a tiny local page that loads MusicKit JS,
-    asks you to sign in with your Apple ID, and posts the resulting
-    user token back to clickwheel. The token is saved to
-    ~/.clickwheel/.env as APPLE_MUSIC_USER_TOKEN. One-time per Mac
-    per Apple ID (the token is long-lived but can be revoked).
+    Opens your browser to sign in with your Apple ID, then saves the token to
+    `~/.clickwheel/.env`. One-time per Mac and Apple ID; the token is long-lived
+    but can be revoked.
     """
     cfg = load_config()
     status("Apple Music auth")
@@ -1587,10 +1576,9 @@ def apple_match_cmd(
 ) -> None:
     """Preview how a playlist's tracks resolve to Apple Music song IDs.
 
-    Read-only against your Apple Music account (no playlist is created)
-    but populates the local match cache so a subsequent `apple push`
-    is fast. Tracks below `--min-confidence` are surfaced as
-    'low-confidence' so you can eyeball them before pushing.
+    Read-only (creates nothing), but caches the matches so the next `apple push`
+    is faster. Tracks below `--min-confidence` are flagged low-confidence for
+    review before pushing.
     """
     cfg = load_config()
     db = Database(cfg.db_path)
@@ -1670,10 +1658,8 @@ def apple_push_cmd(
 ) -> None:
     """Create a playlist in your Apple Music account from a clickwheel playlist.
 
-    Runs the matcher first, then pushes the matched tracks via
-    `POST /v1/me/library/playlists`. Low-confidence matches are skipped
-    by default; pass --include-low after a `clickwheel apple match` review
-    if you want them in.
+    Low-confidence matches are skipped by default; pass `--include-low` (after a
+    `clickwheel apple match` review) to include them.
     """
     cfg = load_config()
     db = Database(cfg.db_path)
@@ -1807,11 +1793,8 @@ def apple_pull_cmd(
 ) -> None:
     """Import an Apple Music library playlist into clickwheel's local store.
 
-    Each Apple track is resolved to a local file in this order: the
-    song_map cache from prior pushes → exact metadata match against
-    your SQLite index → fuzzy composite score. Unmatched rows are
-    surfaced so you know what to chase (typically files Apple has
-    that clickwheel hasn't scanned).
+    Tracks are matched against your library; unmatched rows are reported
+    (usually files Apple has that clickwheel hasn't scanned yet).
     """
     cfg = load_config()
     db = Database(cfg.db_path)
@@ -1874,15 +1857,9 @@ def apple_delete_cmd(
 ) -> None:
     """Delete a library playlist from your Apple Music account.
 
-    Apple's REST API doesn't expose DELETE on library playlists, so
-    clickwheel drives Music.app via AppleScript instead. Music.app's
-    iCloud Music Library sync propagates the deletion to all your
-    signed-in Apple devices.
-
-    macOS-only. Music.app must be launchable (it is on every recent
-    Mac, but the user must be signed in to the same Apple ID as the
-    playlist). Deletes EVERY playlist matching the name, useful for
-    cleaning up duplicates from earlier failed pushes.
+    macOS-only; the deletion syncs to your other devices via iCloud Music
+    Library. Deletes EVERY playlist matching the name, useful for clearing
+    duplicates from failed pushes.
     """
     _check_macos()
     status(f"About to delete '{name}' from Apple Music via Music.app")

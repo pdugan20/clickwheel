@@ -35,11 +35,6 @@ clickwheel plex list [OPTIONS]
 
 List every audio playlist on your Plex server, with kind and size.
 
-Manual playlists are safe to pull back into clickwheel via
-`clickwheel plex pull <name>`. Smart playlists are dynamically
-computed by Plex; pulling one freezes a snapshot and requires
-`--include-smart`.
-
 **Examples**
 
 ```bash
@@ -56,12 +51,9 @@ clickwheel plex pull [OPTIONS] NAME
 
 Pull a playlist from Plex back into clickwheel's local store.
 
-Useful for recovering hand-curated playlists after a clean install
-(Plex retains them server-side; clickwheel's SQLite did not). Each
-Plex track's file path is translated back to clickwheel's view via
-the configured remap and looked up in the index, only matched
-tracks land in the new playlist; unmatched ones are listed below
-so you know what to chase.
+For recovering hand-curated playlists after a clean install (Plex keeps
+them server-side; clickwheel's catalog didn't). Tracks are matched against
+your library; unmatched ones are reported so you can chase them.
 
 **Examples**
 

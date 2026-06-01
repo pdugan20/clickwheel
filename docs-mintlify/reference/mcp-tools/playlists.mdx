@@ -13,7 +13,7 @@ Tools exposed by the clickwheel MCP server. See [MCP server](/concepts/mcp-serve
 
 - _"What playlists do I have?"_
 - _"Build a 45-minute late-night indie folk playlist."_
-- _"Add Big Thief to my road-trip playlist."_
+- _"Add Nirvana to my road-trip playlist."_
 
 ## `add_artist_to_playlist`
 
@@ -30,7 +30,7 @@ Add every track by `artist` to `playlist` (skipping duplicates). Creates the pla
 
 ## `create_playlist`
 
-Create a new named playlist (a curated collection like workout mix, road trip, etc.) with the given track paths. Errors if a playlist with the same name already exists. Use `update_playlist` to replace contents instead.
+Create a new named playlist with the given track paths. Errors if one with the same name already exists; use `update_playlist` to replace contents instead.
 
 
 <ParamField path="name" type="string" required>
@@ -91,7 +91,7 @@ Paginated list of tracks in a saved playlist, in playlist order. Returns full tr
 
 ## `list_playlists`
 
-All saved playlists (the curated, named collections like workout mix, road trip, etc.) with track counts, total size in bytes, and last-updated timestamps.
+All saved playlists with track counts, total size in bytes, and last-updated timestamps.
 
 
 ## `remove_artist_from_playlist`

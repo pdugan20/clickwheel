@@ -11,13 +11,13 @@ from __future__ import annotations
 PROMPTS: dict[str, list[str]] = {
     "Library": [
         "What's in my library?",
-        "Do I have any Radiohead albums?",
+        "Do I have any Beastie Boys albums?",
         "Search my library for acoustic versions.",
     ],
     "Playlists": [
         "What playlists do I have?",
         "Build a 45-minute late-night indie folk playlist.",
-        "Add Big Thief to my road-trip playlist.",
+        "Add Nirvana to my road-trip playlist.",
     ],
     "iPod": [
         "What's on my iPod, and how full is it?",
