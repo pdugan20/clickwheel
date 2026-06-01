@@ -21,6 +21,7 @@ OUT = pathlib.Path("docs-mintlify/changelog.mdx")
 HEADER = """\
 ---
 title: Changelog
+icon: "clock-rotate-left"
 description: clickwheel release history.
 ---
 
