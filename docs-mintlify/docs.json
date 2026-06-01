@@ -22,6 +22,10 @@
     "light": "#C4DCFF",
     "dark": "#4A82EF"
   },
+  "thumbnails": {
+    "appearance": "light",
+    "background": "/images/og-bg.png"
+  },
   "navbar": {
     "primary": {
       "type": "button",
