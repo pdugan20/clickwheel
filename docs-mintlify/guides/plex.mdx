@@ -1,26 +1,78 @@
 ---
 title: Plex / Plexamp
-description: Push clickwheel playlists to Plex, and recover them back.
+icon: "server"
+description: Mirror clickwheel playlists into a Plex music library, and pull them back.
 ---
 
-If you run Plex, clickwheel can push the same playlists to your Plex music
-library (so Plexamp picks them up) and pull them back.
+If you run Plex, clickwheel can push the same playlists into your Plex music
+library so Plexamp and Plex web see them alongside your iPod, and pull Plex
+playlists back into clickwheel. It's bidirectional.
 
-## Configure
+## Setup
 
-Add your Plex server to `~/.clickwheel/config.yaml` (URL, token, and the
-library path remap if Plex sees your music at a different path than your Mac).
-See [Configuration](/reference/configuration).
+<Steps>
+  <Step title="Install the Plex extra">
+    ```bash
+    pipx inject clickwheel 'clickwheel[plex]'
+    ```
+  </Step>
 
-Verify the setup end-to-end with the MCP `plex_health` probe, or via the CLI.
+  <Step title="Configure your server">
+    ```yaml title="~/.clickwheel/config.yaml"
+    plex_enabled: true
+    plex_url: http://192.168.1.10:32400
+    plex_library_name: Music
+    ```
+
+    Keep the token out of YAML, put it in `~/.clickwheel/.env` (mode `600`) as
+    `CLICKWHEEL_PLEX_TOKEN=<your-token>`. Treat it like a password. See Plex's
+    [Finding an authentication token](https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/)
+    if you don't have it yet.
+  </Step>
+
+  <Step title="Verify with the doctor">
+    ```bash
+    clickwheel plex doctor
+    ```
+
+    A read-only, five-stage probe: config → connect → music section → sample
+    track → path remap. Each stage that fails tells you exactly what to fix.
+  </Step>
+</Steps>
 
 ## Push and pull
 
-- **Push** a clickwheel playlist to Plex so Plexamp sees it.
-- **Pull** a Plex playlist back into clickwheel's catalog — useful after a fresh
-  install or Mac wipe, when Plex still has your playlists but clickwheel's
-  catalog is empty.
+```bash
+clickwheel sync-plex <name>     # push one playlist (M3U import)
+clickwheel sync-plex --all      # push every clickwheel playlist
+clickwheel plex list            # list Plex audio playlists (with track counts)
+clickwheel plex pull <name>     # import a Plex playlist into clickwheel
+```
 
-These flows are also available as MCP tools (`sync_playlist_to_plex`,
-`list_plex_playlists`, `pull_playlist_from_plex`) — see the
-[MCP tool reference](/reference/mcp-tools).
+**Push** reports `pushed` vs `resolved`; a gap means Plex hasn't scanned those
+files yet, so run a Plex library scan and re-sync. Re-syncing replaces
+clickwheel's managed copy but leaves a same-named playlist *you* made in Plex
+alone.
+
+**Pull** recovers playlists after a fresh install or Mac wipe. Smart playlists
+are dynamic queries, so pull skips them unless you pass `--include-smart`.
+
+<Accordion title="Path remap: when Plex sees your files at a different path">
+  clickwheel and Plex can mount the same library at different paths (e.g.
+  clickwheel over SMB, Plex on the NAS's local filesystem). The remap swaps one
+  prefix for another:
+
+  ```yaml
+  plex_path_remap_local: /Volumes/Public/
+  plex_path_remap_plex: /share/CACHEDEV1_DATA/Public/
+  ```
+
+  Find Plex's view at **Settings → Manage → Libraries → your music library → Add
+  folders**. Leave both empty when Plex runs on the same machine as clickwheel.
+</Accordion>
+
+## From Claude
+
+You can also drive this from Claude. Set up the
+[MCP server](/concepts/mcp-server), then the
+[Plex tools](/reference/mcp-tools/plex) are yours.

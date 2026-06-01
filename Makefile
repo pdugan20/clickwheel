@@ -26,11 +26,12 @@ format:
 format-web:
 	cd web && npm run format
 
-# Regenerate the CLI + MCP tool reference (docs-mintlify/reference/) from source.
-# CI ("Docs Reference Freshness") fails if the committed output drifts.
+# Regenerate the CLI + MCP tool reference + changelog (docs-mintlify/) from
+# source. CI ("Docs Reference Freshness") fails if the committed output drifts.
 docs-reference:
 	uv run --extra mcp python scripts/gen-cli-reference.py
 	uv run --extra mcp python scripts/gen-mcp-reference.py
+	uv run python scripts/gen-changelog.py
 
 # Live-preview the docs site (needs the Mintlify CLI: npm i -g mint).
 docs:

@@ -1,11 +1,12 @@
 ---
 title: Remote / mobile access
+icon: "mobile-screen"
 description: Use clickwheel from the Claude apps, including your phone.
 ---
 
 The MCP server runs on your Mac. To reach it from the **Claude mobile app** (or
 claude.ai anywhere), you expose the local server to the internet through a
-**Cloudflare Tunnel**, protected by **Cloudflare Access** — keeping the Mac as
+**Cloudflare Tunnel**, protected by **Cloudflare Access**, keeping the Mac as
 the source of truth.
 
 <Note>
@@ -14,25 +15,22 @@ the source of truth.
   undocked, they return "not connected," exactly as locally.
 </Note>
 
-## The shape
-
-```text
-Claude app ──HTTPS──▶ Cloudflare (Access auth) ──tunnel──▶ your Mac (clickwheel-mcp serve --http)
-```
+## How it works
 
 - `clickwheel-mcp serve --http` runs the server over Streamable HTTP, bound to
   `127.0.0.1` (the tunnel is the only ingress).
-- A **Cloudflare Tunnel** routes `clickwheel.fm` → the local server.
+- A **Cloudflare Tunnel** routes your domain (say `mcp.example.com`) → the local
+  server.
 - **Cloudflare Access** (Zero Trust) gates it to your email and natively handles
-  the MCP OAuth flow — no OAuth code required.
+  the MCP OAuth flow, no OAuth code required.
 
-## Setup (summary)
+## Setup
 
 The full, copy-pasteable runbook lives in the repo at
 [`docs/mcp/deploy/README.md`](https://github.com/pdugan20/clickwheel/blob/main/docs/mcp/deploy/README.md).
 In short:
 
-1. Run the server: `clickwheel-mcp serve --http --allowed-host clickwheel.fm`.
+1. Run the server: `clickwheel-mcp serve --http --allowed-host mcp.example.com`.
    (The `--allowed-host` is required behind a tunnel, or the SDK's DNS-rebinding
    protection rejects requests with HTTP 421.)
 2. Create a Cloudflare Tunnel and route your domain to `http://127.0.0.1:8000`.
@@ -42,14 +40,14 @@ In short:
 
 ## Adding the connector
 
-You **add the connector on claude.ai (web)** — Settings → Connectors → Add
+You **add the connector on claude.ai (web)**: Settings → Connectors → Add
 custom connector → your MCP URL. Complete the Cloudflare Access login. It then
 becomes usable in the **mobile app** (you can't add connectors from the phone,
 only use ones added on the web).
 
 ## What works from mobile
 
-- **Library + playlist** tools — fully (they hit the local catalog).
-- **Plex / Apple Music / Last.fm** — whenever the Mac can reach them.
-- **iPod** tools — only when the iPod is docked to the Mac; otherwise they fail
+- **Library + playlist** tools: fully (they hit the local catalog).
+- **Plex / Apple Music / Last.fm**: whenever the Mac can reach them.
+- **iPod** tools: only when the iPod is docked to the Mac; otherwise they fail
   gracefully.

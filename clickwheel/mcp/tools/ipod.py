@@ -94,7 +94,7 @@ def _summarize_track(t: dict) -> dict:
 def get_ipod_contents() -> Annotated[CallToolResult, IpodContents]:
     """High-level snapshot of what's on the iPod: capacity, used/free space,
     track/artist/album counts, and the top 25 artists by track count.
-    Does NOT return the full track list — use `list_ipod_tracks` to page
+    Does NOT return the full track list. Use `list_ipod_tracks` to page
     through tracks (optionally filtered by artist).
 
     Requires the iPod to be mounted (typically /Volumes/IPOD on macOS).
@@ -197,7 +197,7 @@ def list_ipod_tracks(
     ] = 0,
 ) -> Annotated[CallToolResult, list[IpodTrack]]:
     """Paginated list of tracks on the iPod, optionally filtered by artist.
-    Each track is the chat-friendly slice — artist, title, album, size in
+    Each track is the chat-friendly slice: artist, title, album, size in
     bytes. For the full per-track payload, use the CLI.
 
     When to use: the user asks for specific iPod tracks — "what Beatles
@@ -439,7 +439,7 @@ async def add_tracks_to_ipod(
             description=(
                 "Absolute paths (from the indexed library) of tracks to "
                 "add. Use list_tracks_by_album / search_tracks to get "
-                "paths — never invent them."
+                "paths. Never invent them."
             ),
         ),
     ],
@@ -560,8 +560,7 @@ async def add_artist_to_ipod(
     ctx: Context,
 ) -> Annotated[CallToolResult, AddArtistToIpodResult]:
     """Push every track by an artist to the iPod's library, no playlist
-    artifact. Convenience wrapper over `add_tracks_to_ipod` that resolves
-    the artist's tracks via the library index.
+    artifact.
 
     Use for "add all the Beatles to my iPod" style requests. Same
     semantics as `add_tracks_to_ipod`: tracks land in the main library,
@@ -670,13 +669,13 @@ async def remove_tracks_from_ipod(
                 "Absolute paths (from the indexed library) of tracks to "
                 "remove from the iPod. Get these via list_tracks_by_album "
                 "or search_tracks. Paths that aren't on the iPod are "
-                "reported back as unmatched — not an error."
+                "reported back as unmatched, not an error."
             ),
         ),
     ],
     ctx: Context,
 ) -> Annotated[CallToolResult, RemoveTracksFromIpodResult]:
-    """Remove specific tracks from the iPod — drops them from the
+    """Remove specific tracks from the iPod. Drops them from the
     iTunesDB AND deletes the underlying audio files from the device.
 
     Use for "take Pinkerton off my iPod" / "remove these test tracks" /
@@ -866,7 +865,7 @@ def remove_ipod_playlist(
     ],
 ) -> Annotated[CallToolResult, RemoveIpodPlaylistResult]:
     """Remove a playlist from the iPod (Music → Playlists). The
-    playlist's tracks are NOT deleted — they stay in the iPod's main
+    playlist's tracks are NOT deleted. They stay in the iPod's main
     library, browsable by artist/album. Only the playlist artifact
     goes away.
 
@@ -908,18 +907,11 @@ def remove_ipod_playlist(
 
 @mcp.tool(title="Eject iPod", annotations=MUTATION)
 def eject_ipod() -> Annotated[CallToolResult, EjectResult]:
-    """Safely unmount the iPod via `diskutil eject`. Idempotent: if no
-    iPod is currently mounted, returns `{"ejected": False,
-    "already_unmounted": True}` rather than raising. This handles the
-    classic iPod's normal post-sync auto-disconnect — after the device
-    finishes writing its iTunesDB, its firmware flips the screen back
-    to the menu and tells macOS it's safe to remove, at which point
-    the volume dismounts automatically. So by the time the user asks
-    you to eject, the iPod may already be gone. That's expected; tell
-    the user the iPod auto-disconnected and they're safe to unplug.
-    Other things that can cause an idle disconnect: macOS Music.app
-    auto-eject after activity, USB selective-suspend on battery, the
-    iPod's own drive-spindown power-saving.
+    """Safely unmount the iPod via `diskutil eject`. Idempotent: if the
+    iPod is already unmounted, returns `{"ejected": False,
+    "already_unmounted": True}` instead of raising. Classic iPods often
+    auto-disconnect after a sync, so it may already be gone; that's
+    expected, so tell the user it's safe to unplug.
 
     Errors:
     - EjectFailedError if diskutil exits non-zero (typical cause: a

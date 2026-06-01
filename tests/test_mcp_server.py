@@ -18,7 +18,11 @@ import pytest
 
 pytest.importorskip("mcp", reason="mcp not installed")
 
-from clickwheel.actions import IpodNotFoundError, PlaylistNotFoundError
+from clickwheel.actions import (
+    IpodNotFoundError,
+    PathsNotFoundError,
+    PlaylistNotFoundError,
+)
 from clickwheel.config import Config
 from clickwheel.db import Database
 
@@ -325,6 +329,8 @@ def test_tools_registered_with_fastmcp():
         "heal_playlist",
         "add_artist_to_playlist",
         "remove_artist_from_playlist",
+        "add_tracks_to_playlist",
+        "remove_tracks_from_playlist",
         "submit_scrobbles",
         "sync_playlist_to_ipod",
         "eject_ipod",
@@ -545,6 +551,47 @@ def test_remove_artist_from_playlist(tmp_path, monkeypatch):
 
     result = _call(remove_artist_from_playlist, playlist="myset", artist="ArtistA")
     assert result["removed"] == 1
+
+
+def test_add_tracks_to_playlist(tmp_path, monkeypatch):
+    from clickwheel.mcp.tools.playlist import add_tracks_to_playlist
+
+    _setup(tmp_path, monkeypatch)
+
+    result = _call(
+        add_tracks_to_playlist,
+        playlist="myset",
+        track_paths=["/music/A/Album1/01.mp3", "/music/B/Album2/01.mp3"],
+    )
+    assert result["added"] == 2
+    assert result["playlist"] == "myset"
+    assert result["requested"] == 2
+
+
+def test_add_tracks_to_playlist_unknown_path_raises(tmp_path, monkeypatch):
+    from clickwheel.mcp.tools.playlist import add_tracks_to_playlist
+
+    _setup(tmp_path, monkeypatch)
+
+    with pytest.raises(PathsNotFoundError):
+        add_tracks_to_playlist(playlist="myset", track_paths=["/music/nope.mp3"])
+
+
+def test_remove_tracks_from_playlist(tmp_path, monkeypatch):
+    from clickwheel.mcp.tools.playlist import remove_tracks_from_playlist
+
+    cfg = _setup(tmp_path, monkeypatch)
+    db = Database(cfg.db_path)
+    db.save_playlist("myset", ["/music/A/Album1/01.mp3", "/music/B/Album2/01.mp3"])
+    db.close()
+
+    result = _call(
+        remove_tracks_from_playlist,
+        playlist="myset",
+        track_paths=["/music/A/Album1/01.mp3"],
+    )
+    assert result["removed"] == 1
+    assert result["requested"] == 1
 
 
 def test_submit_scrobbles_no_ipod(tmp_path, monkeypatch):
@@ -925,7 +972,7 @@ def test_all_tools_emit_output_schema():
     from clickwheel.mcp._runtime import mcp
 
     tools = asyncio.run(mcp.list_tools())
-    assert len(tools) == 37
+    assert len(tools) == 39
     for t in tools:
         assert t.outputSchema, f"{t.name}: no outputSchema"
         assert t.outputSchema.get("properties"), f"{t.name}: schema has no properties"
@@ -959,6 +1006,16 @@ def test_conformance_playlist_tools(tmp_path, monkeypatch):
     _conform(pl.update_playlist, name="mix", track_paths=["/music/A/Album1/01.mp3"])
     _conform(pl.add_artist_to_playlist, playlist="mix", artist="ArtistB")
     _conform(pl.remove_artist_from_playlist, playlist="mix", artist="ArtistB")
+    _conform(
+        pl.add_tracks_to_playlist,
+        playlist="mix",
+        track_paths=["/music/B/Album2/01.mp3"],
+    )
+    _conform(
+        pl.remove_tracks_from_playlist,
+        playlist="mix",
+        track_paths=["/music/B/Album2/01.mp3"],
+    )
     _conform(pl.heal_playlist, name="mix")
     _conform(pl.set_playlist_description, name="mix", description="a road trip mix")
     _conform(pl.delete_playlist, name="mix")

@@ -111,7 +111,7 @@ def list_albums_by_artist(
     entry includes track count, total size in bytes, and the year (if known).
 
     When to use: the canonical way to BROWSE an artist's whole catalog —
-    "show me everything by Bob Dylan", "what Wilco albums do I have?",
+    "show me everything by Bob Dylan", "what Beastie Boys albums do I have?",
     or any "build me a playlist of X best tracks" flow. Returns the
     complete discography in one call, no result cap, no alphabet
     truncation (unlike `search_tracks` which silently chops at 50–500).

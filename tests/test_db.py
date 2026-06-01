@@ -409,6 +409,110 @@ def test_get_playlist_artists(populated_db: Database):
     assert names == {"ArtistA", "ArtistB"}
 
 
+def test_add_tracks_to_playlist(populated_db: Database):
+    populated_db.save_playlist("test", [])
+    added = populated_db.add_tracks_to_playlist(
+        "test",
+        ["/music/A/Album1/01 T1.mp3", "/music/B/Album2/01 S1.mp3"],
+    )
+    assert added == 2
+    assert len(populated_db.get_playlist("test")) == 2
+
+
+def test_add_tracks_to_playlist_creates_playlist(populated_db: Database):
+    added = populated_db.add_tracks_to_playlist("fresh", ["/music/A/Album1/01 T1.mp3"])
+    assert added == 1
+    assert len(populated_db.get_playlist("fresh")) == 1
+
+
+def test_add_tracks_to_playlist_appends_in_order(populated_db: Database):
+    populated_db.save_playlist("test", ["/music/B/Album2/01 S1.mp3"])
+    added = populated_db.add_tracks_to_playlist(
+        "test",
+        ["/music/A/Album1/02 T2.mp3", "/music/A/Album1/01 T1.mp3"],
+    )
+    assert added == 2
+    titles = [t["title"] for t in populated_db.get_playlist("test")]
+    assert titles == ["S1", "T2", "T1"]
+
+
+def test_add_tracks_to_playlist_skips_duplicates(populated_db: Database):
+    populated_db.save_playlist("test", ["/music/A/Album1/01 T1.mp3"])
+    added = populated_db.add_tracks_to_playlist(
+        "test",
+        ["/music/A/Album1/01 T1.mp3", "/music/A/Album1/02 T2.mp3"],
+    )
+    assert added == 1  # T1 already present
+    assert len(populated_db.get_playlist("test")) == 2
+
+
+def test_add_tracks_to_playlist_skips_missing(populated_db: Database):
+    populated_db.save_playlist("test", [])
+    populated_db.mark_missing({"/music/A/Album1/01 T1.mp3"})
+    added = populated_db.add_tracks_to_playlist(
+        "test",
+        ["/music/A/Album1/01 T1.mp3", "/music/A/Album1/02 T2.mp3"],
+    )
+    assert added == 1
+    paths = {t["path"] for t in populated_db.get_playlist("test")}
+    assert "/music/A/Album1/01 T1.mp3" not in paths
+
+
+def test_add_tracks_to_playlist_skips_flac(populated_db: Database, sample_track: dict):
+    flac = {
+        **sample_track,
+        "path": "/music/A/Album1/04 T4.flac",
+        "title": "T4",
+        "artist": "ArtistA",
+        "album_artist": "ArtistA",
+        "album": "Album1",
+        "format": "flac",
+    }
+    populated_db.upsert_track(flac)
+    populated_db.commit()
+    added = populated_db.add_tracks_to_playlist(
+        "test",
+        ["/music/A/Album1/01 T1.mp3", "/music/A/Album1/04 T4.flac"],
+    )
+    assert added == 1
+    paths = {t["path"] for t in populated_db.get_playlist("test")}
+    assert "/music/A/Album1/04 T4.flac" not in paths
+
+
+def test_remove_tracks_from_playlist(populated_db: Database):
+    populated_db.save_playlist(
+        "test",
+        [
+            "/music/A/Album1/01 T1.mp3",
+            "/music/A/Album1/02 T2.mp3",
+            "/music/B/Album2/01 S1.mp3",
+        ],
+    )
+    removed = populated_db.remove_tracks_from_playlist(
+        "test",
+        ["/music/A/Album1/01 T1.mp3", "/music/B/Album2/01 S1.mp3"],
+    )
+    assert removed == 2
+    titles = [t["title"] for t in populated_db.get_playlist("test")]
+    assert titles == ["T2"]
+
+
+def test_remove_tracks_from_playlist_nonexistent_playlist(populated_db: Database):
+    removed = populated_db.remove_tracks_from_playlist(
+        "nope", ["/music/A/Album1/01 T1.mp3"]
+    )
+    assert removed == 0
+
+
+def test_remove_tracks_from_playlist_not_in_playlist(populated_db: Database):
+    populated_db.save_playlist("test", ["/music/A/Album1/01 T1.mp3"])
+    removed = populated_db.remove_tracks_from_playlist(
+        "test", ["/music/B/Album2/01 S1.mp3"]
+    )
+    assert removed == 0
+    assert len(populated_db.get_playlist("test")) == 1
+
+
 def test_metadata_quality_stats(tmp_db: Database, sample_track: dict):
     # Track with missing genre
     no_genre = {**sample_track, "path": "/music/x.mp3", "genre": ""}

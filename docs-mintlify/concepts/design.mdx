@@ -1,41 +1,39 @@
 ---
 title: Design principles
+sidebarTitle: Design
+icon: "compass-drafting"
 description: The deliberate constraints behind clickwheel.
 ---
 
 A few constraints shape everything clickwheel does. They're intentional.
 
-## Single-tenant, Mac-as-source-of-truth
+## Single-tenant
 
 clickwheel runs on **your** machine and works with **your** library and iPod in
 place. There's no cloud service holding your data. The catalog is built from
 your local files; the iPod is a USB-mounted volume the tool writes directly.
 
 This is why "multi-user clickwheel" isn't a thing a hosted service could
-provide — each person's library and iPod are physically bound to their own Mac.
+provide: each person's library and iPod are physically bound to their own Mac.
 Even the [remote/mobile MCP access](/guides/remote-mcp) keeps the Mac as the
 source of truth and simply exposes the existing local server through a tunnel.
 
-## Metadata is fixed in place — never moved
+## Read-only library
 
-The [`fix`](/guides/fix-metadata) command repairs tags, art, and genres by
-writing back to the original files. It **never moves or renames** them, because
-other tools (e.g. Plex) read the same library and rely on stable paths.
+Indexing (`scan`) only reads tags and writes to SQLite. The one command that
+touches your files is [`fix`](/guides/fix-metadata), and it edits tags, art, and
+genres **in place**, never moving or renaming them (other tools like Plex read
+the same library and rely on stable paths).
 
-## `scan` is read-only
-
-Indexing only reads tags and writes to SQLite. The only command that modifies
-your library is `fix`, and only ever in place.
-
-## FLAC is excluded from iPod sync
+## FLAC is skipped
 
 Stock classic-iPod firmware doesn't play FLAC, so clickwheel skips FLAC when
 loading the device rather than silently transcoding. Your library keeps its
 FLACs; they just don't go on the iPod.
 
-## Manual refresh for the MCP server
+## No auto-scan over MCP
 
-The MCP server never auto-scans — chat tool calls always serve cached catalog
+The MCP server never auto-scans: chat tool calls always serve cached catalog
 data, so a conversation never blocks on a multi-minute library walk. You refresh
 by running `clickwheel scan` when you've added music. (The interactive CLI
 commands *do* auto-scan, via a cheap probe plus a fallback timer.)

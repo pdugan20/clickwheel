@@ -21,6 +21,7 @@ from clickwheel.mcp._runtime import (
 )
 from clickwheel.mcp.models import (
     AddArtistToPlaylistResult,
+    AddTracksToPlaylistResult,
     CreatePlaylistResult,
     DeletePlaylistResult,
     FullTrack,
@@ -28,6 +29,7 @@ from clickwheel.mcp.models import (
     PlaylistDetail,
     PlaylistSummary,
     RemoveArtistFromPlaylistResult,
+    RemoveTracksFromPlaylistResult,
     SetPlaylistDescriptionResult,
     UpdatePlaylistResult,
 )
@@ -35,8 +37,7 @@ from clickwheel.mcp.models import (
 
 @mcp.tool(title="List playlists", annotations=READ_ONLY)
 def list_playlists() -> Annotated[CallToolResult, list[PlaylistSummary]]:
-    """All saved playlists (the curated, named collections — workout
-    mix, road trip, etc.) with track counts, total size in bytes, and
+    """All saved playlists with track counts, total size in bytes, and
     last-updated timestamps.
 
     These are clickwheel-side drafts. A playlist that has been pushed
@@ -74,7 +75,7 @@ def get_playlist(
 ) -> Annotated[CallToolResult, PlaylistDetail]:
     """Summary of one playlist: total track count, total size, and the
     artist breakdown (with track count + size per artist). Does NOT return
-    the full track list — use `list_playlist_tracks` to page through tracks.
+    the full track list. Use `list_playlist_tracks` to page through tracks.
 
     Errors if the playlist doesn't exist.
 
@@ -118,7 +119,7 @@ def list_playlist_tracks(
 ) -> Annotated[CallToolResult, list[FullTrack]]:
     """Paginated list of tracks in a saved playlist, in playlist order.
     Returns full track records (artist, title, album, path, duration,
-    file_size, format) — the `path` values are needed if you're going to
+    file_size, format). The `path` values are needed if you're going to
     pass them to `update_playlist`.
 
     When to use: showing the user specific tracks in a playlist, or
@@ -149,7 +150,7 @@ def create_playlist(
         Field(
             description=(
                 "Absolute file paths from the library. Get these from "
-                "list_tracks_by_album or search_tracks — never invent paths."
+                "list_tracks_by_album or search_tracks. Never invent paths."
             ),
         ),
     ],
@@ -164,9 +165,8 @@ def create_playlist(
         ),
     ] = None,
 ) -> Annotated[CallToolResult, CreatePlaylistResult]:
-    """Create a new named playlist (a curated collection — workout mix,
-    road trip, etc.) with the given track paths. Errors if a playlist
-    with the same name already exists — use `update_playlist` to replace
+    """Create a new named playlist with the given track paths. Errors if one
+    with the same name already exists; use `update_playlist` to replace
     contents instead.
 
     Use this for the "make me a playlist" / "build a curated mix" flow
@@ -270,7 +270,7 @@ def set_playlist_description(
 def delete_playlist(
     name: Annotated[str, Field(description="Playlist name.")],
 ) -> Annotated[CallToolResult, DeletePlaylistResult]:
-    """Permanently delete a saved playlist. Cannot be undone — the playlist
+    """Permanently delete a saved playlist. Cannot be undone. The playlist
     record is removed; the underlying music files are untouched.
 
     Flagged `destructiveHint=true`, so MCP clients (Claude Code etc.) gate
@@ -298,7 +298,7 @@ def add_artist_to_playlist(
     Creates the playlist if it doesn't already exist. Returns the number
     of tracks actually added.
 
-    When to use: the user says "add Big Thief to my road-trip playlist" or
+    When to use: the user says "add Nirvana to my road-trip playlist" or
     similar.
 
     After this: `sync_playlist_to_ipod` to push the change.
@@ -365,7 +365,7 @@ def remove_artist_from_playlist(
     """Remove every track by `artist` from `playlist`. Returns the number
     of tracks removed (0 if the artist wasn't in the playlist).
 
-    When to use: the user says "drop Big Thief from my road-trip playlist".
+    When to use: the user says "drop Nirvana from my road-trip playlist".
     The playlist record stays even if it ends up empty.
     """
     with open_session() as (_cfg, db):
@@ -378,4 +378,95 @@ def remove_artist_from_playlist(
                 f"Removed {format_count(removed, 'track')} by {artist} "
                 f"from '{playlist}'."
             )
+        return render(text, data)
+
+
+@mcp.tool(title="Add tracks to playlist", annotations=MUTATION)
+def add_tracks_to_playlist(
+    playlist: Annotated[str, Field(description="Playlist name (created if missing).")],
+    track_paths: Annotated[
+        list[str],
+        Field(
+            description=(
+                "Absolute file paths from the library, in the order they "
+                "should be appended. Get these from list_tracks_by_album, "
+                "list_playlist_tracks, or search_tracks. Never invent paths."
+            ),
+        ),
+    ],
+) -> Annotated[CallToolResult, AddTracksToPlaylistResult]:
+    """Append specific tracks to a saved playlist, preserving the given
+    order. Creates the playlist if it doesn't exist. Tracks already in the
+    playlist, FLAC files, and files flagged missing on disk are silently
+    skipped. Returns the number of tracks actually added.
+
+    This is the song-level counterpart to `add_artist_to_playlist` — use it
+    when the user wants to add individual songs ("add this track to my
+    road-trip playlist") rather than an artist's whole catalog. To put music
+    directly on the device without a curated playlist artifact, use
+    `add_tracks_to_ipod` instead.
+
+    Errors with PathsNotFoundError if any path isn't in the library index —
+    suggest `clickwheel scan` or double-check the paths.
+
+    When to use: the user names specific songs to add to a playlist.
+
+    After this: `sync_playlist_to_ipod` to push the change.
+    """
+    with open_session() as (_cfg, db):
+        added = actions.add_tracks_to_playlist(db, playlist, track_paths)
+        data = {
+            "added": added,
+            "playlist": playlist,
+            "requested": len(track_paths),
+        }
+        if added == 0:
+            text = (
+                f"No tracks added to '{playlist}' — they're already in it, "
+                "FLAC, or missing on disk."
+            )
+        else:
+            text = (
+                f"Added {format_count(added, 'track')} to '{playlist}'. "
+                "Sync with `sync_playlist_to_ipod`."
+            )
+        return render(text, data)
+
+
+@mcp.tool(title="Remove tracks from playlist", annotations=MUTATION)
+def remove_tracks_from_playlist(
+    playlist: Annotated[str, Field(description="Playlist name.")],
+    track_paths: Annotated[
+        list[str],
+        Field(
+            description=(
+                "Absolute file paths to remove. Get these from "
+                "list_playlist_tracks. Never invent paths."
+            ),
+        ),
+    ],
+) -> Annotated[CallToolResult, RemoveTracksFromPlaylistResult]:
+    """Remove specific tracks from a saved playlist by path. Returns the
+    number of references removed (0 if none of the paths were in the
+    playlist). The playlist record stays even if it ends up empty.
+
+    The song-level counterpart to `remove_artist_from_playlist` — use it
+    when the user wants to drop individual songs rather than an artist's
+    whole catalog.
+
+    Errors with PathsNotFoundError if any path isn't in the library index.
+
+    When to use: the user names specific songs to drop from a playlist.
+    """
+    with open_session() as (_cfg, db):
+        removed = actions.remove_tracks_from_playlist(db, playlist, track_paths)
+        data = {
+            "removed": removed,
+            "playlist": playlist,
+            "requested": len(track_paths),
+        }
+        if removed == 0:
+            text = f"None of those tracks were in '{playlist}' — nothing removed."
+        else:
+            text = f"Removed {format_count(removed, 'track')} from '{playlist}'."
         return render(text, data)

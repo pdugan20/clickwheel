@@ -676,6 +676,92 @@ class Database:
         self.conn.commit()
         return count
 
+    def add_tracks_to_playlist(self, playlist_name: str, track_paths: list[str]) -> int:
+        """Append specific tracks (by path) to a playlist, preserving the
+        given order. Skips FLAC, files flagged missing, and tracks already
+        in the playlist. Creates the playlist if it doesn't exist. Returns
+        the number of tracks actually added."""
+        playlist = self.conn.execute(
+            "SELECT id FROM playlists WHERE name = ?",
+            (playlist_name,),
+        ).fetchone()
+        if not playlist:
+            self.conn.execute(
+                "INSERT INTO playlists (name) VALUES (?)",
+                (playlist_name,),
+            )
+            self.conn.commit()
+            playlist = self.conn.execute(
+                "SELECT id FROM playlists WHERE name = ?",
+                (playlist_name,),
+            ).fetchone()
+
+        pid = playlist["id"]
+        existing = {
+            r["track_id"]
+            for r in self.conn.execute(
+                "SELECT track_id FROM playlist_tracks WHERE playlist_id = ?",
+                (pid,),
+            ).fetchall()
+        }
+        pos = self.conn.execute(
+            "SELECT COALESCE(MAX(position), -1) FROM playlist_tracks "
+            "WHERE playlist_id = ?",
+            (pid,),
+        ).fetchone()[0]
+
+        added = 0
+        for path in track_paths:
+            row = self.conn.execute(
+                "SELECT id FROM tracks WHERE path = ? "
+                "AND format != 'flac' AND missing_since IS NULL",
+                (path,),
+            ).fetchone()
+            if row is None:
+                continue
+            tid = row["id"]
+            if tid in existing:
+                continue
+            pos += 1
+            self.conn.execute(
+                "INSERT INTO playlist_tracks "
+                "(playlist_id, track_id, position) "
+                "VALUES (?, ?, ?)",
+                (pid, tid, pos),
+            )
+            existing.add(tid)
+            added += 1
+
+        self.conn.commit()
+        return added
+
+    def remove_tracks_from_playlist(
+        self, playlist_name: str, track_paths: list[str]
+    ) -> int:
+        """Remove specific tracks (by path) from a playlist. Returns the
+        number of references removed (0 if the playlist doesn't exist or
+        none of the paths were in it)."""
+        row = self.conn.execute(
+            "SELECT id FROM playlists WHERE name = ?",
+            (playlist_name,),
+        ).fetchone()
+        if not row:
+            return 0
+        pid = row["id"]
+
+        before = self.conn.total_changes
+        for path in track_paths:
+            self.conn.execute(
+                """
+                DELETE FROM playlist_tracks WHERE playlist_id = ?
+                AND track_id IN (SELECT id FROM tracks WHERE path = ?)
+                """,
+                (pid, path),
+            )
+        removed = self.conn.total_changes - before
+        self.conn.commit()
+        return removed
+
     def get_playlist_size(self, name: str) -> int:
         """Return total size in bytes of a playlist."""
         row = self.conn.execute(

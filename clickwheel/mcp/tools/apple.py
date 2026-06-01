@@ -415,7 +415,7 @@ def delete_apple_music_playlist(
 
     macOS-only. Music.app must be launchable, and the user must be
     signed into the same Apple ID that holds the playlist. Deletes
-    EVERY playlist matching the name — useful for cleaning up
+    EVERY playlist matching the name, useful for cleaning up
     duplicates left by earlier failed pushes.
 
     Flagged destructive — clients gate with native Allow/Deny prompts.

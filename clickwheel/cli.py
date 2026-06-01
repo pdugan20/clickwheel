@@ -84,7 +84,7 @@ def main(
     """clickwheel — sync your music library to a classic iPod."""
 
 
-@app.command()
+@app.command(rich_help_panel="Library")
 def scan(
     full: bool = typer.Option(
         False, "--full", "-f", help="Rescan everything from scratch"
@@ -153,7 +153,7 @@ def scan(
     dim("Run `clickwheel select` to pick music for your iPod.")
 
 
-@app.command()
+@app.command(rich_help_panel="Library")
 def fix(
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Show what would be done without making changes"
@@ -191,7 +191,7 @@ def fix(
     _run_fix(cfg, target, refresh_mb=refresh_mb, refresh_genres=refresh_genres)
 
 
-@app.command()
+@app.command(rich_help_panel="iPod")
 def select(
     playlist_name: str = typer.Option("ipod", "--name", "-n", help="Playlist name"),
     description: str = typer.Option(
@@ -268,7 +268,7 @@ def select(
     db.close()
 
 
-@app.command()
+@app.command(rich_help_panel="Playlists")
 def playlist(
     name: str = typer.Argument(None, help="Playlist name to show details"),
 ) -> None:
@@ -338,7 +338,7 @@ def playlist(
     db.close()
 
 
-@app.command()
+@app.command(rich_help_panel="Playlists")
 def delete(
     playlist_name: str = typer.Argument(..., help="Playlist to delete"),
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
@@ -366,7 +366,7 @@ def delete(
     db.close()
 
 
-@app.command()
+@app.command(rich_help_panel="Playlists")
 def heal(
     playlist_name: str = typer.Argument(..., help="Playlist to heal"),
     no_scan: bool = typer.Option(
@@ -421,11 +421,17 @@ def heal(
     db.close()
 
 
-@app.command()
+@app.command(rich_help_panel="Playlists")
 def edit(
     playlist_name: str = typer.Argument("ipod", help="Playlist to edit"),
     add: list[str] = typer.Option([], "--add", "-a", help="Artist to add"),
     remove: list[str] = typer.Option([], "--remove", "-r", help="Artist to remove"),
+    add_track: list[str] = typer.Option(
+        [], "--add-track", help="Track path to add (repeatable)"
+    ),
+    remove_track: list[str] = typer.Option(
+        [], "--remove-track", help="Track path to remove (repeatable)"
+    ),
     description: str = typer.Option(
         "", "--description", "-d", help="Set the playlist description"
     ),
@@ -433,14 +439,15 @@ def edit(
         False, "--no-scan", help="Skip automatic library scan"
     ),
 ) -> None:
-    """Add or remove artists from a playlist."""
+    """Add or remove artists or individual tracks from a playlist."""
     cfg = load_config()
     db = Database(cfg.db_path)
     if not no_scan:
         maybe_auto_scan(cfg, db)
 
-    # Non-interactive mode: --add / --remove / --description flags
-    if add or remove or description:
+    # Non-interactive mode: --add / --remove / --add-track / --remove-track
+    # / --description flags
+    if add or remove or add_track or remove_track or description:
         capacity = cfg.ipod_capacity_bytes
 
         for artist in add:
@@ -456,6 +463,36 @@ def edit(
                 info(f"- {artist}: {removed} tracks removed")
             else:
                 warn(f"'{artist}' not in playlist.")
+
+        if add_track:
+            try:
+                added = actions.add_tracks_to_playlist(db, playlist_name, add_track)
+            except actions.PathsNotFoundError as exc:
+                error(str(exc))
+                for p in exc.unknown_paths:
+                    warn(f"  {p}")
+                db.close()
+                raise typer.Exit(1) from None
+            if added:
+                confirm(f"+ {added} track(s) added")
+            else:
+                warn("No tracks added (already in playlist, FLAC, or missing).")
+
+        if remove_track:
+            try:
+                removed = actions.remove_tracks_from_playlist(
+                    db, playlist_name, remove_track
+                )
+            except actions.PathsNotFoundError as exc:
+                error(str(exc))
+                for p in exc.unknown_paths:
+                    warn(f"  {p}")
+                db.close()
+                raise typer.Exit(1) from None
+            if removed:
+                info(f"- {removed} track(s) removed")
+            else:
+                warn("No matching tracks were in the playlist.")
 
         if description:
             try:
@@ -512,6 +549,8 @@ def edit(
             choices=[
                 "Add artists",
                 "Remove artists",
+                "Add songs",
+                "Remove songs",
                 "Show current playlist",
                 "Done",
             ],
@@ -585,6 +624,64 @@ def edit(
                     current_names.discard(name)
                     info(f"Removed {name} ({removed} tracks)")
 
+        if action == "Add songs":
+            query = questionary.text(
+                "Search for songs to add (artist, album, or title):"
+            ).ask()
+            if not query:
+                continue
+            results = actions.search_tracks(db, query, limit=100)
+            in_playlist = {t["path"] for t in db.get_playlist(playlist_name)}
+            available = [t for t in results if t["path"] not in in_playlist]
+            if not available:
+                warn("No matching songs found (or all already in the playlist).")
+                continue
+            choices = [
+                questionary.Choice(
+                    title=(
+                        f"{t['artist']} — {t['title']}  "
+                        f"({t['album']}, {_fmt_size(t['file_size'] or 0)})"
+                    ),
+                    value=t["path"],
+                )
+                for t in available
+            ]
+            to_add = questionary.checkbox(
+                "Select songs to add (space to toggle, enter to confirm):",
+                choices=choices,
+            ).ask()
+            if to_add:
+                added = actions.add_tracks_to_playlist(db, playlist_name, to_add)
+                current_names = {
+                    a["name"] for a in actions.get_playlist_artists(db, playlist_name)
+                }
+                confirm(f"+ {added} song(s) added")
+
+        if action == "Remove songs":
+            tracks = db.get_playlist(playlist_name)
+            if not tracks:
+                warn("Playlist is empty.")
+                continue
+            choices = [
+                questionary.Choice(
+                    title=f"{t['artist']} — {t['title']}  ({t['album']})",
+                    value=t["path"],
+                )
+                for t in tracks
+            ]
+            to_remove = questionary.checkbox(
+                "Select songs to remove (space to toggle, enter to confirm):",
+                choices=choices,
+            ).ask()
+            if to_remove:
+                removed = actions.remove_tracks_from_playlist(
+                    db, playlist_name, to_remove
+                )
+                current_names = {
+                    a["name"] for a in actions.get_playlist_artists(db, playlist_name)
+                }
+                info(f"Removed {removed} song(s)")
+
         playlist_size = actions.get_playlist_size(db, playlist_name)
         _print_capacity_bar(playlist_size, capacity)
 
@@ -603,7 +700,7 @@ def edit(
     db.close()
 
 
-@app.command()
+@app.command(rich_help_panel="iPod")
 def diff(
     playlist_name: str = typer.Argument("ipod", help="Playlist to diff against iPod"),
     no_scan: bool = typer.Option(
@@ -657,7 +754,7 @@ def diff(
     db.close()
 
 
-@app.command()
+@app.command(rich_help_panel="iPod")
 def sync(
     playlist_name: str = typer.Argument("ipod", help="Playlist to sync"),
     dry_run: bool = typer.Option(
@@ -799,7 +896,7 @@ def sync(
     db.close()
 
 
-@app.command(name="sync-plex")
+@app.command(name="sync-plex", rich_help_panel="Plex")
 def sync_plex(
     playlist_name: str = typer.Argument(
         None,
@@ -879,7 +976,7 @@ plex_app = typer.Typer(
     help="Plex integration commands.",
     no_args_is_help=True,
 )
-app.add_typer(plex_app, name="plex")
+app.add_typer(plex_app, name="plex", rich_help_panel="Plex")
 
 
 @plex_app.command(name="doctor")
@@ -910,13 +1007,7 @@ def plex_doctor_cmd() -> None:
 
 @plex_app.command(name="list")
 def plex_list_cmd() -> None:
-    """List every audio playlist on your Plex server, with kind and size.
-
-    Manual playlists are safe to pull back into clickwheel via
-    `clickwheel plex pull <name>`. Smart playlists are dynamically
-    computed by Plex; pulling one freezes a snapshot and requires
-    `--include-smart`.
-    """
+    """List every audio playlist on your Plex server, with kind and size."""
     cfg = load_config()
     try:
         with spinner("Reading Plex playlists..."):
@@ -958,12 +1049,9 @@ def plex_pull_cmd(
 ) -> None:
     """Pull a playlist from Plex back into clickwheel's local store.
 
-    Useful for recovering hand-curated playlists after a clean install
-    (Plex retains them server-side; clickwheel's SQLite did not). Each
-    Plex track's file path is translated back to clickwheel's view via
-    the configured remap and looked up in the index — only matched
-    tracks land in the new playlist; unmatched ones are listed below
-    so you know what to chase.
+    For recovering hand-curated playlists after a clean install (Plex keeps
+    them server-side; clickwheel's catalog didn't). Tracks are matched against
+    your library; unmatched ones are reported so you can chase them.
     """
     cfg = load_config()
     db = Database(cfg.db_path)
@@ -1023,7 +1111,7 @@ def plex_pull_cmd(
             dim(f"  ... and {len(result.unmatched_details) - 20} more.")
 
 
-@app.command()
+@app.command(rich_help_panel="iPod")
 def ls() -> None:
     """Show what's on your iPod."""
     _check_macos()
@@ -1060,7 +1148,7 @@ def ls() -> None:
     status(f"\n{len(tracks)} tracks, {len(artists)} artists, {_fmt_size(total_size)}")
 
 
-@app.command()
+@app.command(rich_help_panel="iPod")
 def eject() -> None:
     """Safely disconnect the iPod."""
     _check_macos()
@@ -1077,7 +1165,7 @@ def eject() -> None:
     confirm("iPod ejected. Safe to unplug.")
 
 
-@app.command()
+@app.command(rich_help_panel="Last.fm")
 def scrobble(
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Show plays without submitting"
@@ -1513,18 +1601,16 @@ apple_app = typer.Typer(
     help="Apple Music integration commands.",
     no_args_is_help=True,
 )
-app.add_typer(apple_app, name="apple")
+app.add_typer(apple_app, name="apple", rich_help_panel="Apple Music")
 
 
 @apple_app.command(name="auth")
 def apple_auth_cmd() -> None:
     """Run the Music User Token authorization flow.
 
-    Opens your browser to a tiny local page that loads MusicKit JS,
-    asks you to sign in with your Apple ID, and posts the resulting
-    user token back to clickwheel. The token is saved to
-    ~/.clickwheel/.env as APPLE_MUSIC_USER_TOKEN. One-time per Mac
-    per Apple ID (the token is long-lived but can be revoked).
+    Opens your browser to sign in with your Apple ID, then saves the token to
+    `~/.clickwheel/.env`. One-time per Mac and Apple ID; the token is long-lived
+    but can be revoked.
     """
     cfg = load_config()
     status("Apple Music auth")
@@ -1587,10 +1673,9 @@ def apple_match_cmd(
 ) -> None:
     """Preview how a playlist's tracks resolve to Apple Music song IDs.
 
-    Read-only against your Apple Music account (no playlist is created)
-    but populates the local match cache so a subsequent `apple push`
-    is fast. Tracks below `--min-confidence` are surfaced as
-    'low-confidence' so you can eyeball them before pushing.
+    Read-only (creates nothing), but caches the matches so the next `apple push`
+    is faster. Tracks below `--min-confidence` are flagged low-confidence for
+    review before pushing.
     """
     cfg = load_config()
     db = Database(cfg.db_path)
@@ -1670,10 +1755,8 @@ def apple_push_cmd(
 ) -> None:
     """Create a playlist in your Apple Music account from a clickwheel playlist.
 
-    Runs the matcher first, then pushes the matched tracks via
-    `POST /v1/me/library/playlists`. Iclupow-confidence matches are skipped
-    by default; pass --include-low after a `clickwheel apple match` review
-    if you want them in.
+    Low-confidence matches are skipped by default; pass `--include-low` (after a
+    `clickwheel apple match` review) to include them.
     """
     cfg = load_config()
     db = Database(cfg.db_path)
@@ -1807,11 +1890,8 @@ def apple_pull_cmd(
 ) -> None:
     """Import an Apple Music library playlist into clickwheel's local store.
 
-    Each Apple track is resolved to a local file in this order: the
-    song_map cache from prior pushes → exact metadata match against
-    your SQLite index → fuzzy composite score. Unmatched rows are
-    surfaced so you know what to chase (typically files Apple has
-    that clickwheel hasn't scanned).
+    Tracks are matched against your library; unmatched rows are reported
+    (usually files Apple has that clickwheel hasn't scanned yet).
     """
     cfg = load_config()
     db = Database(cfg.db_path)
@@ -1874,15 +1954,9 @@ def apple_delete_cmd(
 ) -> None:
     """Delete a library playlist from your Apple Music account.
 
-    Apple's REST API doesn't expose DELETE on library playlists, so
-    clickwheel drives Music.app via AppleScript instead. Music.app's
-    iCloud Music Library sync propagates the deletion to all your
-    signed-in Apple devices.
-
-    macOS-only. Music.app must be launchable (it is on every recent
-    Mac, but the user must be signed in to the same Apple ID as the
-    playlist). Deletes EVERY playlist matching the name — useful for
-    cleaning up duplicates from earlier failed pushes.
+    macOS-only; the deletion syncs to your other devices via iCloud Music
+    Library. Deletes EVERY playlist matching the name, useful for clearing
+    duplicates from failed pushes.
     """
     _check_macos()
     status(f"About to delete '{name}' from Apple Music via Music.app")

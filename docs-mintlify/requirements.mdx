@@ -1,0 +1,61 @@
+---
+title: Requirements
+icon: "list-check"
+description: What you need to run clickwheel, including supported Macs, iPods, and audio formats.
+---
+
+clickwheel is a local, single-tenant tool: it runs on your Mac and works with
+your library and iPod in place. Here's what it expects.
+
+## System
+
+<CardGroup cols={2}>
+  <Card title="macOS" icon="apple">
+    macOS only. Mounting and writing the iPod use macOS disk tools.
+  </Card>
+  <Card title="Python 3.11+" icon="python">
+    Python 3.11 through 3.14, installed via [pipx](https://pipx.pypa.io/).
+  </Card>
+</CardGroup>
+
+## Supported iPods
+
+clickwheel writes the **iTunesDB** format used by the click-wheel iPod line,
+with **stock firmware**, over **USB**. The **iPod Classic** is the primary,
+tested target; other models from the same era that use the same format should
+work too:
+
+- **iPod Classic**
+- **iPod** 4th and 5th gen, including photo and video
+- **iPod mini**
+- **iPod nano**, 1st through 5th gen
+
+Not sure which you have? See Apple's [Identify your iPod
+model](https://support.apple.com/en-us/103823).
+
+<Note>
+  **iPod touch and iOS devices aren't supported**, nor the touchscreen nano
+  6th/7th gen (different on-device database).
+</Note>
+
+clickwheel expects the iPod at `/Volumes/IPOD` and assumes 64 GB. Override with
+`ipod_mount` and `ipod_capacity_gb`, see [Configuration](/reference/configuration).
+
+## Audio formats
+
+| Format | On the iPod? | Notes |
+| --- | --- | --- |
+| MP3, AAC/M4A, ALAC | Yes | Played natively by stock firmware. |
+| FLAC | Skipped | Stock firmware can't play it, so it's excluded from sync. Your FLACs stay in your library. |
+
+## Optional integrations
+
+Everything below is optional and off until you set it up. The base install,
+including [`fix`](/guides/fix-metadata) metadata repair, needs none of it.
+
+| Integration | Extra | Credentials |
+| --- | --- | --- |
+| [Plex / Plexamp](/guides/plex) | `[plex]` | Server URL + token |
+| [Apple Music](/guides/apple-music) | `[applemusic]` | MusicKit key (paid Apple Developer) |
+| [Last.fm](/guides/scrobbling) | none | API key |
+| [MCP server](/concepts/mcp-server) | `[mcp]` | none |

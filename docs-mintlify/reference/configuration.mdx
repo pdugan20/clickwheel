@@ -1,46 +1,89 @@
 ---
 title: Configuration
-description: clickwheel's config file and environment variables.
+description: clickwheel's settings, their defaults and env-var overrides, plus auto-scan and where data lives.
 ---
 
-clickwheel reads runtime settings from **`~/.clickwheel/config.yaml`**.
-Environment variables override the file.
+clickwheel reads runtime settings from **`~/.clickwheel/config.yaml`**. Only
+`music_dir` is required.
 
 ## Minimal config
 
-```yaml
+```yaml title="~/.clickwheel/config.yaml"
 music_dir: /Users/you/Music
 ```
 
-## Common settings
+## Settings
 
-| Setting | What it does |
-| --- | --- |
-| `music_dir` | Root of your music library (scanned by `scan`). |
-| `db_path` | SQLite catalog location (defaults under `~/.clickwheel/`). |
-| `auto_scan_staleness_minutes` | Fallback timer for the interactive commands' auto-scan (default 1440 = 24h). |
+Environment variables override the config file. Each is the setting name in
+`UPPER_CASE` (e.g. `MUSIC_DIR`), except the `library_*` settings, which add a
+`CLICKWHEEL_` prefix.
 
-## Integrations
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `music_dir` | _(required)_ | Root of your music library (scanned by `scan`). |
+| `ipod_mount` | `/Volumes/IPOD` | Where the iPod mounts. |
+| `ipod_capacity_gb` | `64` | iPod capacity, used for fit estimates. |
+| `auto_scan` | `true` | Auto-scan the library before interactive commands (see below). |
+| `auto_scan_staleness_minutes` | `1440` | Fallback re-scan timer; 1440 = 24h. |
+| `library_auto_remount` | `true` | Force-remount a stale SMB/NAS share before touching files. |
+| `library_mount_url` | _(unset)_ | Explicit `smb://` fallback for when the share is fully unmounted. |
+
+## Integration settings
 
 Plex, Apple Music, and Last.fm each add their own settings (server URLs, tokens,
-the Plex path remap, the Apple Music `.p8` / Key ID / Team ID, Last.fm API
-credentials). See the relevant guide:
+API keys, path remap). Set them up in their guides, and keep secrets in
+`~/.clickwheel/.env` rather than in `config.yaml`:
 
 - [Plex / Plexamp](/guides/plex)
 - [Apple Music](/guides/apple-music)
 - [Last.fm scrobbling](/guides/scrobbling)
 
+## How auto-scan works
+
+`select`, `edit`, `diff`, and `sync` auto-scan when the catalog looks stale, via
+a cheap two-tier check:
+
+1. **Probe**: re-scans if a top-level folder in `music_dir` is newer than the
+   last scan (a new artist or album).
+2. **Fallback**: re-scans anyway once `auto_scan_staleness_minutes` has elapsed,
+   catching tracks added inside existing albums that the probe can't see.
+
+The probe is much cheaper than a full scan, so it runs on every command without
+slowing you down.
+
+<AccordionGroup>
+  <Accordion title="Skip or tune it">
+    - Pass `--no-scan` to any command to skip both tiers and use cached data.
+    - Set `auto_scan: false` to disable it for the whole session.
+    - Lower `auto_scan_staleness_minutes` if you often add tracks inside existing
+      albums and want the fallback to fire sooner.
+  </Accordion>
+  <Accordion title="When you must scan manually">
+    The probe can't see metadata-only edits inside files. After
+    `clickwheel fix` or any external tag editor, run `clickwheel scan` so the
+    catalog picks up the new tags. The **MCP server never auto-scans**: run
+    `clickwheel scan` in a terminal and the next chat session sees the change.
+  </Accordion>
+</AccordionGroup>
+
 ## MCP server environment
 
-| Variable | What it does |
-| --- | --- |
-| `CLICKWHEEL_MCP_TRANSPORT` | `http` to serve Streamable HTTP (else stdio). |
-| `CLICKWHEEL_MCP_HOST` / `_PORT` / `_PATH` | HTTP bind + path (default `127.0.0.1:8000/mcp`). |
-| `CLICKWHEEL_MCP_ALLOWED_HOSTS` | Public Host header(s) to allow behind a tunnel (e.g. `clickwheel.fm`). |
-| `CLICKWHEEL_MCP_ALLOWED_ORIGINS` | Origin header(s) to allow. |
-| `CLICKWHEEL_MCP_LOG_LEVEL` | Server log level (stderr). |
+The MCP server is configured by environment variables (not the YAML file), all
+prefixed `CLICKWHEEL_MCP_`. The default transport is **stdio** for local desktop
+clients, which needs none of these; the rest configure the **HTTP** transport
+for remote access (see [Remote / mobile access](/guides/remote-mcp)). The HTTP
+server binds `127.0.0.1:8000/mcp` by default; the `HOST`, `PORT`, and `PATH`
+vars override that if needed.
 
-<Note>
-  The full set of settings is documented in the project README; this page covers
-  the ones you'll touch most.
-</Note>
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `TRANSPORT` | stdio | Set to `http` to serve Streamable HTTP. |
+| `ALLOWED_HOSTS` | _(unset)_ | Host header(s) to allow behind a tunnel (e.g. `mcp.example.com`). |
+| `ALLOWED_ORIGINS` | _(unset)_ | Origin header(s) to allow. |
+| `LOG_LEVEL` | `WARNING` | Server log level (written to stderr). |
+
+## Where data lives
+
+clickwheel stores its catalog at **`~/.clickwheel/clickwheel.db`** (SQLite). The
+location isn't configurable. The database is safe to delete; `clickwheel scan`
+rebuilds it from your music directory.

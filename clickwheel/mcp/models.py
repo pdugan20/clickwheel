@@ -273,6 +273,24 @@ class RemoveArtistFromPlaylistResult(BaseModel):
     artist: str = Field(description="Artist whose tracks were removed.")
 
 
+class AddTracksToPlaylistResult(BaseModel):
+    """Result of `add_tracks_to_playlist`."""
+
+    added: int = Field(
+        description="Number of tracks added (duplicates, FLAC, and missing skipped)."
+    )
+    playlist: str = Field(description="Target playlist name.")
+    requested: int = Field(description="Number of paths requested.")
+
+
+class RemoveTracksFromPlaylistResult(BaseModel):
+    """Result of `remove_tracks_from_playlist`."""
+
+    removed: int = Field(description="Number of track references removed.")
+    playlist: str = Field(description="Target playlist name.")
+    requested: int = Field(description="Number of paths requested.")
+
+
 class HealPlaylistResult(BaseModel):
     """Result of `heal_playlist`."""
 

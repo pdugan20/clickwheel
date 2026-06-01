@@ -1,20 +1,30 @@
 {
   "$schema": "https://mintlify.com/schema.json",
-  "theme": "almond",
+  "theme": "maple",
   "name": "clickwheel",
-  "description": "Sync your music library to a classic iPod from a modern Mac — with optional Claude/MCP control.",
+  "description": "Sync your music library to a classic iPod from a modern Mac, with optional Claude/MCP control.",
   "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
+    "light": "/logo/light.png",
+    "dark": "/logo/dark.png"
   },
   "favicon": "/favicon.svg",
+  "contextual": {
+    "options": ["copy", "view", "chatgpt", "claude"]
+  },
+  "feedback": {
+    "thumbsRating": true
+  },
   "appearance": {
     "default": "system"
   },
   "colors": {
-    "primary": "#5d6ddf",
-    "light": "#8b94f0",
-    "dark": "#5d6ddf"
+    "primary": "#4A82EF",
+    "light": "#C4DCFF",
+    "dark": "#4A82EF"
+  },
+  "thumbnails": {
+    "appearance": "light",
+    "background": "/images/og-bg.png"
   },
   "navbar": {
     "primary": {
@@ -35,45 +45,62 @@
         "groups": [
           {
             "group": "Getting started",
-            "pages": ["introduction", "quickstart"]
+            "pages": ["introduction", "quickstart", "requirements"]
           },
           {
-            "group": "How-to guides",
+            "group": "Everyday use",
             "pages": [
               "guides/sync-to-ipod",
               "guides/playlists",
-              "guides/plex",
-              "guides/apple-music",
-              "guides/scrobbling",
-              "guides/fix-metadata",
-              "guides/remote-mcp"
+              "guides/fix-metadata"
             ]
+          },
+          {
+            "group": "Integrations",
+            "pages": ["guides/plex", "guides/apple-music", "guides/scrobbling"]
+          },
+          {
+            "group": "Claude (MCP)",
+            "pages": ["concepts/mcp-server", "guides/remote-mcp"]
           },
           {
             "group": "Concepts",
-            "pages": [
-              "concepts/architecture",
-              "concepts/design",
-              "concepts/mcp-server"
-            ]
+            "pages": ["concepts/architecture", "concepts/design"]
           },
           {
-            "group": "Updates",
-            "pages": ["changelog"]
+            "group": "Help",
+            "pages": ["troubleshooting", "changelog"]
           }
         ]
       },
       {
         "tab": "Reference",
-        "groups": [
+        "pages": [
           {
-            "group": "Reference",
+            "group": "CLI",
             "pages": [
               "reference/cli",
-              "reference/mcp-tools",
-              "reference/configuration"
+              "reference/cli/library",
+              "reference/cli/playlists",
+              "reference/cli/ipod",
+              "reference/cli/plex",
+              "reference/cli/apple-music",
+              "reference/cli/lastfm"
             ]
-          }
+          },
+          {
+            "group": "MCP",
+            "pages": [
+              "reference/mcp-tools",
+              "reference/mcp-tools/library",
+              "reference/mcp-tools/playlists",
+              "reference/mcp-tools/ipod",
+              "reference/mcp-tools/plex",
+              "reference/mcp-tools/apple-music",
+              "reference/mcp-tools/lastfm"
+            ]
+          },
+          "reference/configuration"
         ]
       }
     ]

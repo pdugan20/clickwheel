@@ -1,83 +1,99 @@
 ---
 title: Quickstart
+icon: "rocket"
 description: Install clickwheel, index your library, and load your iPod.
 ---
 
-This walks you from zero to a freshly-loaded iPod.
-
-## 1. Install
-
-clickwheel installs as a CLI with [pipx](https://pipx.pypa.io/):
-
-```bash
-pipx install clickwheel
-```
+This walks you from zero to a freshly-loaded iPod. It takes about five minutes,
+plus however long the first library scan runs.
 
 <Note>
-  Requires Python 3.11+ and macOS. For the optional MCP server, also run
-  `pipx inject clickwheel 'clickwheel[mcp]'` — see [MCP server](/concepts/mcp-server).
+  Before you start: you need **macOS**, **Python 3.11+**, and a **classic iPod**
+  with stock firmware. See [Requirements](/requirements) for supported models
+  and known limits.
 </Note>
 
-## 2. Point it at your music
+<Steps>
+  <Step title="Install clickwheel" titleSize="h3">
+    [clickwheel](https://pypi.org/project/clickwheel/) installs as a CLI with
+    [pipx](https://pipx.pypa.io/):
 
-clickwheel reads its settings from `~/.clickwheel/config.yaml`. Set your music
-directory:
+    ```bash
+    pipx install clickwheel
+    ```
 
-```yaml
-music_dir: /Users/you/Music
-```
+    To also drive clickwheel from Claude, see [MCP server](/concepts/mcp-server)
+    for the optional extra.
+  </Step>
 
-See [Configuration](/reference/configuration) for every option (and the env-var
-overrides).
+  <Step title="Point it at your music" titleSize="h3">
+    clickwheel reads its settings from `~/.clickwheel/config.yaml`. Create it and
+    set your music directory:
 
-## 3. Index your library
+    ```bash
+    mkdir -p ~/.clickwheel
+    echo "music_dir: /Users/you/Music" > ~/.clickwheel/config.yaml
+    ```
 
-```bash
-clickwheel scan
-```
+    See [Configuration](/reference/configuration) for every option and the
+    env-var overrides.
+  </Step>
 
-`scan` is read-only — it reads tags and writes a local SQLite catalog. Nothing
-in your library is modified. Re-runs are incremental.
+  <Step title="Index your library" titleSize="h3">
+    ```bash
+    clickwheel scan
+    ```
 
-## 4. Pick what goes on the iPod
+    `scan` is **read-only**: it reads tags and writes a local SQLite catalog.
+    Nothing in your library is modified, and re-runs are incremental. A first
+    scan of a large library can take a few minutes.
 
-Plug in your iPod, then:
+    ```text
+    Scanning /Users/you/Music ...
+    Indexed 8,412 tracks · 642 albums · 318 artists
+    47 tracks missing album art · 31 missing year. Run `clickwheel fix`
+    ```
+  </Step>
 
-```bash
-clickwheel select
-```
+  <Step title="Pick what goes on the iPod" titleSize="h3">
+    Plug in your iPod, wait for it to mount, then:
 
-An interactive checkbox picker lets you choose artists/albums for the device.
-Your selection is saved as a playlist you can re-sync later.
+    ```bash
+    clickwheel select
+    ```
 
-## 5. Sync
+    An interactive checkbox picker lets you choose artists and albums for the
+    device. Your selection is saved as a playlist you can re-sync later.
 
-```bash
-clickwheel diff   # preview what will change
-clickwheel sync   # push it to the iPod
-clickwheel eject  # safely unmount
-```
+    Want everything browsable by artist instead of a curated set? See
+    [Sync to iPod](/guides/sync-to-ipod), you don't always need a named playlist.
+  </Step>
 
-`sync` writes the iPod database and artwork directly and copies any missing
-tracks. It's additive — it won't delete tracks you didn't ask it to.
+  <Step title="Preview, sync, and eject" titleSize="h3">
+    ```bash
+    clickwheel diff   # preview what will change
+    clickwheel sync   # push it to the iPod
+    clickwheel eject  # safely unmount
+    ```
 
-<Warning>
-  FLAC files are skipped — stock iPod firmware doesn't play them.
-</Warning>
+    `sync` writes the iPod database and artwork directly and copies any missing
+    tracks. It's **additive**: it won't delete tracks you didn't ask it to.
+  </Step>
+</Steps>
 
 ## Next steps
 
 <CardGroup cols={2}>
   <Card title="Repair metadata" icon="wand-magic-sparkles" href="/guides/fix-metadata">
-    Fix album artists, fetch art + year + genres.
+    Album artists, art, year, and genres.
   </Card>
   <Card title="Build playlists" icon="list-music" href="/guides/playlists">
-    Curate named playlists for the device.
+    Curate named collections.
   </Card>
   <Card title="Scrobble to Last.fm" icon="lastfm" href="/guides/scrobbling">
     Submit your iPod listens.
   </Card>
   <Card title="Drive it from Claude" icon="robot" href="/guides/remote-mcp">
-    Use clickwheel from the Claude app, even on your phone.
+    From the Claude app, even your phone.
   </Card>
 </CardGroup>
