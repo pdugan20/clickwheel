@@ -4,8 +4,6 @@ icon: "server"
 description: Mirror clickwheel playlists into a Plex music library, and pull them back.
 ---
 
-import McpGating from '/snippets/mcp-gating.mdx'
-
 If you run Plex, clickwheel can push the same playlists into your Plex music
 library so Plexamp and Plex web see them alongside your iPod, and pull Plex
 playlists back into clickwheel. It's bidirectional.
@@ -26,16 +24,10 @@ playlists back into clickwheel. It's bidirectional.
     plex_library_name: Music
     ```
 
-    Keep the token out of YAML: put it in `~/.clickwheel/.env` (mode `600`):
-
-    ```bash title="~/.clickwheel/.env"
-    CLICKWHEEL_PLEX_TOKEN=...
-    ```
-
-    <Tip>
-      Token shortcut: in Plex web, open any track → **⋯ → Get Info → View XML**.
-      The URL that opens contains `X-Plex-Token=...`. Treat it like a password.
-    </Tip>
+    Keep the token out of YAML, put it in `~/.clickwheel/.env` (mode `600`) as
+    `CLICKWHEEL_PLEX_TOKEN=<your-token>`. Treat it like a password. See Plex's
+    [Finding an authentication token](https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/)
+    if you don't have it yet.
   </Step>
 
   <Step title="Verify with the doctor">
@@ -57,15 +49,13 @@ clickwheel plex list            # list Plex audio playlists (with track counts)
 clickwheel plex pull <name>     # import a Plex playlist into clickwheel
 ```
 
-**Push** reports `pushed` (lines sent) and `resolved` (lines Plex matched). A gap
-means Plex hasn't scanned those files yet, trigger a Plex library scan and
-re-run. Re-syncing overwrites clickwheel's prior managed copy but leaves a
-same-named playlist *you* made in Plex alone.
+**Push** reports `pushed` vs `resolved`; a gap means Plex hasn't scanned those
+files yet, so run a Plex library scan and re-sync. Re-syncing replaces
+clickwheel's managed copy but leaves a same-named playlist *you* made in Plex
+alone.
 
-**Pull** is handy after a fresh install or Mac wipe, when Plex still has your
-playlists but clickwheel's catalog is empty. Smart playlists are dynamic Plex
-queries, so pull refuses them unless you pass `--include-smart` (which
-materializes a snapshot).
+**Pull** recovers playlists after a fresh install or Mac wipe. Smart playlists
+are dynamic queries, so pull skips them unless you pass `--include-smart`.
 
 <Accordion title="Path remap: when Plex sees your files at a different path">
   clickwheel and Plex can mount the same library at different paths (e.g.
@@ -83,8 +73,5 @@ materializes a snapshot).
 
 ## From Claude
 
-The same flows are MCP tools: `plex_health`, `list_plex_playlists`,
-`sync_playlist_to_plex`, `pull_playlist_from_plex`, see the
-[MCP tool reference](/reference/mcp-tools).
-
-<McpGating />
+You can also drive this from Claude, the MCP server exposes the same Plex
+actions. See [MCP server](/concepts/mcp-server).
