@@ -49,7 +49,12 @@ clickwheel expects the iPod at `/Volumes/IPOD` and assumes 64 GB. Override with
 
 ## Optional integrations
 
-Each integration is off until you set it up. [Plex/Plexamp](/guides/plex),
-[Apple Music](/guides/apple-music), and [Last.fm](/guides/scrobbling) need their
-own credentials; the [MCP server](/concepts/mcp-server) needs the `[mcp]` extra.
-The [`fix`](/guides/fix-metadata) command (metadata repair) needs no extras.
+Everything below is optional and off until you set it up. The base install,
+including [`fix`](/guides/fix-metadata) metadata repair, needs none of it.
+
+| Integration | Extra | Credentials |
+| --- | --- | --- |
+| [Plex / Plexamp](/guides/plex) | `[plex]` | Server URL + token |
+| [Apple Music](/guides/apple-music) | `[applemusic]` | MusicKit key (paid Apple Developer) |
+| [Last.fm](/guides/scrobbling) | none | API key |
+| [MCP server](/concepts/mcp-server) | `[mcp]` | none |
