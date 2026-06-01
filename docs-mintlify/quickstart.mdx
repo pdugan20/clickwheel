@@ -21,12 +21,8 @@ plus however long the first library scan runs.
     pipx install clickwheel
     ```
 
-    For the optional MCP server (drive clickwheel from Claude), also inject the
-    extra, see [MCP server](/concepts/mcp-server):
-
-    ```bash
-    pipx inject clickwheel 'clickwheel[mcp]'
-    ```
+    To also drive clickwheel from Claude, see [MCP server](/concepts/mcp-server)
+    for the optional extra.
   </Step>
 
   <Step title="Point it at your music">
@@ -35,9 +31,7 @@ plus however long the first library scan runs.
 
     ```bash
     mkdir -p ~/.clickwheel
-    cat > ~/.clickwheel/config.yaml << 'EOF'
-    music_dir: /Users/you/Music
-    EOF
+    echo "music_dir: /Users/you/Music" > ~/.clickwheel/config.yaml
     ```
 
     See [Configuration](/reference/configuration) for every option and the
@@ -70,11 +64,8 @@ plus however long the first library scan runs.
     An interactive checkbox picker lets you choose artists and albums for the
     device. Your selection is saved as a playlist you can re-sync later.
 
-    <Tip>
-      Want everything browsable by artist instead of a curated set? See
-      [Sync to iPod](/guides/sync-to-ipod), you don't always need a named
-      playlist.
-    </Tip>
+    Want everything browsable by artist instead of a curated set? See
+    [Sync to iPod](/guides/sync-to-ipod), you don't always need a named playlist.
   </Step>
 
   <Step title="Preview, sync, and eject">
@@ -88,8 +79,7 @@ plus however long the first library scan runs.
     tracks. It's **additive**: it won't delete tracks you didn't ask it to.
 
     <Warning>
-      FLAC files are skipped: stock iPod firmware doesn't play them. Always
-      `eject` before unplugging.
+      Always `eject` before unplugging.
     </Warning>
   </Step>
 </Steps>
@@ -98,15 +88,15 @@ plus however long the first library scan runs.
 
 <CardGroup cols={2}>
   <Card title="Repair metadata" icon="wand-magic-sparkles" href="/guides/fix-metadata">
-    Fix album artists, fetch art + year + genres.
+    Album artists, art, year, and genres.
   </Card>
   <Card title="Build playlists" icon="list-music" href="/guides/playlists">
-    Curate named playlists for the device.
+    Curate named collections.
   </Card>
   <Card title="Scrobble to Last.fm" icon="lastfm" href="/guides/scrobbling">
     Submit your iPod listens.
   </Card>
   <Card title="Drive it from Claude" icon="robot" href="/guides/remote-mcp">
-    Use clickwheel from the Claude app, even on your phone.
+    From the Claude app, even your phone.
   </Card>
 </CardGroup>
