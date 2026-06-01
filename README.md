@@ -2,10 +2,13 @@
 
 [![PyPI](https://img.shields.io/pypi/v/clickwheel?logo=pypi&logoColor=white)](https://pypi.org/project/clickwheel/)
 [![CI](https://github.com/pdugan20/clickwheel/actions/workflows/ci.yml/badge.svg)](https://github.com/pdugan20/clickwheel/actions/workflows/ci.yml)
+[![docs](https://img.shields.io/badge/docs-docs.clickwheel.fm-blue)](https://docs.clickwheel.fm)
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?logo=opensourceinitiative&logoColor=white)](https://opensource.org/licenses/MIT)
 
-Sync a music library to a classic iPod from a modern Mac — no iTunes required. Scan, clean up metadata, pick what goes on the iPod, and sync, all from the terminal. Optional MCP server lets Claude or other AI clients drive it conversationally.
+Sync a music library to a classic iPod from a modern Mac, no iTunes required. Scan, clean up metadata, pick what goes on the iPod, and sync, all from the terminal. Optional MCP server lets Claude or other AI clients drive it conversationally.
+
+Full documentation: [docs.clickwheel.fm](https://docs.clickwheel.fm).
 
 ## Install
 
@@ -19,7 +22,7 @@ Optional extras:
 pipx inject clickwheel 'clickwheel[mcp]'   # MCP server for Claude / AI clients
 ```
 
-`clickwheel fix` (metadata cleanup) runs entirely on the base install — no extras required.
+`clickwheel fix` (metadata cleanup) runs entirely on the base install, no extras required.
 
 ## Quick Start
 
@@ -27,9 +30,7 @@ Point clickwheel at your music:
 
 ```bash
 mkdir -p ~/.clickwheel
-cat > ~/.clickwheel/config.yaml << 'EOF'
-music_dir: /path/to/your/music
-EOF
+echo "music_dir: /path/to/your/music" > ~/.clickwheel/config.yaml
 ```
 
 Then index it and pick what goes on the iPod:
@@ -60,9 +61,9 @@ The iPod workflow:
 
 Each optional integration has its own doc:
 
-- **Plex / Plexamp** — push/pull playlists between clickwheel and a Plex music library. See [`docs/plex.md`](docs/plex.md).
-- **Apple Music** — push/pull/delete playlists in your Apple Music account; syncs across Apple devices via iCloud Music Library. See [`docs/applemusic.md`](docs/applemusic.md).
-- **Last.fm** — submit iPod listens. See [`docs/lastfm.md`](docs/lastfm.md).
+- **Plex / Plexamp**: push/pull playlists between clickwheel and a Plex music library. See the [Plex guide](https://docs.clickwheel.fm/guides/plex).
+- **Apple Music**: push/pull/delete playlists in your Apple Music account; syncs across Apple devices via iCloud Music Library. See the [Apple Music guide](https://docs.clickwheel.fm/guides/apple-music).
+- **Last.fm**: submit iPod listens. See the [scrobbling guide](https://docs.clickwheel.fm/guides/scrobbling).
 
 ## Configuration
 
@@ -73,7 +74,7 @@ ipod_capacity_gb: 64
 auto_scan: true
 ```
 
-Environment variables (`MUSIC_DIR`, `AUTO_SCAN`, etc.) override config values. See [`docs/configuration.md`](docs/configuration.md) for the full schema and `fix` walkthrough. Integrations (Plex, Apple Music, Last.fm) are all off by default — opt in via the per-integration docs linked above.
+Environment variables (`MUSIC_DIR`, `AUTO_SCAN`, etc.) override config values. See the [configuration reference](https://docs.clickwheel.fm/reference/configuration) for the full schema and `fix` walkthrough. Integrations (Plex, Apple Music, Last.fm) are all off by default; opt in via the per-integration guides linked above.
 
 ## MCP server
 
@@ -94,7 +95,7 @@ claude mcp add clickwheel clickwheel-mcp --scope user
 
 The server exposes tools across library, playlist, iPod, Plex, Apple Music, and Last.fm domains, plus a `build_playlist` prompt with anti-hallucination rules. Destructive operations (`delete_playlist`, `sync_playlist_to_ipod`) are gated by client confirmation.
 
-For Claude Desktop config, the full tool reference, and other clients (Cursor, Continue, Cline, Zed), see [`docs/mcp/`](docs/mcp/).
+For client setup (Claude Code, Claude Desktop, mobile) and the full tool reference, see the [MCP server docs](https://docs.clickwheel.fm/concepts/mcp-server).
 
 ## Requirements
 
