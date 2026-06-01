@@ -92,7 +92,7 @@ pipx inject clickwheel 'clickwheel[mcp]'
 claude mcp add clickwheel clickwheel-mcp --scope user
 ```
 
-The server exposes 37 tools across library, playlist, iPod, Plex, Apple Music, and Last.fm domains, plus a `build_playlist` prompt with anti-hallucination rules. Destructive operations (`delete_playlist`, `sync_playlist_to_ipod`) are gated by client confirmation.
+The server exposes tools across library, playlist, iPod, Plex, Apple Music, and Last.fm domains, plus a `build_playlist` prompt with anti-hallucination rules. Destructive operations (`delete_playlist`, `sync_playlist_to_ipod`) are gated by client confirmation.
 
 For Claude Desktop config, the full tool reference, and other clients (Cursor, Continue, Cline, Zed), see [`docs/mcp/`](docs/mcp/).
 

@@ -43,13 +43,13 @@ API keys, path remap). Set them up in their guides, and keep secrets in
 `select`, `edit`, `diff`, and `sync` auto-scan when the catalog looks stale, via
 a cheap two-tier check:
 
-1. **Probe** (~5s on SMB): re-scans if a top-level folder in `music_dir` is newer
-   than the last scan (a new artist or album).
-2. **Fallback**: re-scans anyway once `auto_scan_staleness_minutes` has elapsed
-   (default 24h), catching tracks added inside existing albums that the probe
-   can't see.
+1. **Probe**: re-scans if a top-level folder in `music_dir` is newer than the
+   last scan (a new artist or album).
+2. **Fallback**: re-scans anyway once `auto_scan_staleness_minutes` has elapsed,
+   catching tracks added inside existing albums that the probe can't see.
 
-The probe is ~40× faster than a full walk, so it costs little.
+The probe is much cheaper than a full scan, so it runs on every command without
+slowing you down.
 
 <AccordionGroup>
   <Accordion title="Skip or tune it">
