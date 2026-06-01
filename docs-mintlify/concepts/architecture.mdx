@@ -15,6 +15,7 @@ MCP server layered on top of the same core logic.
 | `actions.py` | Pure-logic functions shared by the CLI and the MCP server. No Rich/typer; errors are a typed `ClickwheelError` hierarchy. |
 | `db.py` | SQLite catalog: tracks, playlists, scrobble cache, MusicBrainz + genre caches. |
 | `library.py` | Music-file scanning via mutagen. |
+| `autoscan.py` | Two-tier staleness check that auto-scans before `select`/`edit`/`diff`/`sync`, only when the library looks changed. |
 | `scrobble.py` | Last.fm scrobbling (pylast). |
 | `ipod/` | Vendored iOpenPodv2, reads/writes the binary iTunesDB + ArtworkDB. |
 | `mcp/` | Optional MCP server (gated by the `[mcp]` extra). |
