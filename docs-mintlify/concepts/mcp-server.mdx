@@ -28,8 +28,9 @@ A few behaviors worth knowing:
 - **No auto-scan.** Tool calls serve cached catalog data; run `clickwheel scan`
   in a terminal when you've added music.
 - **Destructive tools are gated by the client.** Mutating tools carry the MCP
-  `destructiveHint` annotation, so compliant clients show an Allow/Deny prompt
-  before they run.
+  `destructiveHint` annotation, so compliant clients (Claude Code, Claude
+  Desktop, claude.ai) show an Allow/Deny prompt before they run. Nothing changes
+  without your confirmation.
 - **Logging goes to stderr** (stdout is the wire protocol).
 
 ## Connecting
