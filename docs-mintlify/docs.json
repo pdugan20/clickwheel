@@ -44,24 +44,24 @@
             "pages": ["introduction", "quickstart", "requirements"]
           },
           {
-            "group": "How-to guides",
+            "group": "Everyday use",
             "pages": [
               "guides/sync-to-ipod",
               "guides/playlists",
-              "guides/plex",
-              "guides/apple-music",
-              "guides/scrobbling",
-              "guides/fix-metadata",
-              "guides/remote-mcp"
+              "guides/fix-metadata"
             ]
           },
           {
+            "group": "Integrations",
+            "pages": ["guides/plex", "guides/apple-music", "guides/scrobbling"]
+          },
+          {
+            "group": "Claude (MCP)",
+            "pages": ["concepts/mcp-server", "guides/remote-mcp"]
+          },
+          {
             "group": "Concepts",
-            "pages": [
-              "concepts/architecture",
-              "concepts/design",
-              "concepts/mcp-server"
-            ]
+            "pages": ["concepts/architecture", "concepts/design"]
           },
           {
             "group": "Help",
