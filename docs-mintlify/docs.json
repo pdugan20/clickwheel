@@ -45,7 +45,12 @@
         "groups": [
           {
             "group": "Getting started",
-            "pages": ["introduction", "quickstart", "requirements"]
+            "pages": [
+              "introduction",
+              "quickstart",
+              "requirements",
+              "reference/configuration"
+            ]
           },
           {
             "group": "Everyday use",
@@ -74,33 +79,27 @@
         ]
       },
       {
-        "tab": "Reference",
+        "tab": "CLI",
         "pages": [
-          {
-            "group": "CLI",
-            "pages": [
-              "reference/cli",
-              "reference/cli/library",
-              "reference/cli/playlists",
-              "reference/cli/ipod",
-              "reference/cli/plex",
-              "reference/cli/apple-music",
-              "reference/cli/lastfm"
-            ]
-          },
-          {
-            "group": "MCP",
-            "pages": [
-              "reference/mcp-tools",
-              "reference/mcp-tools/library",
-              "reference/mcp-tools/playlists",
-              "reference/mcp-tools/ipod",
-              "reference/mcp-tools/plex",
-              "reference/mcp-tools/apple-music",
-              "reference/mcp-tools/lastfm"
-            ]
-          },
-          "reference/configuration"
+          "reference/cli",
+          "reference/cli/library",
+          "reference/cli/playlists",
+          "reference/cli/ipod",
+          "reference/cli/plex",
+          "reference/cli/apple-music",
+          "reference/cli/lastfm"
+        ]
+      },
+      {
+        "tab": "MCP",
+        "pages": [
+          "reference/mcp-tools",
+          "reference/mcp-tools/library",
+          "reference/mcp-tools/playlists",
+          "reference/mcp-tools/ipod",
+          "reference/mcp-tools/plex",
+          "reference/mcp-tools/apple-music",
+          "reference/mcp-tools/lastfm"
         ]
       }
     ]
