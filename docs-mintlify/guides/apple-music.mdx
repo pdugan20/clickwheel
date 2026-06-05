@@ -26,12 +26,6 @@ iCloud Music Library.
     At [developer.apple.com → Keys](https://developer.apple.com/account/resources/authkeys/list),
     create a key with **Media Services (MusicKit)** enabled and download the
     `.p8`.
-
-    <Warning>
-      Apple lets you download the `.p8` **only once**, at creation. Back it up
-      immediately (e.g. to a password manager), if you lose it you must
-      regenerate.
-    </Warning>
   </Step>
 
   <Step title="Configure clickwheel">
@@ -60,32 +54,36 @@ iCloud Music Library.
 
 ## Push, pull, delete
 
-```bash
-clickwheel apple list            # your Apple Music library playlists
-clickwheel apple match <name>    # preview how tracks resolve (no writes)
-clickwheel apple push <name>     # create the playlist in Apple Music
-clickwheel apple pull <name>     # import an Apple Music playlist into clickwheel
-clickwheel apple delete <name>   # remove an Apple Music playlist (macOS only)
-```
+| Command | What it does |
+| --- | --- |
+| `clickwheel apple list` | List your Apple Music library playlists |
+| `clickwheel apple match <name>` | Preview how tracks resolve (no writes) |
+| `clickwheel apple push <name>` | Create the playlist in Apple Music |
+| `clickwheel apple pull <name>` | Import an Apple Music playlist into clickwheel |
+| `clickwheel apple delete <name>` | Remove an Apple Music playlist |
 
-- **Push** resolves each track via a match ladder: ISRC tag → catalog fuzzy
-  search (title/artist/album weighted) → your library when iCloud Music Library
-  is on. Low-confidence matches are skipped unless you pass `--include-low`.
-  Resolved IDs cache in SQLite, so repeat pushes skip the network.
-- **Pull** is the reverse, useful when you curated on your iPhone and want it on
-  the iPod.
-- **Delete** drives Music.app via AppleScript, because Apple's REST API
-  [refuses to delete library playlists](https://developer.apple.com/forums/thread/107807).
-  macOS-only; the deletion propagates through iCloud Music Library.
+**Pull** is handy when you curated on your iPhone and want it on the iPod.
+**Delete** drives Music.app via AppleScript, because Apple's REST API
+[refuses to delete library playlists](https://developer.apple.com/forums/thread/107807);
+the deletion propagates through iCloud Music Library.
 
-<Accordion title="Two tokens, briefly">
-  MusicKit needs a **developer token** (a JWT clickwheel signs locally with your
-  `.p8`, re-signed on demand) and a **Music User Token** (long-lived, minted in
-  the browser by `apple auth`). Catalog reads need only the developer token;
-  anything touching your library needs both. If you already have a pre-signed JWT
-  from another project, set `APPLE_MUSIC_DEVELOPER_TOKEN` and the
-  `.p8`/Key ID/Team ID become optional.
-</Accordion>
+<AccordionGroup>
+  <Accordion title="How push matches tracks">
+    Push resolves each track via a match ladder: ISRC tag → catalog fuzzy search
+    (title/artist/album weighted) → your library when iCloud Music Library is on.
+    Low-confidence matches are skipped unless you pass `--include-low`. Resolved
+    IDs cache in SQLite, so repeat pushes skip the network.
+  </Accordion>
+
+  <Accordion title="Two tokens, briefly">
+    MusicKit needs a **developer token** (a JWT clickwheel signs locally with your
+    `.p8`, re-signed on demand) and a **Music User Token** (long-lived, minted in
+    the browser by `apple auth`). Catalog reads need only the developer token;
+    anything touching your library needs both. If you already have a pre-signed JWT
+    from another project, set `APPLE_MUSIC_DEVELOPER_TOKEN` and the
+    `.p8`/Key ID/Team ID become optional.
+  </Accordion>
+</AccordionGroup>
 
 ## From Claude
 

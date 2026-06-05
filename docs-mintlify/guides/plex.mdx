@@ -42,12 +42,12 @@ playlists back into clickwheel. It's bidirectional.
 
 ## Push and pull
 
-```bash
-clickwheel sync-plex <name>     # push one playlist (M3U import)
-clickwheel sync-plex --all      # push every clickwheel playlist
-clickwheel plex list            # list Plex audio playlists (with track counts)
-clickwheel plex pull <name>     # import a Plex playlist into clickwheel
-```
+| Command | What it does |
+| --- | --- |
+| `clickwheel sync-plex <name>` | Push one playlist (M3U import) |
+| `clickwheel sync-plex --all` | Push every clickwheel playlist |
+| `clickwheel plex list` | List Plex audio playlists (with track counts) |
+| `clickwheel plex pull <name>` | Import a Plex playlist into clickwheel |
 
 **Push** reports `pushed` vs `resolved`; a gap means Plex hasn't scanned those
 files yet, so run a Plex library scan and re-sync. Re-syncing replaces
