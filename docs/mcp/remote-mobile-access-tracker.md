@@ -196,7 +196,7 @@ wired into the tunnel ingress.
 | ✅  | 🤖    | **Favicon model flip:** the connector icon derives from Google's cached favicon for the **root** domain (→ docs), not the `mcp.` host. Removed favicon HTTP serving (`_http_assets.py`, rasters, `generate-favicon.sh`, its test); kept `SERVER_ICON` (inline SVG handshake icon) | —                                                |
 | ✅  | 🤖    | **Apex → docs 301** via a Page Rule `clickwheel.fm/*` → `https://docs.clickwheel.fm/$1` (the `Dynamic Redirect` token perm wasn't available; Page Rule is functionally identical — path + query preserved). Verified `clickwheel.fm` → 301 → docs → 200 | done via API token                               |
 | ✅  | 🤖    | Deleted the orphaned `clickwheel-favicons` apex bypass Access app (only the `clickwheel.fm → mcp.` app remains)      | done via API token                               |
-| ⬜  | 🧑    | Update the Claude mobile connector URL → `https://mcp.clickwheel.fm/mcp` (last manual step)                          | your phone                                       |
+| ✅  | 🧑    | Updated the Claude connector URL → `https://mcp.clickwheel.fm/mcp`; re-authed through Cloudflare Access successfully | done                                             |
 
 **Acceptance:** `curl -sI https://mcp.clickwheel.fm` → Access challenge (not 404/1033);
 `curl -sI https://clickwheel.fm` → 301 → `https://docs.clickwheel.fm`;
