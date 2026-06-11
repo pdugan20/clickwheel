@@ -9,7 +9,14 @@ Artifacts in this dir:
 - `cloudflared-config.example.yml`: tunnel ingress config template
 - `fm.clickwheel.mcp-http.plist`: LaunchAgent for the MCP HTTP server
 
-The examples use `clickwheel.fm`. Replace it (and the `<USER>` / `<TUNNEL>` /
+**Hostname architecture:** the MCP endpoint is served on the **`mcp.clickwheel.fm`**
+subdomain. The bare apex **`clickwheel.fm`** is *not* served by the tunnel — a
+Cloudflare Redirect Rule sends it to the docs site (`docs.clickwheel.fm`). So
+Cloudflare Access, the tunnel ingress, and `--allowed-host` all key off
+`mcp.clickwheel.fm`. (Earlier revisions ran the MCP server on the apex itself;
+that's been split so the apex is free for the docs redirect — see issue #72.)
+
+The examples use `mcp.clickwheel.fm`. Replace it (and the `<USER>` / `<TUNNEL>` /
 `<UUID>` placeholders) with your own values.
 
 ## 1. Run the server over HTTP (local sanity)
@@ -19,13 +26,13 @@ pipx inject clickwheel 'clickwheel[mcp]'   # if not already
 # --allowed-host is REQUIRED for the tunnel: the SDK's DNS-rebinding
 # protection rejects the public Host header with HTTP 421 otherwise.
 # Omit it for purely local testing (127.0.0.1 is always allowed).
-clickwheel-mcp serve --http --allowed-host clickwheel.fm   # binds 127.0.0.1:8000/mcp
+clickwheel-mcp serve --http --allowed-host mcp.clickwheel.fm   # binds 127.0.0.1:8000/mcp
 # in another shell:
 curl -s http://127.0.0.1:8000/favicon.ico -o /dev/null -w '%{http_code}\n'   # 200
 npx @modelcontextprotocol/inspector        # point at http://127.0.0.1:8000/mcp
 ```
 
-`--allowed-host` can also be set via `CLICKWHEEL_MCP_ALLOWED_HOSTS=clickwheel.fm`
+`--allowed-host` can also be set via `CLICKWHEEL_MCP_ALLOWED_HOSTS=mcp.clickwheel.fm`
 (comma-separated). If Claude's requests ever get a 403, add its origin with
 `--allow-origin https://claude.ai` / `CLICKWHEEL_MCP_ALLOWED_ORIGINS`.
 
@@ -37,11 +44,11 @@ cloudflared tunnel login                   # opens a browser, authorizes your CF
 cloudflared tunnel create clickwheel       # prints a UUID + creds file path
 cp docs/mcp/deploy/cloudflared-config.example.yml ~/.cloudflared/config.yml
 # edit ~/.cloudflared/config.yml: tunnel name/UUID, credentials-file path
-cloudflared tunnel route dns clickwheel clickwheel.fm
+cloudflared tunnel route dns clickwheel mcp.clickwheel.fm
 cloudflared tunnel run clickwheel          # foreground test
 ```
 
-With both the server and tunnel running, `https://clickwheel.fm/mcp` should reach
+With both the server and tunnel running, `https://mcp.clickwheel.fm/mcp` should reach
 the server (you will get Access-challenged once step 3 is in place).
 
 ## 3. Auth: Cloudflare Access (self-hosted app + Managed OAuth)
@@ -49,7 +56,7 @@ the server (you will get Access-challenged once step 3 is in place).
 A self-hosted Access app gates the endpoint, and **Managed OAuth** (a per-app
 toggle) is what lets the Claude connector authenticate: it adds OAuth dynamic
 client registration (RFC 7591) plus PKCE. Without it you get the `ofid_...`
-"couldn't register" error. The connector URL stays `https://clickwheel.fm/mcp`
+"couldn't register" error. The connector URL is `https://mcp.clickwheel.fm/mcp`
 (no portal, no SaaS-OIDC app, no manual client ID/secret).
 
 In the Cloudflare Zero Trust dashboard
@@ -59,8 +66,9 @@ Applications**):
 1. Enable Zero Trust if prompted (**Free** plan; team name is account-wide, keep
    the auto-assigned one).
 2. **Add an application → Self-hosted.**
-3. **Destinations → Public hostnames:** Domain `clickwheel.fm`, blank subdomain
-   and path (protects the whole host).
+3. **Destinations → Public hostnames:** subdomain `mcp`, Domain `clickwheel.fm`,
+   blank path (protects the `mcp.clickwheel.fm` host). Do **not** gate the bare
+   apex — it redirects to the docs site and must stay un-gated.
 4. **Access policies → Create new policy:** name `Only me`, Action **Allow**,
    Include Selector **Emails** = your email. Save and attach.
 5. Identity: built-in **One-time PIN** (email code); leave "Accept all available
@@ -73,9 +81,9 @@ Applications**):
    "Authorization with the MCP server failed" error.
 7. Save the application.
 
-Verify (unauthenticated): `curl -sI https://clickwheel.fm/mcp` returns `401`/`302`
+Verify (unauthenticated): `curl -sI https://mcp.clickwheel.fm/mcp` returns `401`/`302`
 toward your `<team>.cloudflareaccess.com` login, and
-`curl -s https://clickwheel.fm/.well-known/oauth-authorization-server` returns
+`curl -s https://mcp.clickwheel.fm/.well-known/oauth-authorization-server` returns
 JSON containing a `registration_endpoint` (proof Managed OAuth/DCR is live).
 
 ### `ofid_` error cheat-sheet
@@ -95,8 +103,13 @@ Bypass app) in **Access → Applications** for the icon paths: `/favicon.ico`,
 `/apple-touch-icon.png`, `/favicon-32.png`. Google's favicon cache can lag a day
 or more, so expect a delay before it updates.
 
+Note: now that the connector lives on `mcp.clickwheel.fm`, the connector-list
+icon keys off *that* host's favicon, and the bypass app must target
+`mcp.clickwheel.fm` (the old apex bypass app is orphaned once the apex redirects
+to docs). The MCP server still serves these icon paths on `mcp.clickwheel.fm`.
+
 ```bash
-curl -I https://clickwheel.fm/favicon.ico      # 200, no Access redirect
+curl -I https://mcp.clickwheel.fm/favicon.ico      # 200, no Access redirect
 ```
 
 ## 5. Keep it running (launchd)
@@ -117,7 +130,7 @@ accept "only reachable when the Mac is awake."
 ## 6. Add the connector + verify
 
 1. On **claude.ai in a desktop browser** (you can't add connectors from the
-   phone): Settings → Connectors → Add custom connector → `https://clickwheel.fm/mcp`.
+   phone): Settings → Connectors → Add custom connector → `https://mcp.clickwheel.fm/mcp`.
    Complete the Cloudflare Access OAuth flow. List tools.
 2. Run `library_stats` + `search_tracks` on web.
 3. On the **phone**: the connector now appears, run the same tools.

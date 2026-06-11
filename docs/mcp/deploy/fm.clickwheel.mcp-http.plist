@@ -26,9 +26,11 @@
       <string>serve</string>
       <string>--http</string>
       <!-- REQUIRED behind the tunnel: allowlist the public Host header, or
-           the SDK's DNS-rebinding protection rejects every request with 421. -->
+           the SDK's DNS-rebinding protection rejects every request with 421.
+           Must match the tunnel ingress hostname (mcp.clickwheel.fm), NOT the
+           bare apex — the apex redirects to the docs site and never hits this. -->
       <string>--allowed-host</string>
-      <string>clickwheel.fm</string>
+      <string>mcp.clickwheel.fm</string>
     </array>
 
     <key>EnvironmentVariables</key>

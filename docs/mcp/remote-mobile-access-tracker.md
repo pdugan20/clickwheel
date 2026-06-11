@@ -24,6 +24,16 @@ full story incl. the `ofid_` cheat-sheet). Favicon is live; Google cache ~1 day.
 decision. The big unknown — can the connector auth through Cloudflare Access? —
 is now a definitive **yes**.
 
+> **Update (#72): MCP endpoint moving off the apex to `mcp.clickwheel.fm`.** The
+> bare apex `clickwheel.fm` was gray-clouded/dead and is being repurposed to
+> **301-redirect to `docs.clickwheel.fm`**; the MCP server now serves on the
+> `mcp.` subdomain. Mac Mini side (tunnel ingress + `--allowed-host` →
+> `mcp.clickwheel.fm`) is done; Cloudflare-dashboard side (repoint the Access app
+> apex→`mcp.`, add the apex Redirect Rule) and the phone connector URL update to
+> `https://mcp.clickwheel.fm/mcp` are owner-owned. References to `clickwheel.fm`
+> in Phases 1–5 below are historical — read them as `mcp.clickwheel.fm`. See
+> Phase 6.
+
 ---
 
 ## Phase 0 — In-repo foundation ✅
@@ -158,6 +168,32 @@ it runs once against the final setup rather than twice.
 | ⬜  | 🧑    | Connector icon renders for `clickwheel.fm`, distinct from rewind/bibliocommons                     | Phase 3 go-public           |
 
 **Acceptance:** clickwheel is fully usable from the iOS app; iPod tools work when docked, degrade cleanly when not.
+
+---
+
+## Phase 6 — Move MCP to `mcp.clickwheel.fm`, apex → docs redirect 🤖🧑 (#72)
+
+The apex was pointed at the tunnel but gray-clouded/dead (generic favicon in
+Google, never loaded). Splitting it: the **apex redirects to the docs site** and
+the **MCP endpoint moves to the `mcp.` subdomain**. The MCP server never died —
+the apex DNS record was pulled out from under it and the new hostname was never
+wired into the tunnel ingress.
+
+| ✓   | Owner | Task                                                                                                                 | Blocked by / reason                              |
+| --- | ----- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| ✅  | 🧑    | Delete dead apex tunnel DNS record; add proxied apex placeholder `A → 192.0.2.1`; pre-create `CNAME mcp.` → tunnel   | done from MacBook (DNS-scoped token)             |
+| ✅  | 🤖    | Tunnel ingress `~/.cloudflared/config.yml`: `clickwheel.fm` → `mcp.clickwheel.fm`                                    | —                                                |
+| ✅  | 🤖    | MCP LaunchAgent `--allowed-host`: `clickwheel.fm` → `mcp.clickwheel.fm`                                              | —                                                |
+| ✅  | 🤖    | Update deploy templates + this tracker to the new hostname architecture                                             | —                                                |
+| ⬜  | 🧑    | **Cloudflare Access:** repoint the existing self-hosted app's destination `clickwheel.fm` → `mcp.clickwheel.fm` (keeps Managed OAuth + redirect URI; protects `mcp.` and un-gates the apex) | dashboard (Access perms); **gates the restart** |
+| ⬜  | 🤖    | Restart cloudflared + MCP LaunchAgents to apply staged configs; verify `mcp.` reaches the tunnel behind Access       | after Access repoint (no open window)            |
+| ⬜  | 🧑    | **Apex Redirect Rule:** host eq `clickwheel.fm` → `concat("https://docs.clickwheel.fm", http.request.uri.path)`, 301, preserve query | dashboard (Rules perms)                          |
+| ⬜  | 🧑    | Update the Claude mobile connector URL → `https://mcp.clickwheel.fm/mcp`                                             | after the above                                  |
+| ⬜  | 🧑    | (cleanup) Remove the orphaned `clickwheel-favicons` apex bypass app                                                  | non-blocking                                     |
+
+**Acceptance:** `curl -sI https://mcp.clickwheel.fm` → Access challenge (not 404/1033);
+`curl -sI https://clickwheel.fm` → 301 → `https://docs.clickwheel.fm`;
+`docs.clickwheel.fm` unchanged; connector reconnects on the phone over `mcp.`.
 
 ---
 

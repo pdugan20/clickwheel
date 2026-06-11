@@ -8,12 +8,16 @@
 # The MCP server binds 127.0.0.1:8000 (clickwheel-mcp serve --http); the tunnel
 # is the only public ingress. Bump the port here AND in the LaunchAgent if you
 # change it.
+#
+# The MCP endpoint lives on the `mcp.` subdomain; the bare apex `clickwheel.fm`
+# is NOT served by the tunnel — it redirects to the docs site via a Cloudflare
+# Redirect Rule (Rules → Redirect Rules: host eq clickwheel.fm → docs.clickwheel.fm).
 
 tunnel: <TUNNEL>
 credentials-file: /Users/<USER>/.cloudflared/<UUID>.json
 
 ingress:
-  - hostname: clickwheel.fm
+  - hostname: mcp.clickwheel.fm
     service: http://127.0.0.1:8000
   # Everything else 404s rather than leaking other local services.
   - service: http_status:404
