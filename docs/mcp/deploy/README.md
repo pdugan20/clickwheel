@@ -95,22 +95,24 @@ JSON containing a `registration_endpoint` (proof Managed OAuth/DCR is live).
   Cloudflare "Block AI bots"/Bot Fight Mode is dropping Claude's requests (zone →
   Security → Bots → off, or allow IP range `160.79.104.0/21`).
 
-## 4. Favicon bypass (optional)
+## 4. Connector favicon (nothing to do)
 
-Access gates the whole hostname, so an unauthenticated crawler can't fetch the
-favicon. To let Google's crawler reach it, add a **Bypass** policy (or a separate
-Bypass app) in **Access → Applications** for the icon paths: `/favicon.ico`,
-`/apple-touch-icon.png`, `/favicon-32.png`. Google's favicon cache can lag a day
-or more, so expect a delay before it updates.
+The little icon Claude shows next to the connector comes from Google's favicon
+service keyed off the **root domain** (`clickwheel.fm`) — *not* the `mcp.`
+connector host. Since the apex now 301-redirects to `docs.clickwheel.fm` (step
+2's Redirect Rule), Google follows the redirect and caches the **docs site's**
+favicon (the clickwheel mark, configured in Mintlify) for `clickwheel.fm`. So
+the connector icon is correct with **no extra work** — no favicon serving on the
+MCP server, no Access bypass.
 
-Note: now that the connector lives on `mcp.clickwheel.fm`, the connector-list
-icon keys off *that* host's favicon, and the bypass app must target
-`mcp.clickwheel.fm` (the old apex bypass app is orphaned once the apex redirects
-to docs). The MCP server still serves these icon paths on `mcp.clickwheel.fm`.
+This is why the MCP server no longer serves `/favicon.ico` and there's no
+`clickwheel-favicons` bypass app: both were only needed back when the connector
+ran on the apex behind Access. Google's favicon cache can lag a day or more
+after the redirect goes live, so expect a delay before the icon updates.
 
-```bash
-curl -I https://mcp.clickwheel.fm/favicon.ico      # 200, no Access redirect
-```
+(The MCP handshake still advertises the mark via the `icons=[SERVER_ICON]` field
+— a base64 SVG inlined in `clickwheel/mcp/_runtime.py` — which is independent of
+the Google-favicon connector-list icon.)
 
 ## 5. Keep it running (launchd)
 

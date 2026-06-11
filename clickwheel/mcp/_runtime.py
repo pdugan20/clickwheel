@@ -250,14 +250,6 @@ from clickwheel.mcp.ui import enable_mcp_apps  # noqa: E402
 enable_mcp_apps(mcp)
 
 
-# Serve favicon assets over the HTTP transport so the Claude connector icon
-# resolves via Google's favicon service (see clickwheel/mcp/_http_assets.py).
-# Inert under stdio.
-from clickwheel.mcp._http_assets import register_http_assets  # noqa: E402
-
-register_http_assets(mcp)
-
-
 # Tool annotation presets. Per the MCP spec these are hints clients use
 # for auto-approval and UI labeling — they're not enforced server-side.
 READ_ONLY = ToolAnnotations(

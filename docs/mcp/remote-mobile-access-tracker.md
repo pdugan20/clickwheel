@@ -93,6 +93,12 @@ Team domain: `sparkling-violet-bfb4.cloudflareaccess.com`. Steps:
 
 ## Phase 3 — Favicon / connector icon 🤖🧑
 
+> **⚠️ SUPERSEDED by Phase 6 (#72).** This phase served the favicon from the MCP
+> HTTP endpoint + an Access bypass, because the connector ran on the apex behind
+> Access. The connector now lives on `mcp.clickwheel.fm` and the icon derives
+> from Google's cached favicon for the **root** domain (→ docs redirect), so the
+> favicon serving + bypass were removed. The history below is kept for context.
+
 The piece you asked for — a domain favicon so the connector shows the
 clickwheel mark, the way rewind's does.
 
@@ -185,11 +191,12 @@ wired into the tunnel ingress.
 | ✅  | 🤖    | Tunnel ingress `~/.cloudflared/config.yml`: `clickwheel.fm` → `mcp.clickwheel.fm`                                    | —                                                |
 | ✅  | 🤖    | MCP LaunchAgent `--allowed-host`: `clickwheel.fm` → `mcp.clickwheel.fm`                                              | —                                                |
 | ✅  | 🤖    | Update deploy templates + this tracker to the new hostname architecture                                             | —                                                |
-| ⬜  | 🧑    | **Cloudflare Access:** repoint the existing self-hosted app's destination `clickwheel.fm` → `mcp.clickwheel.fm` (keeps Managed OAuth + redirect URI; protects `mcp.` and un-gates the apex) | dashboard (Access perms); **gates the restart** |
-| ⬜  | 🤖    | Restart cloudflared + MCP LaunchAgents to apply staged configs; verify `mcp.` reaches the tunnel behind Access       | after Access repoint (no open window)            |
-| ⬜  | 🧑    | **Apex Redirect Rule:** host eq `clickwheel.fm` → `concat("https://docs.clickwheel.fm", http.request.uri.path)`, 301, preserve query | dashboard (Rules perms)                          |
-| ⬜  | 🧑    | Update the Claude mobile connector URL → `https://mcp.clickwheel.fm/mcp`                                             | after the above                                  |
-| ⬜  | 🧑    | (cleanup) Remove the orphaned `clickwheel-favicons` apex bypass app                                                  | non-blocking                                     |
+| ✅  | 🧑    | **Cloudflare Access:** repoint the existing self-hosted app's destination `clickwheel.fm` → `mcp.clickwheel.fm` (keeps Managed OAuth + redirect URI; protects `mcp.` and un-gates the apex) | dashboard (Access perms) — done                  |
+| ✅  | 🤖    | Restart cloudflared + MCP LaunchAgents to apply staged configs; verified `mcp.` reaches the tunnel behind Access (edge 401; local host-guard correct) | —                                                |
+| ✅  | 🤖    | **Favicon model flip:** the connector icon derives from Google's cached favicon for the **root** domain (→ docs), not the `mcp.` host. Removed favicon HTTP serving (`_http_assets.py`, rasters, `generate-favicon.sh`, its test); kept `SERVER_ICON` (inline SVG handshake icon) | —                                                |
+| ⬜  | 🧑    | **Apex Redirect Rule:** host eq `clickwheel.fm` → `concat("https://docs.clickwheel.fm", http.request.uri.path)`, 301, preserve query (also makes Google cache the docs favicon for the root → fixes connector icon) | API token (Dynamic Redirect: Edit)               |
+| ⬜  | 🧑    | Delete the now-orphaned `clickwheel-favicons` apex bypass Access app                                                 | API token (Access: Apps and Policies: Edit)      |
+| ⬜  | 🧑    | Update the Claude mobile connector URL → `https://mcp.clickwheel.fm/mcp`                                             | after redirect rule                              |
 
 **Acceptance:** `curl -sI https://mcp.clickwheel.fm` → Access challenge (not 404/1033);
 `curl -sI https://clickwheel.fm` → 301 → `https://docs.clickwheel.fm`;
