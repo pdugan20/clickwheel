@@ -194,9 +194,9 @@ wired into the tunnel ingress.
 | ✅  | 🧑    | **Cloudflare Access:** repoint the existing self-hosted app's destination `clickwheel.fm` → `mcp.clickwheel.fm` (keeps Managed OAuth + redirect URI; protects `mcp.` and un-gates the apex) | dashboard (Access perms) — done                  |
 | ✅  | 🤖    | Restart cloudflared + MCP LaunchAgents to apply staged configs; verified `mcp.` reaches the tunnel behind Access (edge 401; local host-guard correct) | —                                                |
 | ✅  | 🤖    | **Favicon model flip:** the connector icon derives from Google's cached favicon for the **root** domain (→ docs), not the `mcp.` host. Removed favicon HTTP serving (`_http_assets.py`, rasters, `generate-favicon.sh`, its test); kept `SERVER_ICON` (inline SVG handshake icon) | —                                                |
-| ⬜  | 🧑    | **Apex Redirect Rule:** host eq `clickwheel.fm` → `concat("https://docs.clickwheel.fm", http.request.uri.path)`, 301, preserve query (also makes Google cache the docs favicon for the root → fixes connector icon) | API token (Dynamic Redirect: Edit)               |
-| ⬜  | 🧑    | Delete the now-orphaned `clickwheel-favicons` apex bypass Access app                                                 | API token (Access: Apps and Policies: Edit)      |
-| ⬜  | 🧑    | Update the Claude mobile connector URL → `https://mcp.clickwheel.fm/mcp`                                             | after redirect rule                              |
+| ✅  | 🤖    | **Apex → docs 301** via a Page Rule `clickwheel.fm/*` → `https://docs.clickwheel.fm/$1` (the `Dynamic Redirect` token perm wasn't available; Page Rule is functionally identical — path + query preserved). Verified `clickwheel.fm` → 301 → docs → 200 | done via API token                               |
+| ✅  | 🤖    | Deleted the orphaned `clickwheel-favicons` apex bypass Access app (only the `clickwheel.fm → mcp.` app remains)      | done via API token                               |
+| ⬜  | 🧑    | Update the Claude mobile connector URL → `https://mcp.clickwheel.fm/mcp` (last manual step)                          | your phone                                       |
 
 **Acceptance:** `curl -sI https://mcp.clickwheel.fm` → Access challenge (not 404/1033);
 `curl -sI https://clickwheel.fm` → 301 → `https://docs.clickwheel.fm`;
