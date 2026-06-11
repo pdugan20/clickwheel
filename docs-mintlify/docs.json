@@ -7,7 +7,7 @@
     "light": "/logo/light.png",
     "dark": "/logo/dark.png"
   },
-  "favicon": "/favicon.svg",
+  "favicon": "/favicon.png",
   "contextual": {
     "options": ["copy", "view", "chatgpt", "claude"]
   },
