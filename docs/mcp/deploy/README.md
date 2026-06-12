@@ -10,7 +10,7 @@ Artifacts in this dir:
 - `fm.clickwheel.mcp-http.plist`: LaunchAgent for the MCP HTTP server
 
 **Hostname architecture:** the MCP endpoint is served on the **`mcp.clickwheel.fm`**
-subdomain. The bare apex **`clickwheel.fm`** is *not* served by the tunnel — a
+subdomain. The bare apex **`clickwheel.fm`** is _not_ served by the tunnel — a
 Cloudflare Redirect Rule sends it to the docs site (`docs.clickwheel.fm`). So
 Cloudflare Access, the tunnel ingress, and `--allowed-host` all key off
 `mcp.clickwheel.fm`. (Earlier revisions ran the MCP server on the apex itself;
@@ -98,7 +98,7 @@ JSON containing a `registration_endpoint` (proof Managed OAuth/DCR is live).
 ## 4. Connector favicon (nothing to do)
 
 The little icon Claude shows next to the connector comes from Google's favicon
-service keyed off the **root domain** (`clickwheel.fm`) — *not* the `mcp.`
+service keyed off the **root domain** (`clickwheel.fm`) — _not_ the `mcp.`
 connector host. Since the apex now 301-redirects to `docs.clickwheel.fm` (step
 2's Redirect Rule), Google follows the redirect and caches the **docs site's**
 favicon (the clickwheel mark, configured in Mintlify) for `clickwheel.fm`. So

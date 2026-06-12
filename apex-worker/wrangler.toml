@@ -1,0 +1,7 @@
+name = "clickwheel-apex"
+main = "src/worker.ts"
+compatibility_date = "2025-04-01"
+
+routes = [
+  { pattern = "clickwheel.fm/*", zone_name = "clickwheel.fm" }
+]
