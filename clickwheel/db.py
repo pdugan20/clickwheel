@@ -104,9 +104,9 @@ CREATE TABLE IF NOT EXISTS genre_matches (
 -- DBs, so no _migrate() entry is needed.
 CREATE TABLE IF NOT EXISTS transcodes (
     source_path  TEXT PRIMARY KEY,
-    source_mtime REAL,
+    source_mtime REAL NOT NULL,
     output_path  TEXT NOT NULL,
-    bitrate      INTEGER,
+    bitrate      INTEGER NOT NULL,
     converted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
