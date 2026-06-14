@@ -679,3 +679,26 @@ def test_list_playlists_includes_description(populated_db: Database):
     populated_db.save_playlist("p", ["/music/A/Album1/01 T1.mp3"], description="my mix")
     pl = next(p for p in populated_db.list_playlists() if p["name"] == "p")
     assert pl["description"] == "my mix"
+
+
+# ---------------------------------------------------------------------------
+# transcodes cache
+# ---------------------------------------------------------------------------
+
+
+def test_transcode_record_and_get(tmp_db):
+    assert tmp_db.get_transcode("/music/a.flac") is None
+    tmp_db.record_transcode("/music/a.flac", 123.0, "/t/a.mp3", 320)
+    row = tmp_db.get_transcode("/music/a.flac")
+    assert row["output_path"] == "/t/a.mp3"
+    assert row["source_mtime"] == 123.0
+    assert row["bitrate"] == 320
+
+
+def test_transcode_record_upserts(tmp_db):
+    tmp_db.record_transcode("/music/a.flac", 1.0, "/t/old.mp3", 256)
+    tmp_db.record_transcode("/music/a.flac", 2.0, "/t/new.mp3", 320)
+    row = tmp_db.get_transcode("/music/a.flac")
+    assert row["output_path"] == "/t/new.mp3"
+    assert row["source_mtime"] == 2.0
+    assert len(tmp_db.list_transcodes()) == 1

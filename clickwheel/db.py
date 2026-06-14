@@ -97,6 +97,19 @@ CREATE TABLE IF NOT EXISTS genre_matches (
     PRIMARY KEY (artist, album)
 );
 
+-- FLAC→MP3 transcode cache. Maps a source FLAC path (+ its mtime at
+-- conversion time) to the MP3 written under cfg.transcode_dir. A re-run of
+-- `clickwheel convert` skips a source whose mtime is unchanged and whose
+-- output still exists, unless --force. CREATE IF NOT EXISTS covers existing
+-- DBs, so no _migrate() entry is needed.
+CREATE TABLE IF NOT EXISTS transcodes (
+    source_path  TEXT PRIMARY KEY,
+    source_mtime REAL,
+    output_path  TEXT NOT NULL,
+    bitrate      INTEGER,
+    converted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks(artist);
 CREATE INDEX IF NOT EXISTS idx_tracks_album ON tracks(album);
 CREATE INDEX IF NOT EXISTS idx_tracks_album_artist ON tracks(album_artist);
@@ -155,6 +168,38 @@ class Database:
         """Remove all tracks from the index."""
         self.conn.execute("DELETE FROM tracks")
         self.conn.commit()
+
+    def record_transcode(
+        self, source_path: str, source_mtime: float, output_path: str, bitrate: int
+    ) -> None:
+        """Upsert a FLAC→MP3 conversion record."""
+        self.conn.execute(
+            """
+            INSERT INTO transcodes (source_path, source_mtime, output_path, bitrate)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(source_path) DO UPDATE SET
+                source_mtime = excluded.source_mtime,
+                output_path = excluded.output_path,
+                bitrate = excluded.bitrate,
+                converted_at = CURRENT_TIMESTAMP
+            """,
+            (source_path, source_mtime, output_path, bitrate),
+        )
+        self.conn.commit()
+
+    def get_transcode(self, source_path: str) -> dict | None:
+        """Return the transcode record for a source FLAC path, or None."""
+        row = self.conn.execute(
+            "SELECT * FROM transcodes WHERE source_path = ?", (source_path,)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def list_transcodes(self) -> list[dict]:
+        """Return all transcode records, newest first."""
+        rows = self.conn.execute(
+            "SELECT * FROM transcodes ORDER BY converted_at DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     # ---------------------------------------------------------------------
     # Library queries
