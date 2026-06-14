@@ -518,9 +518,7 @@ def scan_library(
         # outside it (e.g. `clickwheel convert` MP3s in cfg.transcode_dir) are
         # owned by their producer, not scan, and must not be flagged missing.
         missing_paths = {
-            p
-            for p in (db_paths - disk_paths)
-            if Path(p).is_relative_to(cfg.music_dir)
+            p for p in (db_paths - disk_paths) if Path(p).is_relative_to(cfg.music_dir)
         }
         if missing_paths:
             result.missing = db.mark_missing(missing_paths)
@@ -615,9 +613,7 @@ def convert_tracks(
         try:
             cur_mtime = src.stat().st_mtime
         except OSError:
-            result.failed.append(
-                {"path": str(src), "reason": "source missing on disk"}
-            )
+            result.failed.append({"path": str(src), "reason": "source missing on disk"})
             if progress_callback:
                 progress_callback(i, total)
             continue
