@@ -485,6 +485,50 @@ class Database:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def get_flac_albums(self) -> list[dict]:
+        """FLAC albums available to convert, with per-album conversion status.
+
+        Unlike get_albums_by_artist (which excludes FLAC), this is the convert
+        *source* list, so it INCLUDES format='flac'. `converted` counts source
+        tracks already present in the transcodes cache.
+        """
+        rows = self.conn.execute(
+            """
+            SELECT
+                COALESCE(NULLIF(t.album_artist, ''), t.artist) AS artist,
+                t.album AS album,
+                COUNT(*) AS tracks,
+                SUM(t.file_size) AS total_bytes,
+                SUM(CASE WHEN tr.source_path IS NOT NULL THEN 1 ELSE 0 END)
+                    AS converted
+            FROM tracks t
+            LEFT JOIN transcodes tr ON tr.source_path = t.path
+            WHERE t.format = 'flac' AND t.missing_since IS NULL
+            GROUP BY artist, album
+            ORDER BY artist COLLATE NOCASE, album COLLATE NOCASE
+            """
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_flac_tracks(
+        self, artist: str | None = None, album: str | None = None
+    ) -> list[dict]:
+        """Source FLAC tracks to convert, optionally scoped by artist/album.
+
+        INCLUDES format='flac' (the convert source); excludes missing-on-disk.
+        """
+        sql = ["SELECT * FROM tracks WHERE format = 'flac' AND missing_since IS NULL"]
+        params: list[str] = []
+        if artist is not None:
+            sql.append("AND (album_artist = ? OR artist = ?)")
+            params += [artist, artist]
+        if album is not None:
+            sql.append("AND album = ?")
+            params.append(album)
+        sql.append("ORDER BY disc_number, track_number")
+        rows = self.conn.execute(" ".join(sql), params).fetchall()
+        return [dict(r) for r in rows]
+
     def save_playlist(
         self, name: str, track_paths: list[str], description: str | None = None
     ) -> None:

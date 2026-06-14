@@ -702,3 +702,50 @@ def test_transcode_record_upserts(tmp_db):
     assert row["output_path"] == "/t/new.mp3"
     assert row["source_mtime"] == 2.0
     assert len(tmp_db.list_transcodes()) == 1
+
+
+# ---------------------------------------------------------------------------
+# FLAC source queries
+# ---------------------------------------------------------------------------
+
+
+def _add_flac(db, path, artist="Olivia Rodrigo", album="GUTS", track=1):
+    db.upsert_track(
+        {
+            "path": path,
+            "title": f"T{track}",
+            "artist": artist,
+            "album_artist": artist,
+            "album": album,
+            "format": "flac",
+            "track_number": track,
+            "disc_number": 1,
+            "file_size": 8_000_000,
+        }
+    )
+
+
+def test_get_flac_tracks_scoped(tmp_db):
+    _add_flac(tmp_db, "/m/o/g/01.flac", track=1)
+    _add_flac(tmp_db, "/m/o/g/02.flac", track=2)
+    _add_flac(tmp_db, "/m/other/x/01.flac", artist="Other", album="X")
+    tmp_db.commit()
+
+    guts = tmp_db.get_flac_tracks(artist="Olivia Rodrigo", album="GUTS")
+    assert {t["path"] for t in guts} == {"/m/o/g/01.flac", "/m/o/g/02.flac"}
+    assert len(tmp_db.get_flac_tracks()) == 3  # unscoped = all flac
+
+
+def test_get_flac_albums_reports_conversion_status(tmp_db):
+    _add_flac(tmp_db, "/m/o/g/01.flac", track=1)
+    _add_flac(tmp_db, "/m/o/g/02.flac", track=2)
+    tmp_db.commit()
+    albums = tmp_db.get_flac_albums()
+    assert len(albums) == 1
+    assert albums[0]["artist"] == "Olivia Rodrigo"
+    assert albums[0]["album"] == "GUTS"
+    assert albums[0]["tracks"] == 2
+    assert albums[0]["converted"] == 0
+
+    tmp_db.record_transcode("/m/o/g/01.flac", 1.0, "/t/01.mp3", 320)
+    assert tmp_db.get_flac_albums()[0]["converted"] == 1
