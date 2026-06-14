@@ -514,7 +514,14 @@ def scan_library(
     # Phase 3: detect deleted files (incremental only)
     if not full:
         disk_paths = {str(p) for p in disk_files}
-        missing_paths = db_paths - disk_paths
+        # Only sweep tracks that live under music_dir. Tracks indexed from
+        # outside it (e.g. `clickwheel convert` MP3s in cfg.transcode_dir) are
+        # owned by their producer, not scan, and must not be flagged missing.
+        missing_paths = {
+            p
+            for p in (db_paths - disk_paths)
+            if Path(p).is_relative_to(cfg.music_dir)
+        }
         if missing_paths:
             result.missing = db.mark_missing(missing_paths)
 

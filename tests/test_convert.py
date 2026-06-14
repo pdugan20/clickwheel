@@ -229,3 +229,32 @@ def test_convert_tracks_multidisc_no_collision(tmp_db, tmp_path, monkeypatch):
 
     assert len(result.converted) == 2
     assert len(set(result.converted)) == 2  # distinct dest paths, nothing overwritten
+
+
+def test_scan_does_not_mark_converted_tracks_missing(tmp_db, tmp_path):
+    from clickwheel import actions
+    from clickwheel.config import Config
+
+    music = tmp_path / "music"
+    music.mkdir()
+    cfg = Config(music_dir=music, project_dir=tmp_path)
+
+    # A converted mp3 indexed under transcode_dir (OUTSIDE music_dir).
+    conv_path = str(cfg.transcode_dir / "A" / "B" / "x.mp3")
+    tmp_db.upsert_track(
+        {"path": conv_path, "format": "mp3", "artist": "A", "album": "B",
+         "file_size": 1, "mtime": 1.0}
+    )
+    # A real library track that has since vanished from disk.
+    gone = str(music / "gone.mp3")
+    tmp_db.upsert_track(
+        {"path": gone, "format": "mp3", "artist": "C", "album": "D",
+         "file_size": 1, "mtime": 1.0}
+    )
+    tmp_db.commit()
+
+    actions.scan_library(cfg, tmp_db)  # incremental
+
+    tracked = tmp_db.get_all_tracked_paths()
+    assert conv_path in tracked  # converted track preserved
+    assert gone not in tracked  # vanished library track flagged missing
