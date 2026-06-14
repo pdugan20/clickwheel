@@ -104,3 +104,90 @@ def test_transcode_to_mp3_real_ffmpeg(tmp_path):
             capture_output=True, text=True,
         )
         assert probe.stdout.strip() != ""  # art stream preserved
+
+
+def _make_flac_source(tmp_db, music_dir):
+    flac = music_dir / "Olivia Rodrigo" / "GUTS" / "01 bad idea right.flac"
+    flac.parent.mkdir(parents=True, exist_ok=True)
+    flac.write_bytes(b"fakeflac")
+    tmp_db.upsert_track(
+        {
+            "path": str(flac),
+            "title": "bad idea right!",
+            "artist": "Olivia Rodrigo",
+            "album_artist": "Olivia Rodrigo",
+            "album": "GUTS",
+            "format": "flac",
+            "track_number": 1,
+            "disc_number": 1,
+            "file_size": 8,
+            "mtime": flac.stat().st_mtime,
+            "duration_seconds": 180.0,
+        }
+    )
+    tmp_db.commit()
+    return flac
+
+
+def _patch_transcode(monkeypatch):
+    from clickwheel import transcode
+
+    monkeypatch.setattr(transcode, "find_ffmpeg", lambda: "/usr/bin/ffmpeg")
+
+    def fake(src, dest, bitrate, ffmpeg):
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(MP3_BYTES)
+
+    monkeypatch.setattr(transcode, "transcode_to_mp3", fake)
+
+
+def test_convert_tracks_transcodes_and_indexes(tmp_db, tmp_path, monkeypatch):
+    from clickwheel import actions
+    from clickwheel.config import Config
+
+    music = tmp_path / "music"
+    music.mkdir()
+    flac = _make_flac_source(tmp_db, music)
+    _patch_transcode(monkeypatch)
+    cfg = Config(music_dir=music, project_dir=tmp_path)
+
+    result = actions.convert_tracks(
+        cfg,
+        tmp_db,
+        scopes=[{"artist": "Olivia Rodrigo", "album": "GUTS"}],
+        bitrate=320,
+    )
+
+    assert len(result.converted) == 1
+    out = Path(result.converted[0])
+    assert out.exists() and out.suffix == ".mp3"
+    assert str(out) in tmp_db.get_all_tracked_paths()  # indexed as playable mp3
+    assert tmp_db.get_transcode(str(flac)) is not None  # cached
+
+
+def test_convert_tracks_is_idempotent(tmp_db, tmp_path, monkeypatch):
+    from clickwheel import actions
+    from clickwheel.config import Config
+
+    music = tmp_path / "music"
+    music.mkdir()
+    flac = _make_flac_source(tmp_db, music)
+    _patch_transcode(monkeypatch)
+    cfg = Config(music_dir=music, project_dir=tmp_path)
+    scopes = [{"artist": "Olivia Rodrigo", "album": "GUTS"}]
+
+    actions.convert_tracks(cfg, tmp_db, scopes=scopes, bitrate=320)
+    second = actions.convert_tracks(cfg, tmp_db, scopes=scopes, bitrate=320)
+
+    assert second.converted == []
+    assert second.skipped == [str(flac)]
+
+
+def test_convert_tracks_raises_without_ffmpeg(tmp_db, tmp_path, monkeypatch):
+    from clickwheel import actions, transcode
+    from clickwheel.config import Config
+
+    monkeypatch.setattr(transcode, "find_ffmpeg", lambda: None)
+    cfg = Config(music_dir=tmp_path, project_dir=tmp_path)
+    with pytest.raises(actions.FfmpegNotFoundError):
+        actions.convert_tracks(cfg, tmp_db, all_flac=True)
