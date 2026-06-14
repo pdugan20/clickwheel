@@ -48,6 +48,7 @@ The iPod workflow:
 | Command               | Description                                   |
 | --------------------- | --------------------------------------------- |
 | `clickwheel scan`     | Index your library; report metadata gaps      |
+| `clickwheel convert`  | Transcode FLAC albums to iPod-playable MP3     |
 | `clickwheel fix`      | Fill in album art, years, genres; repair tags |
 | `clickwheel select`   | Interactive checkbox picker for the iPod      |
 | `clickwheel playlist` | List saved playlists or show one's tracks     |
@@ -58,6 +59,8 @@ The iPod workflow:
 | `clickwheel sync`     | Push your playlist to the iPod                |
 | `clickwheel ls`       | Show what's on the iPod                       |
 | `clickwheel eject`    | Safely unmount the iPod                       |
+
+`clickwheel convert` transcodes selected FLAC albums to iPod-playable MP3 (interactive picker, or `--artist`/`--album`/`--all-flac`; `--bitrate`, `--force`). Output goes to `transcode_dir` and is indexed into the library, so the resulting MP3s flow through `select`/`sync` like any other track. It requires `ffmpeg` on your PATH (`brew install ffmpeg`).
 
 Each optional integration has its own doc:
 
@@ -72,7 +75,12 @@ Each optional integration has its own doc:
 music_dir: /Volumes/Music/Library
 ipod_capacity_gb: 64
 auto_scan: true
+transcode_dir: ~/.clickwheel/transcoded
+transcode_bitrate: 320
 ```
+
+- `transcode_dir` — where `clickwheel convert` writes converted MP3s (default `~/.clickwheel/transcoded`). Kept outside your music library so Plex and the scanner don't pick them up.
+- `transcode_bitrate` — MP3 CBR bitrate in kbps for conversion (default `320`).
 
 Environment variables (`MUSIC_DIR`, `AUTO_SCAN`, etc.) override config values. See the [configuration reference](https://docs.clickwheel.fm/reference/configuration) for the full schema and `fix` walkthrough. Integrations (Plex, Apple Music, Last.fm) are all off by default; opt in via the per-integration guides linked above.
 
@@ -102,7 +110,8 @@ For client setup (Claude Code, Claude Desktop, mobile) and the full tool referen
 - macOS (iPod sync depends on macOS disk utilities)
 - Python 3.11+
 - iPod Classic with stock firmware, connected via USB
-- FLAC files are excluded from sync (stock firmware limitation)
+- FLAC files are excluded from sync (stock firmware limitation); use `clickwheel convert` to transcode them to MP3
+- `ffmpeg` on your PATH for `clickwheel convert` (`brew install ffmpeg`)
 
 ## Contributing
 
