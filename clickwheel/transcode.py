@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import os
 import shutil
-import subprocess
 from pathlib import Path
 
 
@@ -34,6 +33,8 @@ def transcode_to_mp3(src: Path, dest: Path, bitrate: int, ffmpeg: str) -> None:
     run never leaves a half-written MP3 that a later run mistakes for complete.
     Raises TranscodeError on non-zero ffmpeg exit.
     """
+    import subprocess
+
     dest.parent.mkdir(parents=True, exist_ok=True)
     part = dest.with_name(dest.name + ".part")
     cmd = [

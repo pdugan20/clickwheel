@@ -22,12 +22,14 @@ def test_transcode_to_mp3_invokes_ffmpeg_and_moves(tmp_path, monkeypatch):
         returncode = 0
         stderr = ""
 
-    def fake_run(cmd, capture_output, text):
+    def fake_run(cmd, **kwargs):
         captured["cmd"] = cmd
         Path(cmd[-1]).write_bytes(MP3_BYTES)  # write the .part file
         return FakeProc()
 
-    monkeypatch.setattr(transcode.subprocess, "run", fake_run)
+    import subprocess as _sp
+
+    monkeypatch.setattr(_sp, "run", fake_run)
     transcode.transcode_to_mp3(src, dest, 320, "/usr/bin/ffmpeg")
 
     assert dest.exists()
@@ -43,8 +45,62 @@ def test_transcode_to_mp3_raises_on_failure(tmp_path, monkeypatch):
         returncode = 1
         stderr = "boom"
 
-    monkeypatch.setattr(transcode.subprocess, "run", lambda *a, **k: FakeProc())
+    import subprocess as _sp
+
+    monkeypatch.setattr(_sp, "run", lambda *a, **k: FakeProc())
     src = tmp_path / "a.flac"
     src.write_bytes(b"x")
     with pytest.raises(transcode.TranscodeError):
         transcode.transcode_to_mp3(src, tmp_path / "o.mp3", 320, "/usr/bin/ffmpeg")
+
+
+def test_transcode_to_mp3_real_ffmpeg(tmp_path):
+    """Integration: run the real ffmpeg command on art + no-art FLACs."""
+    import shutil
+    import subprocess
+
+    from clickwheel import transcode
+
+    ffmpeg = transcode.find_ffmpeg()
+    if ffmpeg is None:
+        pytest.skip("ffmpeg not installed")
+
+    # FLAC with no embedded cover art.
+    noart = tmp_path / "noart.flac"
+    subprocess.run(
+        [ffmpeg, "-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=1",
+         "-c:a", "flac", str(noart)],
+        capture_output=True, check=True,
+    )
+    out_noart = tmp_path / "out" / "noart.mp3"
+    transcode.transcode_to_mp3(noart, out_noart, 320, ffmpeg)
+    assert out_noart.exists() and out_noart.stat().st_size > 0
+
+    # FLAC WITH embedded cover art.
+    cover = tmp_path / "cover.png"
+    subprocess.run(
+        [ffmpeg, "-y", "-f", "lavfi", "-i", "color=c=red:s=120x120:d=1",
+         "-frames:v", "1", str(cover)],
+        capture_output=True, check=True,
+    )
+    art = tmp_path / "art.flac"
+    subprocess.run(
+        [ffmpeg, "-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=1",
+         "-i", str(cover), "-map", "0:a", "-map", "1:v", "-c:a", "flac",
+         "-c:v", "copy", "-disposition:v", "attached_pic", str(art)],
+        capture_output=True, check=True,
+    )
+    out_art = tmp_path / "out" / "art.mp3"
+    transcode.transcode_to_mp3(art, out_art, 320, ffmpeg)
+    assert out_art.exists() and out_art.stat().st_size > 0
+
+    # Cover art should be carried into the MP3 (a video/image stream present).
+    ffprobe = shutil.which("ffprobe")
+    if ffprobe:
+        probe = subprocess.run(
+            [ffprobe, "-v", "error", "-select_streams", "v",
+             "-show_entries", "stream=codec_name", "-of", "csv=p=0",
+             str(out_art)],
+            capture_output=True, text=True,
+        )
+        assert probe.stdout.strip() != ""  # art stream preserved
