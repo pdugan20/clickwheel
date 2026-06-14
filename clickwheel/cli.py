@@ -18,6 +18,7 @@ from clickwheel.actions import (
     AppleMusicPlaylistNotFoundError,
     AppleMusicUnreachableError,
     EjectFailedError,
+    FfmpegNotFoundError,
     InsufficientSpaceError,
     IpodNotFoundError,
     LastfmNotConfiguredError,
@@ -302,6 +303,9 @@ def convert(
         db.close()
         raise typer.Exit(1)
 
+    if album and not artist and not all_flac:
+        warn("--album is ignored without --artist; opening the album picker.")
+
     scopes: list[dict] = []
     if all_flac:
         pass  # resolved by the all_flac flag below
@@ -347,16 +351,21 @@ def convert(
     status(f"Converting {len(sources)} tracks to MP3 @ {use_bitrate} kbps")
     dim(f"Output: {cfg.transcode_dir}")
 
-    with tqdm(total=len(sources), desc="Transcoding", unit="track") as bar:
-        result = actions.convert_tracks(
-            cfg,
-            db,
-            scopes=None if all_flac else scopes,
-            all_flac=all_flac,
-            bitrate=use_bitrate,
-            force=force,
-            progress_callback=lambda done, _total: bar.update(done - bar.n),
-        )
+    try:
+        with tqdm(total=len(sources), desc="Transcoding", unit="track") as bar:
+            result = actions.convert_tracks(
+                cfg,
+                db,
+                scopes=None if all_flac else scopes,
+                all_flac=all_flac,
+                bitrate=use_bitrate,
+                force=force,
+                progress_callback=lambda done, _total: bar.update(done - bar.n),
+            )
+    except FfmpegNotFoundError as exc:
+        error(str(exc))
+        db.close()
+        raise typer.Exit(1) from exc
 
     success(
         f"Converted {len(result.converted)}, "
