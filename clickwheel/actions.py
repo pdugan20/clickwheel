@@ -587,14 +587,23 @@ def convert_tracks(
 
     for i, track in enumerate(sources, 1):
         src = Path(track["path"])
-        label = primary_artist(track.get("artist"), track.get("album_artist"))
-        album = track.get("album") or "Unknown Album"
-        dest = (
-            cfg.transcode_dir
-            / _safe_path_component(label)
-            / _safe_path_component(album)
-            / (src.stem + ".mp3")
-        )
+        try:
+            # Mirror the source's path under music_dir: source paths are
+            # unique, so this is collision-free and deterministic (multi-disc
+            # albums with same-named tracks no longer overwrite each other).
+            dest = (cfg.transcode_dir / src.relative_to(cfg.music_dir)).with_suffix(
+                ".mp3"
+            )
+        except ValueError:
+            # Source lives outside music_dir — fall back to a tag-based layout.
+            label = primary_artist(track.get("artist"), track.get("album_artist"))
+            album = track.get("album") or "Unknown Album"
+            dest = (
+                cfg.transcode_dir
+                / _safe_path_component(label)
+                / _safe_path_component(album)
+                / (src.stem + ".mp3")
+            )
 
         try:
             cur_mtime = src.stat().st_mtime
@@ -628,10 +637,13 @@ def convert_tracks(
                 progress_callback(i, total)
             continue
 
-        db.record_transcode(str(src), cur_mtime, str(dest), use_bitrate)
         scanned = scan_file(dest)
         if scanned:
             db.upsert_track(scanned)
+        # record_transcode commits internally, flushing the upsert above and
+        # this cache row together — so an interrupted run never leaves a
+        # transcode-cache hit whose track row was rolled back.
+        db.record_transcode(str(src), cur_mtime, str(dest), use_bitrate)
         result.converted.append(str(dest))
         if progress_callback:
             progress_callback(i, total)

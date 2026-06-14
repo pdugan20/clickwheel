@@ -191,3 +191,41 @@ def test_convert_tracks_raises_without_ffmpeg(tmp_db, tmp_path, monkeypatch):
     cfg = Config(music_dir=tmp_path, project_dir=tmp_path)
     with pytest.raises(actions.FfmpegNotFoundError):
         actions.convert_tracks(cfg, tmp_db, all_flac=True)
+
+
+def test_convert_tracks_multidisc_no_collision(tmp_db, tmp_path, monkeypatch):
+    from clickwheel import actions
+    from clickwheel.config import Config
+
+    music = tmp_path / "music"
+    base = music / "Artist" / "Album"
+    for disc in (1, 2):
+        folder = base / f"Disc {disc}"
+        folder.mkdir(parents=True)
+        flac = folder / "01 Track.flac"
+        flac.write_bytes(b"flac")
+        tmp_db.upsert_track(
+            {
+                "path": str(flac),
+                "title": "Track",
+                "artist": "Artist",
+                "album_artist": "Artist",
+                "album": "Album",
+                "format": "flac",
+                "track_number": 1,
+                "disc_number": disc,
+                "file_size": 4,
+                "mtime": flac.stat().st_mtime,
+                "duration_seconds": 180.0,
+            }
+        )
+    tmp_db.commit()
+    _patch_transcode(monkeypatch)
+    cfg = Config(music_dir=music, project_dir=tmp_path)
+
+    result = actions.convert_tracks(
+        cfg, tmp_db, scopes=[{"artist": "Artist", "album": "Album"}], bitrate=320
+    )
+
+    assert len(result.converted) == 2
+    assert len(set(result.converted)) == 2  # distinct dest paths, nothing overwritten
