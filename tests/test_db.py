@@ -735,6 +735,25 @@ def test_get_flac_tracks_scoped(tmp_db):
     assert {t["path"] for t in guts} == {"/m/o/g/01.flac", "/m/o/g/02.flac"}
     assert len(tmp_db.get_flac_tracks()) == 3  # unscoped = all flac
 
+    artist_only = tmp_db.get_flac_tracks(artist="Olivia Rodrigo")
+    assert {t["path"] for t in artist_only} == {"/m/o/g/01.flac", "/m/o/g/02.flac"}
+
+
+def test_get_flac_albums_groups_compilation_by_album_artist(tmp_db):
+    # Same album_artist, differing per-track artist (a compilation).
+    _add_flac(tmp_db, "/m/c/01.flac", artist="A1", album="Comp", track=1)
+    _add_flac(tmp_db, "/m/c/02.flac", artist="A2", album="Comp", track=2)
+    # Override album_artist to a shared value on both rows.
+    tmp_db.conn.execute(
+        "UPDATE tracks SET album_artist = 'Various Artists' WHERE album = 'Comp'"
+    )
+    tmp_db.commit()
+    albums = tmp_db.get_flac_albums()
+    comp = [a for a in albums if a["album"] == "Comp"]
+    assert len(comp) == 1
+    assert comp[0]["artist"] == "Various Artists"
+    assert comp[0]["tracks"] == 2
+
 
 def test_get_flac_albums_reports_conversion_status(tmp_db):
     _add_flac(tmp_db, "/m/o/g/01.flac", track=1)

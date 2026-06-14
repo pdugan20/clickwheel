@@ -504,8 +504,9 @@ class Database:
             FROM tracks t
             LEFT JOIN transcodes tr ON tr.source_path = t.path
             WHERE t.format = 'flac' AND t.missing_since IS NULL
-            GROUP BY artist, album
-            ORDER BY artist COLLATE NOCASE, album COLLATE NOCASE
+            GROUP BY COALESCE(NULLIF(t.album_artist, ''), t.artist), t.album
+            ORDER BY COALESCE(NULLIF(t.album_artist, ''), t.artist) COLLATE NOCASE,
+                     t.album COLLATE NOCASE
             """
         ).fetchall()
         return [dict(r) for r in rows]
