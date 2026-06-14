@@ -511,6 +511,20 @@ def scan_library(
 
     db.commit()
 
+    # A full scan clears the whole index, including converted MP3s that live
+    # outside music_dir (clickwheel convert writes them to cfg.transcode_dir).
+    # The music_dir walk above won't rediscover them, so re-index any still-
+    # present transcode outputs from the cache — otherwise `scan --full` would
+    # silently drop converted albums from select/sync.
+    if full:
+        for row in db.list_transcodes():
+            out = Path(row["output_path"])
+            if out.exists():
+                scanned = scan_file(out)
+                if scanned:
+                    db.upsert_track(scanned)
+        db.commit()
+
     # Phase 3: detect deleted files (incremental only)
     if not full:
         disk_paths = {str(p) for p in disk_files}
