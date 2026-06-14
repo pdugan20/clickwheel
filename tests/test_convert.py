@@ -258,3 +258,13 @@ def test_scan_does_not_mark_converted_tracks_missing(tmp_db, tmp_path):
     tracked = tmp_db.get_all_tracked_paths()
     assert conv_path in tracked  # converted track preserved
     assert gone not in tracked  # vanished library track flagged missing
+
+
+def test_convert_command_registered():
+    from typer.testing import CliRunner
+
+    from clickwheel.cli import app
+
+    result = CliRunner().invoke(app, ["convert", "--help"])
+    assert result.exit_code == 0
+    assert "Convert FLAC" in result.output
