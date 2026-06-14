@@ -79,7 +79,7 @@ class Config:
     apple_music_key_file: str = ""
     apple_music_developer_token: str = ""
     apple_music_user_token: str = ""
-    transcode_dir: Path | None = None
+    transcode_dir: Path = None  # type: ignore[assignment]  # resolved in __post_init__
     transcode_bitrate: int = 320
     db_path: Path = field(init=False)
 
@@ -93,7 +93,7 @@ class Config:
         self.db_path = self.project_dir / "clickwheel.db"
         self.transcode_dir = (
             Path(self.transcode_dir)
-            if self.transcode_dir
+            if self.transcode_dir is not None
             else self.project_dir / "transcoded"
         )
         self.transcode_bitrate = int(self.transcode_bitrate)
@@ -161,7 +161,11 @@ def load_config() -> Config:
         apple_music_key_file=os.environ.get("APPLE_MUSIC_KEY_FILE", ""),
         apple_music_developer_token=os.environ.get("APPLE_MUSIC_DEVELOPER_TOKEN", ""),
         apple_music_user_token=os.environ.get("APPLE_MUSIC_USER_TOKEN", ""),
-        transcode_dir=(os.environ.get("CLICKWHEEL_TRANSCODE_DIR") or None),
+        transcode_dir=(
+            Path(_transcode_dir)
+            if (_transcode_dir := os.environ.get("CLICKWHEEL_TRANSCODE_DIR"))
+            else None  # type: ignore[arg-type]  # resolved in __post_init__
+        ),
         transcode_bitrate=int(os.environ.get("CLICKWHEEL_TRANSCODE_BITRATE", 320)),
     )
 
