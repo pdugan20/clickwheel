@@ -48,7 +48,7 @@ The iPod workflow:
 | Command               | Description                                   |
 | --------------------- | --------------------------------------------- |
 | `clickwheel scan`     | Index your library; report metadata gaps      |
-| `clickwheel convert`  | Transcode FLAC albums to iPod-playable MP3     |
+| `clickwheel convert`  | Transcode FLAC albums to iPod-playable MP3    |
 | `clickwheel fix`      | Fill in album art, years, genres; repair tags |
 | `clickwheel select`   | Interactive checkbox picker for the iPod      |
 | `clickwheel playlist` | List saved playlists or show one's tracks     |

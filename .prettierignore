@@ -7,6 +7,9 @@ CHANGELOG.md
 clickwheel/mcp/_ui_bundles.py
 web/dist/
 
+# Internal planning artifacts (brainstorm specs + implementation plans).
+docs/superpowers/
+
 # Vendored — keep upstream formatting intact.
 clickwheel/ipod/
 

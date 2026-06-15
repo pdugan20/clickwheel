@@ -61,7 +61,7 @@ make format     # auto-format code
 
 3. **The `scan` command is read-only** — it only reads metadata and writes to SQLite. No file modifications.
 
-4. **FLAC is excluded from the iPod *sync* path** — stock iPod firmware can't decode FLAC, so sync/select/add-to-ipod never copy FLAC directly. There is NO transparent/automatic transcoding in the sync path. The explicit `clickwheel convert` command (FLAC→MP3 into `transcode_dir`, outside `music_dir`) is the sanctioned way to get FLAC onto the iPod; it indexes its MP3 outputs so they then flow through the normal pipeline. See `docs/superpowers/specs/2026-06-14-flac-to-mp3-conversion-design.md`.
+4. **FLAC is excluded from the iPod _sync_ path** — stock iPod firmware can't decode FLAC, so sync/select/add-to-ipod never copy FLAC directly. There is NO transparent/automatic transcoding in the sync path. The explicit `clickwheel convert` command (FLAC→MP3 into `transcode_dir`, outside `music_dir`) is the sanctioned way to get FLAC onto the iPod; it indexes its MP3 outputs so they then flow through the normal pipeline. See `docs/superpowers/specs/2026-06-14-flac-to-mp3-conversion-design.md`.
 
 5. **`clickwheel/ipod/` is vendored code** — excluded from ruff linting. Don't refactor it unless fixing a bug in the iPod database writer.
 
