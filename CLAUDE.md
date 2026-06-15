@@ -27,6 +27,7 @@ A Python CLI for syncing a music library to a classic iPod from a modern Mac.
 ## Commands
 
 - `clickwheel scan` — index library metadata into SQLite (incremental by default)
+- `clickwheel convert` — transcode selected FLAC albums to MP3 (interactive picker or `--artist`/`--album`/`--all-flac`); writes to `transcode_dir` and indexes the results
 - `clickwheel fix` — repair albumartist, fetch art/year from MusicBrainz, fetch genres from Last.fm (native — no extras required)
 - `clickwheel select` — interactive iPod subset picker (questionary checkbox, auto-scans if stale)
 - `clickwheel playlist` — list saved playlists
@@ -60,7 +61,7 @@ make format     # auto-format code
 
 3. **The `scan` command is read-only** — it only reads metadata and writes to SQLite. No file modifications.
 
-4. **FLAC files are excluded from iPod sync** — stock iPod firmware doesn't support FLAC. Don't add transcoding.
+4. **FLAC is excluded from the iPod _sync_ path** — stock iPod firmware can't decode FLAC, so sync/select/add-to-ipod never copy FLAC directly. There is NO transparent/automatic transcoding in the sync path. The explicit `clickwheel convert` command (FLAC→MP3 into `transcode_dir`, outside `music_dir`) is the sanctioned way to get FLAC onto the iPod; it indexes its MP3 outputs so they then flow through the normal pipeline. See `docs/superpowers/specs/2026-06-14-flac-to-mp3-conversion-design.md`.
 
 5. **`clickwheel/ipod/` is vendored code** — excluded from ruff linting. Don't refactor it unless fixing a bug in the iPod database writer.
 

@@ -97,6 +97,19 @@ CREATE TABLE IF NOT EXISTS genre_matches (
     PRIMARY KEY (artist, album)
 );
 
+-- FLAC→MP3 transcode cache. Maps a source FLAC path (+ its mtime at
+-- conversion time) to the MP3 written under cfg.transcode_dir. A re-run of
+-- `clickwheel convert` skips a source whose mtime is unchanged and whose
+-- output still exists, unless --force. CREATE IF NOT EXISTS covers existing
+-- DBs, so no _migrate() entry is needed.
+CREATE TABLE IF NOT EXISTS transcodes (
+    source_path  TEXT PRIMARY KEY,
+    source_mtime REAL NOT NULL,
+    output_path  TEXT NOT NULL,
+    bitrate      INTEGER NOT NULL,
+    converted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks(artist);
 CREATE INDEX IF NOT EXISTS idx_tracks_album ON tracks(album);
 CREATE INDEX IF NOT EXISTS idx_tracks_album_artist ON tracks(album_artist);
@@ -155,6 +168,38 @@ class Database:
         """Remove all tracks from the index."""
         self.conn.execute("DELETE FROM tracks")
         self.conn.commit()
+
+    def record_transcode(
+        self, source_path: str, source_mtime: float, output_path: str, bitrate: int
+    ) -> None:
+        """Upsert a FLAC→MP3 conversion record."""
+        self.conn.execute(
+            """
+            INSERT INTO transcodes (source_path, source_mtime, output_path, bitrate)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(source_path) DO UPDATE SET
+                source_mtime = excluded.source_mtime,
+                output_path = excluded.output_path,
+                bitrate = excluded.bitrate,
+                converted_at = CURRENT_TIMESTAMP
+            """,
+            (source_path, source_mtime, output_path, bitrate),
+        )
+        self.conn.commit()
+
+    def get_transcode(self, source_path: str) -> dict | None:
+        """Return the transcode record for a source FLAC path, or None."""
+        row = self.conn.execute(
+            "SELECT * FROM transcodes WHERE source_path = ?", (source_path,)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def list_transcodes(self) -> list[dict]:
+        """Return all transcode records, newest first."""
+        rows = self.conn.execute(
+            "SELECT * FROM transcodes ORDER BY converted_at DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     # ---------------------------------------------------------------------
     # Library queries
@@ -438,6 +483,51 @@ class Database:
         """,
             (artist, artist, album),
         ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_flac_albums(self) -> list[dict]:
+        """FLAC albums available to convert, with per-album conversion status.
+
+        Unlike get_albums_by_artist (which excludes FLAC), this is the convert
+        *source* list, so it INCLUDES format='flac'. `converted` counts source
+        tracks already present in the transcodes cache.
+        """
+        rows = self.conn.execute(
+            """
+            SELECT
+                COALESCE(NULLIF(t.album_artist, ''), t.artist) AS artist,
+                t.album AS album,
+                COUNT(*) AS tracks,
+                SUM(t.file_size) AS total_bytes,
+                SUM(CASE WHEN tr.source_path IS NOT NULL THEN 1 ELSE 0 END)
+                    AS converted
+            FROM tracks t
+            LEFT JOIN transcodes tr ON tr.source_path = t.path
+            WHERE t.format = 'flac' AND t.missing_since IS NULL
+            GROUP BY COALESCE(NULLIF(t.album_artist, ''), t.artist), t.album
+            ORDER BY COALESCE(NULLIF(t.album_artist, ''), t.artist) COLLATE NOCASE,
+                     t.album COLLATE NOCASE
+            """
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_flac_tracks(
+        self, artist: str | None = None, album: str | None = None
+    ) -> list[dict]:
+        """Source FLAC tracks to convert, optionally scoped by artist/album.
+
+        INCLUDES format='flac' (the convert source); excludes missing-on-disk.
+        """
+        sql = ["SELECT * FROM tracks WHERE format = 'flac' AND missing_since IS NULL"]
+        params: list[str] = []
+        if artist is not None:
+            sql.append("AND (album_artist = ? OR artist = ?)")
+            params += [artist, artist]
+        if album is not None:
+            sql.append("AND album = ?")
+            params.append(album)
+        sql.append("ORDER BY disc_number, track_number")
+        rows = self.conn.execute(" ".join(sql), params).fetchall()
         return [dict(r) for r in rows]
 
     def save_playlist(

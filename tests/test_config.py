@@ -74,3 +74,19 @@ def test_load_dotenv_comments(tmp_path: Path, monkeypatch):
 def test_find_data_dir_always_config_dir():
     result = _find_data_dir()
     assert result == CONFIG_DIR
+
+
+def test_transcode_config_defaults(tmp_path):
+    from clickwheel.config import Config
+
+    cfg = Config(music_dir=tmp_path, project_dir=tmp_path)
+    assert cfg.transcode_bitrate == 320
+    assert cfg.transcode_dir == tmp_path / "transcoded"
+
+
+def test_transcode_dir_override(tmp_path):
+    from clickwheel.config import Config
+
+    custom = tmp_path / "elsewhere"
+    cfg = Config(music_dir=tmp_path, project_dir=tmp_path, transcode_dir=custom)
+    assert cfg.transcode_dir == custom

@@ -679,3 +679,92 @@ def test_list_playlists_includes_description(populated_db: Database):
     populated_db.save_playlist("p", ["/music/A/Album1/01 T1.mp3"], description="my mix")
     pl = next(p for p in populated_db.list_playlists() if p["name"] == "p")
     assert pl["description"] == "my mix"
+
+
+# ---------------------------------------------------------------------------
+# transcodes cache
+# ---------------------------------------------------------------------------
+
+
+def test_transcode_record_and_get(tmp_db):
+    assert tmp_db.get_transcode("/music/a.flac") is None
+    tmp_db.record_transcode("/music/a.flac", 123.0, "/t/a.mp3", 320)
+    row = tmp_db.get_transcode("/music/a.flac")
+    assert row["output_path"] == "/t/a.mp3"
+    assert row["source_mtime"] == 123.0
+    assert row["bitrate"] == 320
+
+
+def test_transcode_record_upserts(tmp_db):
+    tmp_db.record_transcode("/music/a.flac", 1.0, "/t/old.mp3", 256)
+    tmp_db.record_transcode("/music/a.flac", 2.0, "/t/new.mp3", 320)
+    row = tmp_db.get_transcode("/music/a.flac")
+    assert row["output_path"] == "/t/new.mp3"
+    assert row["source_mtime"] == 2.0
+    assert len(tmp_db.list_transcodes()) == 1
+
+
+# ---------------------------------------------------------------------------
+# FLAC source queries
+# ---------------------------------------------------------------------------
+
+
+def _add_flac(db, path, artist="Olivia Rodrigo", album="GUTS", track=1):
+    db.upsert_track(
+        {
+            "path": path,
+            "title": f"T{track}",
+            "artist": artist,
+            "album_artist": artist,
+            "album": album,
+            "format": "flac",
+            "track_number": track,
+            "disc_number": 1,
+            "file_size": 8_000_000,
+        }
+    )
+
+
+def test_get_flac_tracks_scoped(tmp_db):
+    _add_flac(tmp_db, "/m/o/g/01.flac", track=1)
+    _add_flac(tmp_db, "/m/o/g/02.flac", track=2)
+    _add_flac(tmp_db, "/m/other/x/01.flac", artist="Other", album="X")
+    tmp_db.commit()
+
+    guts = tmp_db.get_flac_tracks(artist="Olivia Rodrigo", album="GUTS")
+    assert {t["path"] for t in guts} == {"/m/o/g/01.flac", "/m/o/g/02.flac"}
+    assert len(tmp_db.get_flac_tracks()) == 3  # unscoped = all flac
+
+    artist_only = tmp_db.get_flac_tracks(artist="Olivia Rodrigo")
+    assert {t["path"] for t in artist_only} == {"/m/o/g/01.flac", "/m/o/g/02.flac"}
+
+
+def test_get_flac_albums_groups_compilation_by_album_artist(tmp_db):
+    # Same album_artist, differing per-track artist (a compilation).
+    _add_flac(tmp_db, "/m/c/01.flac", artist="A1", album="Comp", track=1)
+    _add_flac(tmp_db, "/m/c/02.flac", artist="A2", album="Comp", track=2)
+    # Override album_artist to a shared value on both rows.
+    tmp_db.conn.execute(
+        "UPDATE tracks SET album_artist = 'Various Artists' WHERE album = 'Comp'"
+    )
+    tmp_db.commit()
+    albums = tmp_db.get_flac_albums()
+    comp = [a for a in albums if a["album"] == "Comp"]
+    assert len(comp) == 1
+    assert comp[0]["artist"] == "Various Artists"
+    assert comp[0]["tracks"] == 2
+
+
+def test_get_flac_albums_reports_conversion_status(tmp_db):
+    _add_flac(tmp_db, "/m/o/g/01.flac", track=1)
+    _add_flac(tmp_db, "/m/o/g/02.flac", track=2)
+    tmp_db.commit()
+    albums = tmp_db.get_flac_albums()
+    assert len(albums) == 1
+    assert albums[0]["artist"] == "Olivia Rodrigo"
+    assert albums[0]["album"] == "GUTS"
+    assert albums[0]["tracks"] == 2
+    assert albums[0]["converted"] == 0
+
+    tmp_db.record_transcode("/m/o/g/01.flac", 1.0, "/t/01.mp3", 320)
+    assert tmp_db.get_flac_albums()[0]["converted"] == 1

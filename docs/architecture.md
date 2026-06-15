@@ -71,7 +71,13 @@ When you `clickwheel select`, the result is a playlist stored in SQLite with ful
 
 ### No FLAC on iPod
 
-Stock iPod firmware doesn't support FLAC. Rather than building a transcoding pipeline, FLAC files are excluded from selection. Convert them separately if needed.
+Stock iPod firmware doesn't decode FLAC, so the sync path excludes FLAC at the
+DB query layer. To put a FLAC album on the iPod, run `clickwheel convert`: it
+transcodes FLAC to CBR MP3 (default 320 kbps, libmp3lame) into `transcode_dir`
+(default `~/.clickwheel/transcoded`, outside `music_dir` so Plex is unaffected),
+records each conversion in the `transcodes` cache, and indexes the MP3s into the
+library so `select`/`sync` treat them as ordinary MP3s. `scan`'s missing-sweep is
+scoped to `music_dir`, so it never touches the converted files.
 
 ### iPod database via vendored iOpenPodv2
 

@@ -42,6 +42,7 @@ jobs:
           globs: |
             **/*.md
             !CHANGELOG.md
+            !docs/superpowers
 
   prettier:
     name: Prettier

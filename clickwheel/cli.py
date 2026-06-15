@@ -18,6 +18,7 @@ from clickwheel.actions import (
     AppleMusicPlaylistNotFoundError,
     AppleMusicUnreachableError,
     EjectFailedError,
+    FfmpegNotFoundError,
     InsufficientSpaceError,
     IpodNotFoundError,
     LastfmNotConfiguredError,
@@ -265,6 +266,115 @@ def select(
             f"{len(selected_paths)} tracks, {_fmt_size(selected_size)}"
         )
 
+    db.close()
+
+
+@app.command(rich_help_panel="Library")
+def convert(
+    artist: str = typer.Option(
+        "", "--artist", "-a", help="Convert FLAC for this artist"
+    ),
+    album: str = typer.Option(
+        "", "--album", help="Restrict to this album (use with --artist)"
+    ),
+    all_flac: bool = typer.Option(
+        False, "--all-flac", help="Convert every FLAC album in the library"
+    ),
+    bitrate: int = typer.Option(
+        0, "--bitrate", help="MP3 CBR kbps (default: config transcode_bitrate)"
+    ),
+    force: bool = typer.Option(
+        False, "--force", help="Re-convert even if already converted"
+    ),
+    no_scan: bool = typer.Option(
+        False, "--no-scan", help="Skip automatic library scan"
+    ),
+) -> None:
+    """Convert FLAC albums to iPod-playable MP3."""
+    from clickwheel.transcode import find_ffmpeg
+
+    cfg = load_config()
+    db = Database(cfg.db_path)
+    if not no_scan:
+        maybe_auto_scan(cfg, db)
+
+    if find_ffmpeg() is None:
+        error("ffmpeg not found. Install it with: brew install ffmpeg")
+        db.close()
+        raise typer.Exit(1)
+
+    if album and not artist and not all_flac:
+        warn("--album is ignored without --artist; opening the album picker.")
+
+    scopes: list[dict] = []
+    if all_flac:
+        pass  # resolved by the all_flac flag below
+    elif artist:
+        scopes = [{"artist": artist, "album": album or None}]
+    else:
+        import questionary
+
+        albums = actions.list_convertible_albums(db)
+        if not albums:
+            warn("No FLAC albums found to convert.")
+            db.close()
+            raise typer.Exit(0)
+        choices = [
+            questionary.Choice(
+                title=(
+                    f"{a['artist']} — {a['album']}  "
+                    f"({a['tracks']} tracks, {_fmt_size(a['total_bytes'] or 0)})"
+                    + ("  ✓ converted" if a["converted"] >= a["tracks"] else "")
+                ),
+                value={"artist": a["artist"], "album": a["album"]},
+            )
+            for a in albums
+        ]
+        picked = questionary.checkbox(
+            "Select FLAC albums to convert (space to toggle, enter to confirm):",
+            choices=choices,
+        ).ask()
+        if not picked:
+            db.close()
+            raise typer.Exit(0)
+        scopes = picked
+
+    use_bitrate = bitrate or cfg.transcode_bitrate
+    sources = actions.resolve_flac_sources(
+        db, scopes=None if all_flac else scopes, all_flac=all_flac
+    )
+    if not sources:
+        warn("No FLAC tracks matched.")
+        db.close()
+        raise typer.Exit(0)
+
+    status(f"Converting {len(sources)} tracks to MP3 @ {use_bitrate} kbps")
+    dim(f"Output: {cfg.transcode_dir}")
+
+    try:
+        with tqdm(total=len(sources), desc="Transcoding", unit="track") as bar:
+            result = actions.convert_tracks(
+                cfg,
+                db,
+                scopes=None if all_flac else scopes,
+                all_flac=all_flac,
+                bitrate=use_bitrate,
+                force=force,
+                progress_callback=lambda done, _total: bar.update(done - bar.n),
+            )
+    except FfmpegNotFoundError as exc:
+        error(str(exc))
+        db.close()
+        raise typer.Exit(1) from exc
+
+    success(
+        f"Converted {len(result.converted)}, "
+        f"skipped {len(result.skipped)} (already current), "
+        f"failed {len(result.failed)}."
+    )
+    for f in result.failed:
+        warn(f"  ✗ {f['path']}: {f['reason']}")
+    dim("Add them to the iPod with `clickwheel select` or `clickwheel sync`.")
     db.close()
 
 

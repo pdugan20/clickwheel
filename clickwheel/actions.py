@@ -89,6 +89,10 @@ class IpodNotFoundError(ClickwheelError):
     """iPod not mounted or not detected."""
 
 
+class FfmpegNotFoundError(ClickwheelError):
+    """ffmpeg is required for FLAC conversion but isn't installed."""
+
+
 class LastfmNotConfiguredError(ClickwheelError):
     """Last.fm API key, secret, or session key is missing."""
 
@@ -243,6 +247,46 @@ class ScanResult:
     unchanged: int = 0
     missing: int = 0
     errors: int = 0
+
+
+@dataclass
+class ConvertResult:
+    """Outcome of a convert_tracks run."""
+
+    converted: list[str] = field(default_factory=list)  # output mp3 paths
+    skipped: list[str] = field(default_factory=list)  # source paths (cache hit)
+    failed: list[dict] = field(default_factory=list)  # {"path": str, "reason": str}
+    output_dir: str = ""
+
+
+def _safe_path_component(name: str) -> str:
+    """Make a tag value safe to use as a single path segment."""
+    cleaned = re.sub(r"[/\\:]", "_", name).strip()
+    return cleaned or "Unknown"
+
+
+def resolve_flac_sources(
+    db: Database,
+    *,
+    scopes: list[dict] | None = None,
+    all_flac: bool = False,
+) -> list[dict]:
+    """Resolve the set of source FLAC track dicts to convert.
+
+    `all_flac=True` returns every FLAC in the library. Otherwise each scope is
+    `{"artist": str, "album": str | None}`; album=None converts all of that
+    artist's FLAC. Duplicates across scopes are removed (first occurrence wins).
+    """
+    if all_flac:
+        return db.get_flac_tracks()
+    seen: set[str] = set()
+    out: list[dict] = []
+    for sc in scopes or []:
+        for t in db.get_flac_tracks(sc.get("artist"), sc.get("album")):
+            if t["path"] not in seen:
+                seen.add(t["path"])
+                out.append(t)
+    return out
 
 
 @dataclass
@@ -467,10 +511,29 @@ def scan_library(
 
     db.commit()
 
+    # A full scan clears the whole index, including converted MP3s that live
+    # outside music_dir (clickwheel convert writes them to cfg.transcode_dir).
+    # The music_dir walk above won't rediscover them, so re-index any still-
+    # present transcode outputs from the cache — otherwise `scan --full` would
+    # silently drop converted albums from select/sync.
+    if full:
+        for row in db.list_transcodes():
+            out = Path(row["output_path"])
+            if out.exists():
+                scanned = scan_file(out)
+                if scanned:
+                    db.upsert_track(scanned)
+        db.commit()
+
     # Phase 3: detect deleted files (incremental only)
     if not full:
         disk_paths = {str(p) for p in disk_files}
-        missing_paths = db_paths - disk_paths
+        # Only sweep tracks that live under music_dir. Tracks indexed from
+        # outside it (e.g. `clickwheel convert` MP3s in cfg.transcode_dir) are
+        # owned by their producer, not scan, and must not be flagged missing.
+        missing_paths = {
+            p for p in (db_paths - disk_paths) if Path(p).is_relative_to(cfg.music_dir)
+        }
         if missing_paths:
             result.missing = db.mark_missing(missing_paths)
 
@@ -504,6 +567,106 @@ def _emit_scan_progress(
             errors=result.errors,
         )
     )
+
+
+def list_convertible_albums(db: Database) -> list[dict]:
+    """FLAC albums available to convert, with per-album conversion status."""
+    return db.get_flac_albums()
+
+
+def convert_tracks(
+    cfg: Config,
+    db: Database,
+    *,
+    scopes: list[dict] | None = None,
+    all_flac: bool = False,
+    bitrate: int | None = None,
+    force: bool = False,
+    progress_callback: Callable[[int, int], None] | None = None,
+) -> ConvertResult:
+    """Transcode the selected FLAC sources to MP3 under cfg.transcode_dir.
+
+    Skips sources whose mtime is unchanged and whose output still exists
+    (unless force=True), records each conversion in the transcodes cache, and
+    indexes every produced MP3 into the tracks table so it flows through the
+    normal sync pipeline. Raises FfmpegNotFoundError if ffmpeg is absent.
+    """
+    from clickwheel import transcode
+
+    ffmpeg = transcode.find_ffmpeg()
+    if ffmpeg is None:
+        raise FfmpegNotFoundError(
+            "ffmpeg not found. Install it with: brew install ffmpeg"
+        )
+
+    use_bitrate = bitrate or cfg.transcode_bitrate
+    sources = resolve_flac_sources(db, scopes=scopes, all_flac=all_flac)
+    result = ConvertResult(output_dir=str(cfg.transcode_dir))
+    total = len(sources)
+
+    for i, track in enumerate(sources, 1):
+        src = Path(track["path"])
+        try:
+            # Mirror the source's path under music_dir: source paths are
+            # unique, so this is collision-free and deterministic (multi-disc
+            # albums with same-named tracks no longer overwrite each other).
+            dest = (cfg.transcode_dir / src.relative_to(cfg.music_dir)).with_suffix(
+                ".mp3"
+            )
+        except ValueError:
+            # Source lives outside music_dir — fall back to a tag-based layout.
+            label = primary_artist(track.get("artist"), track.get("album_artist"))
+            album = track.get("album") or "Unknown Album"
+            dest = (
+                cfg.transcode_dir
+                / _safe_path_component(label)
+                / _safe_path_component(album)
+                / (src.stem + ".mp3")
+            )
+
+        try:
+            cur_mtime = src.stat().st_mtime
+        except OSError:
+            result.failed.append({"path": str(src), "reason": "source missing on disk"})
+            if progress_callback:
+                progress_callback(i, total)
+            continue
+
+        if not force:
+            cached = db.get_transcode(str(src))
+            if (
+                cached
+                and cached["source_mtime"] == cur_mtime
+                and Path(cached["output_path"]).exists()
+            ):
+                result.skipped.append(str(src))
+                if progress_callback:
+                    progress_callback(i, total)
+                continue
+
+        try:
+            transcode.transcode_to_mp3(src, dest, use_bitrate, ffmpeg)
+        except transcode.TranscodeError as e:
+            result.failed.append(
+                {"path": str(src), "reason": e.detail or "ffmpeg error"}
+            )
+            if progress_callback:
+                progress_callback(i, total)
+            continue
+
+        scanned = scan_file(dest)
+        if scanned:
+            db.upsert_track(scanned)
+        # record_transcode commits internally, flushing the upsert above and
+        # this cache row together — so an interrupted run never leaves a
+        # transcode-cache hit whose track row was rolled back.
+        db.record_transcode(str(src), cur_mtime, str(dest), use_bitrate)
+        result.converted.append(str(dest))
+        if progress_callback:
+            progress_callback(i, total)
+
+    db.commit()
+    return result
 
 
 def library_stats(db: Database) -> dict:
