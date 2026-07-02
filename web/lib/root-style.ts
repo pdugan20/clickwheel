@@ -46,7 +46,9 @@ function isIOS(): boolean {
   );
 }
 
-const ON_IOS = isIOS();
+// Exported so components can drop non-essential chrome on the narrow iOS
+// bubble (e.g. CapacityBar hides the derivable "total" from its stats line).
+export const ON_IOS = isIOS();
 
 export const rootStyle: CSSProperties = {
   fontFamily:
