@@ -97,7 +97,11 @@ function LibraryStatsApp() {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'baseline',
-          gap: 12,
+          // columnGap keeps the desktop title↔stats spacing on one line;
+          // rowGap is the tighter gap used only when the stats wrap to a
+          // second line on a narrow (mobile) viewport.
+          columnGap: 12,
+          rowGap: 4,
           flexWrap: 'wrap',
         }}
       >
