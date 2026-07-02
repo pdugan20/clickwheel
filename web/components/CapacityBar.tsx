@@ -8,6 +8,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { autoUpdate, offset, shift, useFloating } from '@floating-ui/react';
+import { ON_IOS } from '../lib/root-style.js';
 
 export type CapacityArtist = {
   artist: string;
@@ -162,8 +163,10 @@ export function CapacityBar({
           iPod capacity
         </h2>
         <div style={{ fontSize: 12, opacity: 0.7 }}>
-          {fmtBytes(used_bytes)} used · {fmtBytes(free_bytes)} free ·{' '}
-          {fmtBytes(capacity_bytes)} total
+          {fmtBytes(used_bytes)} used · {fmtBytes(free_bytes)} free
+          {/* "total" is derivable from used + free, so drop it on the
+              narrow iOS bubble where the one-line stats read cramped. */}
+          {ON_IOS ? null : ` · ${fmtBytes(capacity_bytes)} total`}
         </div>
       </div>
       <div style={{ position: 'relative' }}>
