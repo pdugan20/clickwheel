@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/) and
 [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [0.18.1](https://github.com/pdugan20/clickwheel/compare/v0.18.0...v0.18.1) (2026-07-02)
+
+
+### Bug Fixes
+
+* **apex-worker:** serve CW wordmark favicon instead of iPod mark ([#79](https://github.com/pdugan20/clickwheel/issues/79)) ([2d756e3](https://github.com/pdugan20/clickwheel/commit/2d756e39a344e221d80be1083a5279a37ee958a7))
+* **web:** drop card radius + border on iOS so Claude doesn't clip the corners ([#82](https://github.com/pdugan20/clickwheel/issues/82)) ([196f3e8](https://github.com/pdugan20/clickwheel/commit/196f3e8bfdca27decb0965bd15547f653c2c1d86))
+
+
+### Documentation
+
+* sync the generated changelog page to 0.18.0 ([#76](https://github.com/pdugan20/clickwheel/issues/76)) ([fec60e5](https://github.com/pdugan20/clickwheel/commit/fec60e514d6d3f5c20d89ab9b29fb8182a9a3818))
+
 ## [0.18.0](https://github.com/pdugan20/clickwheel/compare/v0.17.0...v0.18.0) (2026-06-15)
 
 
