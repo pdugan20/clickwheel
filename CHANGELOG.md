@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/) and
 [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [0.18.2](https://github.com/pdugan20/clickwheel/compare/v0.18.1...v0.18.2) (2026-07-02)
+
+
+### Bug Fixes
+
+* **web:** mobile MCP card polish (hide derivable total, tighten wrapped subtext gap) ([#85](https://github.com/pdugan20/clickwheel/issues/85)) ([e592ba8](https://github.com/pdugan20/clickwheel/commit/e592ba87b4b30e1549ed47172e468dac7eff5850))
+
+
+### Documentation
+
+* sync the generated changelog page to 0.18.1 ([#83](https://github.com/pdugan20/clickwheel/issues/83)) ([19475c1](https://github.com/pdugan20/clickwheel/commit/19475c11121153cad40bd074114ed5f9f593d38c))
+
 ## [0.18.1](https://github.com/pdugan20/clickwheel/compare/v0.18.0...v0.18.1) (2026-07-02)
 
 
