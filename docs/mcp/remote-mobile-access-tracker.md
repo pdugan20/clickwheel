@@ -102,10 +102,12 @@ Team domain: `sparkling-violet-bfb4.cloudflareaccess.com`. Steps:
 The piece you asked for — a domain favicon so the connector shows the
 clickwheel mark, the way rewind's does.
 
-> **Favicon art is FINAL** — `clickwheel/mcp/assets/favicon.svg`, served as
-> `/favicon.svg` + rasterized `/favicon.ico` + PNGs. Regenerate rasters with
-> `./scripts/generate-favicon.sh` if the SVG changes. The go-public steps below
-> are now unblocked.
+> **⚠️ RETIRED — the iPod favicon art was removed (2026-07-03).** The clickwheel
+> connector mark is now the **CW wordmark** served by the `apex-worker`
+> (`apex-worker/src/assets.ts`), matching the docs site and the domain. The old
+> iPod source (`clickwheel/mcp/assets/favicon.svg`) and its non-existent
+> `scripts/generate-favicon.sh` are gone; the historical note below described
+> serving that iPod art from the MCP HTTP endpoint and no longer applies.
 >
 > **Approach (simplified):** serve the favicon from the existing MCP HTTP
 > endpoint (already built) + one Cloudflare Access **bypass** so Google's
@@ -132,7 +134,7 @@ explicit Access **bypass** below.
 
 | ✓   | Owner | Task                                                                                                                                                              | Blocked by / reason      |
 | --- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| ✅  | 🤖    | Final favicon art committed (`clickwheel/mcp/assets/favicon.svg`); rasterized to `favicon.ico` + 32/180px PNG via `scripts/generate-favicon.sh`                   | —                        |
+| ✅  | 🤖    | ~~Final favicon art committed (`clickwheel/mcp/assets/favicon.svg`)~~ — RETIRED 2026-07-03: iPod art removed; CW wordmark now served by `apex-worker`             | —                        |
 | ✅  | 🤖    | Serve `/favicon.svg`, `/favicon.ico`, `/favicon-32.png`, `/apple-touch-icon.png`, `/` from the MCP app (`_http_assets.py`); tests; packaged in the wheel          | —                        |
 | ✅  | 🧑    | Cloudflare Access **bypass** for `/favicon.ico`, `/favicon.svg`, `/apple-touch-icon.png`, `/favicon-32.png` (separate "clickwheel-favicons" app, Bypass/Everyone) | —                        |
 | ✅  | 🤖    | Verify unauthenticated: favicon paths → 200; `/mcp` still 302 gated                                                                                               | —                        |
