@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/) and
 [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [0.18.3](https://github.com/pdugan20/clickwheel/compare/v0.18.2...v0.18.3) (2026-07-21)
+
+
+### Documentation
+
+* sync the generated changelog page to 0.18.2 ([#86](https://github.com/pdugan20/clickwheel/issues/86)) ([bd9ace9](https://github.com/pdugan20/clickwheel/commit/bd9ace9eb111054f508ff8d217343ffebad35f8a))
+
 ## [0.18.2](https://github.com/pdugan20/clickwheel/compare/v0.18.1...v0.18.2) (2026-07-02)
 
 
