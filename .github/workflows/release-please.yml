@@ -21,3 +21,53 @@ jobs:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+      # release-please only maintains CHANGELOG.md. docs-mintlify/changelog.mdx is
+      # generated from it by scripts/gen-changelog.py and gated by CI's "Docs
+      # Reference Freshness" job, so a release PR is born one release behind and
+      # lands red — which is why every release since 0.17.0 needed a follow-up
+      # "sync the generated changelog page" PR, whose commit then became the sole
+      # content of the next release. Regenerate the page on the release branch
+      # instead. That commit is squashed into "chore(main): release X", so unlike
+      # the follow-up PRs it can't seed another release.
+      - name: Locate the open release PR
+        id: relpr
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+        run: |
+          branch=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open \
+            --json headRefName \
+            --jq '[.[] | select(.headRefName | startswith("release-please--"))]
+                  | .[0].headRefName // empty')
+          echo "branch=${branch}" >> "$GITHUB_OUTPUT"
+          if [ -z "$branch" ]; then
+            echo "No open release PR; nothing to sync."
+          else
+            echo "Found release branch: ${branch}"
+          fi
+
+      - name: Check out the release PR branch
+        if: steps.relpr.outputs.branch != ''
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
+        with:
+          ref: ${{ steps.relpr.outputs.branch }}
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        if: steps.relpr.outputs.branch != ''
+        with:
+          enable-cache: true
+
+      - name: Sync the generated changelog page onto the release PR
+        if: steps.relpr.outputs.branch != ''
+        run: |
+          uv run --locked python scripts/gen-changelog.py
+          if git diff --quiet -- docs-mintlify/changelog.mdx; then
+            echo "docs-mintlify/changelog.mdx is already in sync."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs-mintlify/changelog.mdx
+          git commit -m "docs: sync the generated changelog page"
+          git push
