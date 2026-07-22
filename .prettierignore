@@ -14,8 +14,13 @@ docs/superpowers/
 clickwheel/ipod/
 
 # Dependencies.
+.venv/
 web/node_modules/
 node_modules/
+
+# Local test state.
+.pytest_cache/
+.claudelint-cache/
 
 # Build output.
 dist/

@@ -5,3 +5,8 @@ updates:
     schedule:
       interval: 'weekly'
       day: 'monday'
+  - package-ecosystem: 'npm'
+    directory: '/tools/ci'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
