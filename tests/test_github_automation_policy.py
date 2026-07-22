@@ -42,8 +42,12 @@ EXPECTED_WORKFLOW_PERMISSIONS = {
     "pr-lint.yml": {"pull-requests": "read"},
     "publish.yml": {"contents": "read", "id-token": "write"},
     "release-please.yml": {"contents": "read", "pull-requests": "read"},
-    "test-publish.yml": {"contents": "read", "id-token": "write"},
+    "test-publish.yml": {"contents": "read"},
     "version-guard.yml": {"contents": "read"},
+}
+
+EXPECTED_JOB_PERMISSIONS = {
+    ("test-publish.yml", "publish"): {"actions": "read", "id-token": "write"},
 }
 
 EXPECTED_WORKFLOW_TRIGGERS = {
@@ -78,7 +82,7 @@ PRIVILEGED_WORKFLOW_SHA256 = {
         "df0d13bd0aea89b500b8b0972843367675208a4ffe59cd9c4ba939a7330df37d"
     ),
     "test-publish.yml": (
-        "39076adb4e75017c713ba5b8c8013a5b249fb76ad90943752ca3781cae790e53"
+        "dcde4ca43b5d3946a15d47d0b9394994034cf06be6e17b206bac175a24269d09"
     ),
 }
 
@@ -140,7 +144,9 @@ EXPECTED_NPM_OVERRIDES = {
 
 PINNED_ACTION_COMMENTS = {
     "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0": "v7.0.0",
+    "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c": ("v8.0.1"),
     "actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e": "v6.4.0",
+    "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": ("v7.0.1"),
     (
         "amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50"
     ): "v6.1.1",
@@ -306,10 +312,21 @@ def test_workflow_set_and_permissions_are_explicit_and_minimal() -> None:
         workflow = load_yaml(path)
         assert workflow.get("permissions") == EXPECTED_WORKFLOW_PERMISSIONS[path.name]
         for job_name, job in workflow.get("jobs", {}).items():
-            assert "permissions" not in job, (
-                f"{path.name}:{job_name} must use the audited workflow-level "
-                "permissions"
-            )
+            expected = EXPECTED_JOB_PERMISSIONS.get((path.name, job_name))
+            if expected is None:
+                assert "permissions" not in job, (
+                    f"{path.name}:{job_name} has unaudited job permissions"
+                )
+            else:
+                assert job.get("permissions") == expected
+
+    observed_job_permissions = {
+        (path.name, job_name)
+        for path in workflow_paths()
+        for job_name, job in load_yaml(path).get("jobs", {}).items()
+        if "permissions" in job
+    }
+    assert observed_job_permissions == EXPECTED_JOB_PERMISSIONS.keys()
 
 
 def test_workflow_triggers_match_the_reviewed_profiles() -> None:
@@ -335,15 +352,21 @@ def test_privileged_workflows_match_exact_reviewed_hashes() -> None:
 
 
 def test_secret_references_are_limited_to_exact_release_mutations() -> None:
-    secret_reference = re.compile(r"\$\{\{\s*secrets\.([A-Z0-9_]+)\s*\}\}")
+    # Scan the complete audited source rather than attempting to interpret the
+    # GitHub expression grammar. This deliberately rejects comments and string
+    # literals containing the namespace too, so embedded `}}` or future syntax
+    # cannot hide a secret sink from the policy.
+    secrets_namespace = re.compile(
+        r"(?<![A-Za-z0-9_])secrets(?![A-Za-z0-9_])", re.IGNORECASE
+    )
     observed = Counter(
-        (path.relative_to(ROOT).as_posix(), secret)
+        (path.relative_to(ROOT).as_posix(), match.group(0).lower())
         for path in [*automation_paths(), *executable_paths()]
-        for secret in secret_reference.findall(path.read_text())
+        for match in secrets_namespace.finditer(path.read_text())
     )
     assert observed == Counter(
         {
-            (".github/workflows/release-please.yml", "RELEASE_PLEASE_TOKEN"): 2,
+            (".github/workflows/release-please.yml", "secrets"): 2,
         }
     )
 
@@ -517,6 +540,56 @@ def test_publish_workflows_guard_exact_same_repo_sources_before_oidc() -> None:
     ) < publish_source.index("name: Publish to PyPI")
 
 
+def test_test_publish_oidc_job_only_downloads_and_publishes_artifact() -> None:
+    workflow = load_yaml(WORKFLOW_DIR / "test-publish.yml")
+    assert workflow["permissions"] == {"contents": "read"}
+    assert workflow["jobs"].keys() == {"resolve-build", "publish"}
+
+    build = workflow["jobs"]["resolve-build"]
+    assert "permissions" not in build
+    assert "environment" not in build
+    assert build["outputs"] == {
+        "artifact-id": "${{ steps.artifact.outputs.artifact-id }}",
+        "artifact-digest": "${{ steps.artifact.outputs.artifact-digest }}",
+    }
+    upload = build["steps"][-1]
+    assert upload["uses"] == (
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+    )
+    assert upload["with"] == {
+        "name": "testpypi-dist",
+        "path": "dist/",
+        "if-no-files-found": "error",
+        "retention-days": 1,
+        "include-hidden-files": False,
+    }
+
+    publish = workflow["jobs"]["publish"]
+    assert publish["needs"] == "resolve-build"
+    assert publish["if"] == (
+        "needs.resolve-build.result == 'success' && "
+        "needs.resolve-build.outputs.artifact-id != '' && "
+        "needs.resolve-build.outputs.artifact-digest != ''"
+    )
+    assert publish["permissions"] == {"actions": "read", "id-token": "write"}
+    assert publish["environment"] == "testpypi"
+    assert "run" not in publish
+    assert all("run" not in step for step in publish["steps"])
+    assert [step["uses"] for step in publish["steps"]] == [
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+        "pypa/gh-action-pypi-publish@ba38be9e461d3875417946c167d0b5f3d385a247",
+    ]
+    assert publish["steps"][0]["with"] == {
+        "artifact-ids": "${{ needs.resolve-build.outputs.artifact-id }}",
+        "path": "dist",
+        "digest-mismatch": "error",
+    }
+    assert publish["steps"][1]["with"] == {
+        "packages-dir": "dist",
+        "repository-url": "https://test.pypi.org/legacy/",
+    }
+
+
 def test_hosted_shell_checks_cover_the_installer() -> None:
     source = (WORKFLOW_DIR / "ci.yml").read_text()
     assert "shellcheck scripts/*.sh .github/scripts/install-shfmt.sh" in source
@@ -642,6 +715,7 @@ def assert_current_policy_rejects(root: Path) -> None:
             test_ci_npm_lifecycle_scripts_are_disabled_and_asserted()
             test_release_pr_provenance_and_pat_lifetime_are_fail_closed()
             test_publish_workflows_guard_exact_same_repo_sources_before_oidc()
+            test_test_publish_oidc_job_only_downloads_and_publishes_artifact()
             test_hosted_shell_checks_cover_the_installer()
             test_dependabot_ecosystems_have_non_overlapping_schedules()
             test_setup_uv_and_node_select_exact_tool_versions()
@@ -671,6 +745,32 @@ def test_policy_rejects_secret_sink_in_pr_lint(tmp_path: Path) -> None:
         workflow.read_text().replace(
             "GITHUB_TOKEN: ${{ github.token }}",
             "GITHUB_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}",
+        )
+    )
+    assert_current_policy_rejects(fixture)
+
+
+@pytest.mark.parametrize(
+    "secret_expression",
+    [
+        "${{ secrets['RELEASE_PLEASE_TOKEN'] }}",
+        "${{ secrets[inputs.secret_name] }}",
+        "${{ toJSON(secrets) }}",
+        "${{ Secrets.RELEASE_PLEASE_TOKEN }}",
+        "${{ format('}}', secrets.RELEASE_PLEASE_TOKEN) }}",
+    ],
+    ids=["bracketed", "dynamic", "to-json", "case-variant", "embedded-close"],
+)
+def test_policy_rejects_any_secret_namespace_in_ci(
+    tmp_path: Path, secret_expression: str
+) -> None:
+    fixture = copy_policy_fixture(tmp_path)
+    workflow = fixture / ".github" / "workflows" / "ci.yml"
+    workflow.write_text(
+        workflow.read_text().replace(
+            "permissions:\n  contents: read",
+            f"permissions:\n  contents: read\n\nenv:\n  LEAK: {secret_expression}",
+            1,
         )
     )
     assert_current_policy_rejects(fixture)

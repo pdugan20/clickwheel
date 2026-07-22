@@ -45,7 +45,10 @@ Determined from commit types since the last release:
 To validate a build before a real release: **Actions → Test Publish** → run the
 workflow from the protected default branch and provide either an exact lowercase
 40-character commit SHA or a qualified `refs/tags/vX.Y.Z` ref. The workflow
-resolves the object from this repository before it can request TestPyPI OIDC.
+resolves and builds that object in a job with no OIDC permission, uploads the
+distribution as an immutable artifact, then gives OIDC only to a separate job
+that downloads the exact artifact ID with digest verification and publishes it.
+The OIDC job never checks out or executes repository source.
 
 ## First-time setup (one-time)
 
