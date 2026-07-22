@@ -2,10 +2,11 @@
 
 dev:
 	uv sync --extra dev --extra mcp
+	npm ci --ignore-scripts --prefix tools/ci
 	uv run pre-commit install --hook-type pre-commit --hook-type commit-msg
 
 dev-web:
-	cd web && npm install
+	cd web && npm ci
 	cd web && npm run dev
 
 lint:
@@ -33,13 +34,13 @@ docs-reference:
 	uv run --extra mcp python scripts/gen-mcp-reference.py
 	uv run python scripts/gen-changelog.py
 
-# Live-preview the docs site (needs the Mintlify CLI: npm i -g mint).
+# Live-preview the docs site with the same locked Mint CLI used by CI.
 docs:
-	cd docs-mintlify && mint dev
+	cd docs-mintlify && ../tools/ci/node_modules/.bin/mint dev
 
 # Check the docs for broken links (same as CI).
 docs-links:
-	cd docs-mintlify && npx mint@latest broken-links
+	cd docs-mintlify && ../tools/ci/node_modules/.bin/mint broken-links
 
 test:
 	uv run pytest tests/ -v
@@ -50,7 +51,7 @@ build: clean
 # Build the React UI bundles via Vite + emit clickwheel/mcp/_ui_bundles.py.
 # Run this after editing anything under web/ before committing.
 build-web:
-	cd web && npm install
+	cd web && npm ci
 	cd web && npm run build:bundles
 
 clean:

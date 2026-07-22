@@ -12,7 +12,7 @@ jobs:
     name: Validate PR Title
     runs-on: ubuntu-latest
     steps:
-      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6
+      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
         with:
           # Type must match [a-zA-Z]+ — no hyphens (parser limitation).
           # Dependabot uses `chore(deps)` / `chore(deps-dev)` — hyphen in
@@ -35,4 +35,4 @@ jobs:
           subjectPatternError: |
             The subject must start with a lowercase letter.
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}

@@ -1,0 +1,18 @@
+{
+  "name": "clickwheel-ci-tools",
+  "private": true,
+  "description": "Integrity-locked command-line tools used by CI and pre-commit.",
+  "devDependencies": {
+    "claude-code-lint": "0.7.0",
+    "mint": "4.2.729",
+    "prettier": "3.9.6"
+  },
+  "overrides": {
+    "adm-zip": "0.6.0",
+    "axios": "1.18.1",
+    "js-yaml": "4.3.0",
+    "qs": "6.15.3",
+    "sharp": "0.35.3",
+    "tar": "7.5.21"
+  }
+}
