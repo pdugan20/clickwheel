@@ -22,7 +22,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Run ShellCheck
-        run: shellcheck scripts/*.sh
+        run: shellcheck scripts/*.sh .github/scripts/install-shfmt.sh
 
   shfmt:
     name: shfmt
@@ -34,7 +34,7 @@ jobs:
       - name: Install shfmt
         run: .github/scripts/install-shfmt.sh
       - name: Check formatting
-        run: shfmt -d scripts/*.sh
+        run: shfmt -d scripts/*.sh .github/scripts/install-shfmt.sh
 
   markdownlint:
     name: Markdown Lint

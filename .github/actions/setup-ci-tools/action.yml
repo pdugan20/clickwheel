@@ -11,4 +11,4 @@ runs:
         cache-dependency-path: tools/ci/package-lock.json
     - name: Install locked CI tools
       shell: bash
-      run: npm ci --prefix tools/ci
+      run: npm ci --ignore-scripts --prefix tools/ci

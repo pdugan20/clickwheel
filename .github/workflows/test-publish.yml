@@ -3,8 +3,8 @@ name: Test Publish
 on:
   workflow_dispatch:
     inputs:
-      tag:
-        description: 'Tag to publish (e.g. v0.3.0)'
+      ref:
+        description: 'Qualified tag ref or exact commit SHA to publish'
         required: true
 
 permissions:
@@ -14,13 +14,67 @@ permissions:
 jobs:
   test-publish:
     name: Build and Publish to TestPyPI
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     environment: testpypi
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Check out the protected default branch
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-          ref: ${{ inputs.tag }}
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Resolve exact same-repository source
+        id: source
+        env:
+          REQUESTED_REF: ${{ inputs.ref }}
+        run: |
+          set -euo pipefail
+          requested=${REQUESTED_REF}
+          remote=$(git remote get-url origin)
+          if [ "${remote%.git}" != "https://github.com/${GITHUB_REPOSITORY}" ]; then
+            echo "::error::Checkout origin is not the triggering repository."
+            exit 1
+          fi
+
+          if [[ "${requested}" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            remote_object=$(git ls-remote --refs origin "${requested}")
+            if [ "$(wc -l <<<"${remote_object}" | tr -d ' ')" -ne 1 ]; then
+              echo "::error::Qualified tag does not uniquely exist in this repository."
+              exit 1
+            fi
+            remote_sha=${remote_object%%[[:space:]]*}
+            peeled=$(git ls-remote origin "${requested}^{}")
+            expected_commit=${peeled%%[[:space:]]*}
+            if [ -z "${expected_commit}" ]; then
+              expected_commit=${remote_sha}
+            fi
+            git fetch --force --no-tags origin "${requested}"
+          elif [[ "${requested}" =~ ^[0-9a-f]{40}$ ]]; then
+            expected_commit=${requested}
+            git fetch --force --no-tags origin "${requested}"
+          else
+            echo "::error::Source must be refs/tags/vX.Y.Z or a lowercase 40-character commit SHA."
+            exit 1
+          fi
+
+          resolved=$(git rev-parse "FETCH_HEAD^{commit}")
+          if [ "${resolved}" != "${expected_commit}" ]; then
+            echo "::error::Requested source did not resolve to the fetched repository object."
+            exit 1
+          fi
+          if [[ "${requested}" =~ ^[0-9a-f]{40}$ ]] && [ "${resolved}" != "${requested}" ]; then
+            echo "::error::Commit input did not resolve to that exact commit."
+            exit 1
+          fi
+          echo "commit=${resolved}" >>"${GITHUB_OUTPUT}"
+
+      - name: Check out the resolved commit
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          ref: ${{ steps.source.outputs.commit }}
+
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: true

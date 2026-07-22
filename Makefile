@@ -2,7 +2,7 @@
 
 dev:
 	uv sync --extra dev --extra mcp
-	npm ci --prefix tools/ci
+	npm ci --ignore-scripts --prefix tools/ci
 	uv run pre-commit install --hook-type pre-commit --hook-type commit-msg
 
 dev-web:

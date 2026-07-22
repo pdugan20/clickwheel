@@ -35,4 +35,4 @@ jobs:
           subjectPatternError: |
             The subject must start with a lowercase letter.
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}

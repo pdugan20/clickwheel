@@ -5,71 +5,131 @@ on:
     branches:
       - main
 
+# The generated GITHUB_TOKEN is read-only. The PAT is passed only to the
+# release-please mutation and the final, narrowly scoped branch push.
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+  pull-requests: read
 
 jobs:
   release-please:
     name: Release Please
     runs-on: ubuntu-latest
     steps:
-      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+      - id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
-          # PAT so the tag push triggers publish.yml. GITHUB_TOKEN doesn't
-          # cascade into downstream workflows.
+          # PAT so release tags trigger publish.yml. GITHUB_TOKEN-created events
+          # do not cascade into downstream workflows.
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-      # release-please only maintains CHANGELOG.md. docs-mintlify/changelog.mdx is
-      # generated from it by scripts/gen-changelog.py and gated by CI's "Docs
-      # Reference Freshness" job, so a release PR is born one release behind and
-      # lands red — which is why every release since 0.17.0 needed a follow-up
-      # "sync the generated changelog page" PR, whose commit then became the sole
-      # content of the next release. Regenerate the page on the release branch
-      # instead. That commit is squashed into "chore(main): release X", so unlike
-      # the follow-up PRs it can't seed another release.
-      - name: Locate the open release PR
-        id: relpr
+      - name: Authenticate the exact release PR output
+        id: provenance
+        if: steps.release.outputs.prs != ''
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_PRS: ${{ steps.release.outputs.prs }}
         run: |
-          branch=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open \
-            --json headRefName \
-            --jq '[.[] | select(.headRefName | startswith("release-please--"))]
-                  | .[0].headRefName // empty')
-          echo "branch=${branch}" >> "$GITHUB_OUTPUT"
-          if [ -z "$branch" ]; then
-            echo "No open release PR; nothing to sync."
-          else
-            echo "Found release branch: ${branch}"
+          set -euo pipefail
+          expected_author="pdugan20"
+          expected_base="main"
+          expected_branch="release-please--branches--main--components--clickwheel"
+
+          if [ "$(jq 'length' <<<"${RELEASE_PRS}")" -ne 1 ]; then
+            echo "::error::Expected exactly one release-please PR output."
+            exit 1
           fi
 
-      - name: Check out the release PR branch
-        if: steps.relpr.outputs.branch != ''
+          number=$(jq -er '.[0].number' <<<"${RELEASE_PRS}")
+          output_head=$(jq -er '.[0].headBranchName' <<<"${RELEASE_PRS}")
+          output_base=$(jq -er '.[0].baseBranchName' <<<"${RELEASE_PRS}")
+          output_sha=$(jq -er '.[0].sha | select(test("^[0-9a-f]{40}$"))' \
+            <<<"${RELEASE_PRS}")
+          pr=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${number}")
+
+          jq -e \
+            --arg author "${expected_author}" \
+            --arg base "${expected_base}" \
+            --arg branch "${expected_branch}" \
+            --arg repo "${GITHUB_REPOSITORY}" \
+            --arg sha "${output_sha}" \
+            --argjson number "${number}" \
+            '.number == $number and
+             .state == "open" and
+             .draft == false and
+             .user.login == $author and
+             .author_association == "OWNER" and
+             .base.ref == $base and
+             .base.repo.full_name == $repo and
+             .head.ref == $branch and
+             .head.repo.full_name == $repo and
+             .head.sha == $sha and
+             any(.labels[]; .name == "autorelease: pending")' <<<"${pr}" >/dev/null
+
+          if [ "${output_head}" != "${expected_branch}" ] || \
+            [ "${output_base}" != "${expected_base}" ]; then
+            echo "::error::Release action output does not match the reviewed branch profile."
+            exit 1
+          fi
+
+          echo "head_sha=${output_sha}" >>"${GITHUB_OUTPUT}"
+          echo "head_branch=${output_head}" >>"${GITHUB_OUTPUT}"
+
+      - name: Check out the exact release PR commit without credentials
+        if: steps.provenance.outputs.head_sha != ''
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          persist-credentials: true
-          ref: ${{ steps.relpr.outputs.branch }}
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          path: release
+          persist-credentials: false
+          ref: ${{ steps.provenance.outputs.head_sha }}
 
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
-        if: steps.relpr.outputs.branch != ''
+      - name: Check out the trusted generator from main
+        if: steps.provenance.outputs.head_sha != ''
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          enable-cache: true
-          version: '0.11.17'
+          path: trusted
+          persist-credentials: false
+          ref: ${{ github.sha }}
 
-      - name: Sync the generated changelog page onto the release PR
-        if: steps.relpr.outputs.branch != ''
+      - name: Generate and commit the changelog without the PAT
+        id: changelog
+        if: steps.provenance.outputs.head_sha != ''
         run: |
-          uv run --locked python scripts/gen-changelog.py
+          set -euo pipefail
+          cd release
+          python ../trusted/scripts/gen-changelog.py
           if git diff --quiet -- docs-mintlify/changelog.mdx; then
-            echo "docs-mintlify/changelog.mdx is already in sync."
+            echo "changed=false" >>"${GITHUB_OUTPUT}"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs-mintlify/changelog.mdx
           git commit -m "docs: sync the generated changelog page"
-          git push
+          echo "changed=true" >>"${GITHUB_OUTPUT}"
+
+      - name: Push only the generated changelog commit
+        if: steps.changelog.outputs.changed == 'true'
+        env:
+          RELEASE_BRANCH: ${{ steps.provenance.outputs.head_branch }}
+          RELEASE_PLEASE_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+        run: |
+          set -euo pipefail
+          askpass=$(mktemp)
+          trap 'rm -f "${askpass}"' EXIT
+          cat >"${askpass}" <<'EOF'
+          #!/usr/bin/env sh
+          case "$1" in
+            *Username*) printf '%s\n' 'x-access-token' ;;
+            *Password*) printf '%s\n' "${RELEASE_PLEASE_TOKEN}" ;;
+          esac
+          EOF
+          chmod 0700 "${askpass}"
+
+          cd release
+          GIT_ASKPASS="${askpass}" GIT_TERMINAL_PROMPT=0 \
+            git -c credential.helper= push \
+              "https://github.com/${GITHUB_REPOSITORY}.git" \
+              "HEAD:refs/heads/${RELEASE_BRANCH}"
