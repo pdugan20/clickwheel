@@ -13,6 +13,7 @@ clickwheel.db
 clickwheel.db-shm
 clickwheel.db-wal
 .ruff_cache/
+.claudelint-cache/
 node_modules/
 # Top-level package.json/lock are gitignored historically (commitlint
 # scratch from pre-commit). The `web/` workspace ships its own checked-in

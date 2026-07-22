@@ -43,7 +43,12 @@ Determined from commit types since the last release:
 ## Test publishing
 
 To validate a build before a real release: **Actions → Test Publish** → run the
-workflow manually. It publishes to TestPyPI.
+workflow from the protected default branch and provide either an exact lowercase
+40-character commit SHA or a qualified `refs/tags/vX.Y.Z` ref. The workflow
+resolves and builds that object in a job with no OIDC permission, uploads the
+distribution as an immutable artifact, then gives OIDC only to a separate job
+that downloads the exact artifact ID with digest verification and publishes it.
+The OIDC job never checks out or executes repository source.
 
 ## First-time setup (one-time)
 
@@ -56,6 +61,28 @@ workflow manually. It publishes to TestPyPI.
 4. **`RELEASE_PLEASE_TOKEN`** secret — a PAT so the release-PR merge's tag push
    cascades into `publish.yml` (the default `GITHUB_TOKEN` does not trigger
    downstream workflows).
+
+## Required post-merge repository settings
+
+The workflow source guards are only one layer. The following live GitHub/Codecov
+settings are **required after this PR merges and are not completed by this PR**:
+
+- [ ] Protect the `pypi` environment with a required reviewer, prevent
+      self-review, and restrict deployments to protected `v*` tags.
+- [ ] Protect the `testpypi` environment with a required reviewer, prevent
+      self-review, and restrict deployments to the protected `main` branch.
+- [ ] Add a release-tag ruleset for `v*` that blocks deletion and force updates
+      and limits tag creation to the release automation identity. The workflow also
+      rejects anything except exact `vX.Y.Z` and requires the tagged commit to be
+      reachable from the current protected default-branch history.
+- [ ] Require the complete CI/status-check set on `main`, require pull-request
+      review, require branches to be up to date, and disallow bypasses appropriate
+      for the repository owner.
+- [ ] Configure Codecov protected-branch uploads. Store `CODECOV_TOKEN` as a
+      GitHub Actions secret (or install/configure the Codecov GitHub App's supported
+      tokenless flow), pass it only to the pinned Codecov upload step, and decide
+      whether upload failures should become required. The current tokenless,
+      `fail_ci_if_error: false` upload remains a documented residual until then.
 
 ## Troubleshooting
 
