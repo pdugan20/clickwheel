@@ -130,7 +130,7 @@ AUTHORIZED_EXECUTABLE_SHA256 = {
 
 EXPECTED_NPM_TOOLS = {
     "claude-code-lint": "0.7.0",
-    "mint": "4.2.729",
+    "mint": "4.2.734",
     "prettier": "3.9.6",
 }
 EXPECTED_NPM_OVERRIDES = {
