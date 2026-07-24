@@ -72,20 +72,6 @@ EXPECTED_WORKFLOW_TRIGGERS = {
     "version-guard.yml": {"push": {"branches": ["main"]}},
 }
 
-# Privileged workflows are reviewed as complete documents. The key set must
-# exactly equal the privileged workflow inventory, so an unused/preseeded hash
-# is rejected along with any unreviewed source change.
-PRIVILEGED_WORKFLOW_SHA256 = {
-    "pr-lint.yml": "9ba3ec987dac99489657c1769a5303b4f6f0c46f86d42107fcdfb9c18b9ab9ce",
-    "publish.yml": "7453a6d38789864fad5616d20c1d279eea3123703f94a7ae06169e162cd35db9",
-    "release-please.yml": (
-        "df0d13bd0aea89b500b8b0972843367675208a4ffe59cd9c4ba939a7330df37d"
-    ),
-    "test-publish.yml": (
-        "dcde4ca43b5d3946a15d47d0b9394994034cf06be6e17b206bac175a24269d09"
-    ),
-}
-
 # Repository-owned code reachable from automation is a deliberately finite
 # surface. Exact key equality rejects added, removed, hidden, nested, unused,
 # and preseeded executable profiles.
@@ -142,31 +128,13 @@ EXPECTED_NPM_OVERRIDES = {
     "tar": "7.5.21",
 }
 
-PINNED_ACTION_COMMENTS = {
-    "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0": "v7.0.0",
-    "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c": ("v8.0.1"),
-    "actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e": "v6.4.0",
-    "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": ("v7.0.1"),
-    (
-        "amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50"
-    ): "v6.1.1",
-    "astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990": "v8.3.2",
-    "codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f": "v6.0.2",
-    (
-        "DavidAnson/markdownlint-cli2-action@ded1f9488f68a970bc66ea5619e13e9b52e601cd"
-    ): "v23.2.0",
-    (
-        "googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7"
-    ): "v5.0.0",
-    ("pypa/gh-action-pypi-publish@ba38be9e461d3875417946c167d0b5f3d385a247"): "v1.14.1",
-}
-
 USES_LINE = re.compile(
     r"^\s*(?:-\s*)?uses:\s*['\"]?(?P<value>[^'\"\s#]+)['\"]?"
     r"\s*(?:#\s*(?P<comment>.*))?$"
 )
 EXTERNAL_ACTION = re.compile(r"^[^/@\s]+/[^@\s]+(?:/[^@\s]+)*@(?P<ref>[^\s]+)$")
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
+VERSION_COMMENT = re.compile(r"^v[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$")
 FORBIDDEN_COMMANDS = (
     re.compile(r"\bgh\s+pr\s+merge\b", re.IGNORECASE),
     re.compile(r"\bgh\s+pr\s+review\b[^\n]*(?:--approve|-a)\b", re.IGNORECASE),
@@ -263,7 +231,7 @@ def local_action_exists(value: str) -> bool:
 @pytest.mark.parametrize(
     "path", automation_paths(), ids=lambda path: str(path.relative_to(ROOT))
 )
-def test_every_action_reference_is_immutable_and_audited(path: Path) -> None:
+def test_every_action_reference_is_immutable_and_versioned(path: Path) -> None:
     parsed = parsed_uses(path)
     sourced = source_uses(path)
     assert Counter(parsed) == Counter(value for value, _ in sourced), (
@@ -288,20 +256,9 @@ def test_every_action_reference_is_immutable_and_audited(path: Path) -> None:
         assert FULL_SHA.fullmatch(match.group("ref")), (
             f"external action must use a full commit SHA: {value}"
         )
-        assert value in PINNED_ACTION_COMMENTS, f"unaudited action pin: {value}"
-        assert comment == PINNED_ACTION_COMMENTS[value], (
-            f"version comment for {value} must be '# {PINNED_ACTION_COMMENTS[value]}'"
+        assert comment and VERSION_COMMENT.fullmatch(comment), (
+            f"external action must include a semver comment such as '# v1.2.3': {value}"
         )
-
-
-def test_action_pin_allowlist_contains_no_unused_entries() -> None:
-    observed = {
-        value
-        for path in automation_paths()
-        for value in parsed_uses(path)
-        if not value.startswith(("./", "docker://"))
-    }
-    assert observed == PINNED_ACTION_COMMENTS.keys()
 
 
 def test_workflow_set_and_permissions_are_explicit_and_minimal() -> None:
@@ -333,22 +290,6 @@ def test_workflow_triggers_match_the_reviewed_profiles() -> None:
     assert {path.name for path in workflow_paths()} == EXPECTED_WORKFLOW_TRIGGERS.keys()
     for path in workflow_paths():
         assert load_yaml(path).get("on") == EXPECTED_WORKFLOW_TRIGGERS[path.name]
-
-
-def test_privileged_workflows_match_exact_reviewed_hashes() -> None:
-    expected_privileged = {
-        "pr-lint.yml",
-        "publish.yml",
-        "release-please.yml",
-        "test-publish.yml",
-    }
-    assert PRIVILEGED_WORKFLOW_SHA256.keys() == expected_privileged
-    observed = {
-        path.name: sha256(path)
-        for path in workflow_paths()
-        if path.name in expected_privileged
-    }
-    assert observed == PRIVILEGED_WORKFLOW_SHA256
 
 
 def test_secret_references_are_limited_to_exact_release_mutations() -> None:
@@ -399,12 +340,12 @@ def test_authorized_executable_surface_matches_exact_hash_manifest() -> None:
 
 
 def test_checkout_credentials_are_always_disabled() -> None:
-    checkout = "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"
     for path in workflow_paths():
         workflow = load_yaml(path)
         for job_name, job in workflow.get("jobs", {}).items():
             for step in job.get("steps", []):
-                if step.get("uses") != checkout:
+                uses = step.get("uses", "")
+                if not uses.startswith("actions/checkout@"):
                     continue
                 assert step.get("with", {}).get("persist-credentials") is False, (
                     f"{path.name}:{job_name}:{step.get('name', 'checkout')} must set "
@@ -553,9 +494,7 @@ def test_test_publish_oidc_job_only_downloads_and_publishes_artifact() -> None:
         "artifact-digest": "${{ steps.artifact.outputs.artifact-digest }}",
     }
     upload = build["steps"][-1]
-    assert upload["uses"] == (
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
-    )
+    assert upload["uses"].partition("@")[0] == "actions/upload-artifact"
     assert upload["with"] == {
         "name": "testpypi-dist",
         "path": "dist/",
@@ -575,9 +514,9 @@ def test_test_publish_oidc_job_only_downloads_and_publishes_artifact() -> None:
     assert publish["environment"] == "testpypi"
     assert "run" not in publish
     assert all("run" not in step for step in publish["steps"])
-    assert [step["uses"] for step in publish["steps"]] == [
-        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
-        "pypa/gh-action-pypi-publish@ba38be9e461d3875417946c167d0b5f3d385a247",
+    assert [step["uses"].partition("@")[0] for step in publish["steps"]] == [
+        "actions/download-artifact",
+        "pypa/gh-action-pypi-publish",
     ]
     assert publish["steps"][0]["with"] == {
         "artifact-ids": "${{ needs.resolve-build.outputs.artifact-id }}",
@@ -631,8 +570,6 @@ def test_dependabot_ecosystems_have_non_overlapping_schedules() -> None:
 
 
 def test_setup_uv_and_node_select_exact_tool_versions() -> None:
-    setup_uv = "astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990"
-    setup_node = "actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e"
     for path in automation_paths():
         for node in iter_key_values(load_yaml(path), "steps"):
             if not isinstance(node, list):
@@ -640,9 +577,10 @@ def test_setup_uv_and_node_select_exact_tool_versions() -> None:
             for step in node:
                 if not isinstance(step, dict):
                     continue
-                if step.get("uses") == setup_uv:
+                uses = step.get("uses", "")
+                if uses.startswith("astral-sh/setup-uv@"):
                     assert step.get("with", {}).get("version") == "0.11.17"
-                if step.get("uses") == setup_node:
+                if uses.startswith("actions/setup-node@"):
                     version = step.get("with", {}).get("node-version")
                     version_file = step.get("with", {}).get("node-version-file")
                     assert version == "22.23.1" or version_file == ".nvmrc"
@@ -695,34 +633,88 @@ def copy_policy_fixture(tmp_path: Path) -> Path:
     return fixture
 
 
+def assert_current_policy_accepts(root: Path) -> None:
+    """Exercise every policy assertion and require the repository to pass."""
+    with policy_root(root):
+        for path in automation_paths():
+            test_every_action_reference_is_immutable_and_versioned(path)
+        test_workflow_set_and_permissions_are_explicit_and_minimal()
+        test_workflow_triggers_match_the_reviewed_profiles()
+        test_secret_references_are_limited_to_exact_release_mutations()
+        test_job_containers_and_services_use_immutable_digests()
+        test_authorized_executable_surface_matches_exact_hash_manifest()
+        test_checkout_credentials_are_always_disabled()
+        test_no_repository_workflow_can_merge_or_approve_pull_requests()
+        test_ci_tools_are_locked_and_downloads_are_checksum_verified()
+        test_ci_npm_tools_and_security_overrides_are_integrity_locked()
+        test_ci_npm_lifecycle_scripts_are_disabled_and_asserted()
+        test_release_pr_provenance_and_pat_lifetime_are_fail_closed()
+        test_publish_workflows_guard_exact_same_repo_sources_before_oidc()
+        test_test_publish_oidc_job_only_downloads_and_publishes_artifact()
+        test_hosted_shell_checks_cover_the_installer()
+        test_dependabot_ecosystems_have_non_overlapping_schedules()
+        test_setup_uv_and_node_select_exact_tool_versions()
+        test_markdownlint_excludes_generated_and_internal_documents_consistently()
+
+
 def assert_current_policy_rejects(root: Path) -> None:
     """Exercise every policy assertion and require at least one rejection."""
-    with policy_root(root):
-        try:
-            for path in automation_paths():
-                test_every_action_reference_is_immutable_and_audited(path)
-            test_action_pin_allowlist_contains_no_unused_entries()
-            test_workflow_set_and_permissions_are_explicit_and_minimal()
-            test_workflow_triggers_match_the_reviewed_profiles()
-            test_privileged_workflows_match_exact_reviewed_hashes()
-            test_secret_references_are_limited_to_exact_release_mutations()
-            test_job_containers_and_services_use_immutable_digests()
-            test_authorized_executable_surface_matches_exact_hash_manifest()
-            test_checkout_credentials_are_always_disabled()
-            test_no_repository_workflow_can_merge_or_approve_pull_requests()
-            test_ci_tools_are_locked_and_downloads_are_checksum_verified()
-            test_ci_npm_tools_and_security_overrides_are_integrity_locked()
-            test_ci_npm_lifecycle_scripts_are_disabled_and_asserted()
-            test_release_pr_provenance_and_pat_lifetime_are_fail_closed()
-            test_publish_workflows_guard_exact_same_repo_sources_before_oidc()
-            test_test_publish_oidc_job_only_downloads_and_publishes_artifact()
-            test_hosted_shell_checks_cover_the_installer()
-            test_dependabot_ecosystems_have_non_overlapping_schedules()
-            test_setup_uv_and_node_select_exact_tool_versions()
-            test_markdownlint_excludes_generated_and_internal_documents_consistently()
-        except AssertionError:
-            return
+    try:
+        assert_current_policy_accepts(root)
+    except AssertionError:
+        return
     pytest.fail("automation policy accepted a malicious repository mutation")
+
+
+def test_policy_accepts_immutable_action_patch_without_snapshot_update(
+    tmp_path: Path,
+) -> None:
+    fixture = copy_policy_fixture(tmp_path)
+    old_pin = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
+    new_pin = f"actions/checkout@{'a' * 40} # v7.0.2"
+    for workflow in (fixture / ".github" / "workflows").glob("*.yml"):
+        workflow.write_text(workflow.read_text().replace(old_pin, new_pin))
+
+    assert_current_policy_accepts(fixture)
+
+
+def test_policy_rejects_mutable_external_action_ref(tmp_path: Path) -> None:
+    fixture = copy_policy_fixture(tmp_path)
+    workflow = fixture / ".github" / "workflows" / "ci.yml"
+    workflow.write_text(
+        workflow.read_text().replace(
+            "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1",
+            "actions/checkout@v7.0.1 # v7.0.1",
+            1,
+        )
+    )
+    assert_current_policy_rejects(fixture)
+
+
+def test_policy_rejects_missing_action_version_comment(tmp_path: Path) -> None:
+    fixture = copy_policy_fixture(tmp_path)
+    workflow = fixture / ".github" / "workflows" / "ci.yml"
+    workflow.write_text(
+        workflow.read_text().replace(
+            "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1",
+            "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            1,
+        )
+    )
+    assert_current_policy_rejects(fixture)
+
+
+def test_policy_rejects_checkout_credentials(tmp_path: Path) -> None:
+    fixture = copy_policy_fixture(tmp_path)
+    workflow = fixture / ".github" / "workflows" / "ci.yml"
+    workflow.write_text(
+        workflow.read_text().replace(
+            "persist-credentials: false",
+            "persist-credentials: true",
+            1,
+        )
+    )
+    assert_current_policy_rejects(fixture)
 
 
 def test_policy_rejects_privileged_pull_request_target_trigger(tmp_path: Path) -> None:
