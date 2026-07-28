@@ -45,16 +45,24 @@ jobs:
           number=$(jq -er '.[0].number' <<<"${RELEASE_PRS}")
           output_head=$(jq -er '.[0].headBranchName' <<<"${RELEASE_PRS}")
           output_base=$(jq -er '.[0].baseBranchName' <<<"${RELEASE_PRS}")
-          output_sha=$(jq -er '.[0].sha | select(test("^[0-9a-f]{40}$"))' \
-            <<<"${RELEASE_PRS}")
+
+          if [ "${output_head}" != "${expected_branch}" ] || \
+            [ "${output_base}" != "${expected_base}" ]; then
+            echo "::error::Release action output does not match the reviewed branch profile."
+            exit 1
+          fi
+
           pr=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${number}")
+          head_sha=$(jq -er \
+            '.head.sha | select(type == "string" and test("^[0-9a-f]{40}$"))' \
+            <<<"${pr}")
 
           jq -e \
             --arg author "${expected_author}" \
             --arg base "${expected_base}" \
             --arg branch "${expected_branch}" \
             --arg repo "${GITHUB_REPOSITORY}" \
-            --arg sha "${output_sha}" \
+            --arg sha "${head_sha}" \
             --argjson number "${number}" \
             '.number == $number and
              .state == "open" and
@@ -68,13 +76,7 @@ jobs:
              .head.sha == $sha and
              any(.labels[]; .name == "autorelease: pending")' <<<"${pr}" >/dev/null
 
-          if [ "${output_head}" != "${expected_branch}" ] || \
-            [ "${output_base}" != "${expected_base}" ]; then
-            echo "::error::Release action output does not match the reviewed branch profile."
-            exit 1
-          fi
-
-          echo "head_sha=${output_sha}" >>"${GITHUB_OUTPUT}"
+          echo "head_sha=${head_sha}" >>"${GITHUB_OUTPUT}"
           echo "head_branch=${output_head}" >>"${GITHUB_OUTPUT}"
 
       - name: Check out the exact release PR commit without credentials
