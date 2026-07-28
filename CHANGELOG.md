@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/) and
 [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [0.19.1](https://github.com/pdugan20/clickwheel/compare/v0.19.0...v0.19.1) (2026-07-28)
+
+
+### Bug Fixes
+
+* **ci:** derive release PR SHA from GitHub ([#133](https://github.com/pdugan20/clickwheel/issues/133)) ([580ed98](https://github.com/pdugan20/clickwheel/commit/580ed98d10e32130b4c134a3b4864405c4eb661f))
+
 ## [0.19.0](https://github.com/pdugan20/clickwheel/compare/v0.18.3...v0.19.0) (2026-07-28)
 
 
