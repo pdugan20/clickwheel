@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/) and
 [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [0.19.0](https://github.com/pdugan20/clickwheel/compare/v0.18.3...v0.19.0) (2026-07-28)
+
+
+### Features
+
+* **mcp:** migrate to protocol 2026-07-28 ([#130](https://github.com/pdugan20/clickwheel/issues/130)) ([2a98863](https://github.com/pdugan20/clickwheel/commit/2a98863108ce852d1f7a21eda197970eec104f31))
+
 ## [0.18.3](https://github.com/pdugan20/clickwheel/compare/v0.18.2...v0.18.3) (2026-07-21)
 
 
