@@ -453,6 +453,11 @@ def test_release_pr_provenance_and_pat_lifetime_are_fail_closed() -> None:
     assert ".head.repo.full_name == $repo" in source
     assert ".base.repo.full_name == $repo" in source
     assert ".head.sha == $sha" in source
+    assert ".[0].sha" not in source
+    assert '.head.sha | select(type == "string"' in source
+    assert source.index("Release action output does not match") < source.index(
+        'pr=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${number}")'
+    )
     assert "persist-credentials: true" not in source
     assert "../trusted/scripts/gen-changelog.py" in source
     assert source.index("../trusted/scripts/gen-changelog.py") < source.index(
