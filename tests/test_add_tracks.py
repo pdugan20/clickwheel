@@ -128,7 +128,7 @@ def test_add_tracks_to_ipod_happy_path(tmp_path, monkeypatch):
     paths = ["/music/ArtistA/T1.mp3", "/music/ArtistA/T2.mp3"]
     result = asyncio.run(add_tracks_to_ipod(paths=paths, ctx=ctx))
 
-    sc = result.structuredContent or {}
+    sc = result.structured_content or {}
     assert sc["added"] == 2
     assert sc["failed"] == 0
     assert sc["already_present"] == 0
@@ -149,7 +149,7 @@ def test_add_tracks_dedupes_against_ipod(tmp_path, monkeypatch):
     paths = ["/music/ArtistA/T1.mp3", "/music/ArtistA/T2.mp3"]
     result = asyncio.run(add_tracks_to_ipod(paths=paths, ctx=ctx))
 
-    sc = result.structuredContent or {}
+    sc = result.structured_content or {}
     assert sc["added"] == 1
     assert sc["already_present"] == 1
 
@@ -179,7 +179,7 @@ def test_add_artist_to_ipod_happy_path(tmp_path, monkeypatch):
     ctx = _FakeContext()
     result = asyncio.run(add_artist_to_ipod(artist="ArtistA", ctx=ctx))
 
-    sc = result.structuredContent or {}
+    sc = result.structured_content or {}
     assert sc["artist"] == "ArtistA"
     assert sc["found_in_library"] == 2
     assert sc["added"] == 2
@@ -196,7 +196,7 @@ def test_add_artist_to_ipod_unknown_artist(tmp_path, monkeypatch):
     ctx = _FakeContext()
     result = asyncio.run(add_artist_to_ipod(artist="Nobody", ctx=ctx))
 
-    sc = result.structuredContent or {}
+    sc = result.structured_content or {}
     assert sc["found_in_library"] == 0
     assert sc["added"] == 0
     assert ctx.calls == []

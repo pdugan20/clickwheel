@@ -213,3 +213,22 @@ wired into the tunnel ingress.
 - ~~Connector icon source: MCP `icons` field vs. domain favicon?~~ **Resolved:** Google `s2/favicons` keyed off the connector domain; the MCP `icons` field doesn't drive it. (Phase 3)
 - Keep-awake approach without leaving the Mac wide open. (Phase 4)
 - Do MCP Apps inline UI bundles render on mobile, or text-only fallback? (non-blocking)
+
+---
+
+## Phase 7 — MCP 2026-07-28 / Python SDK 2 migration ✅
+
+This is complete in-repo and awaits the normal package release + service
+restart before the public connector begins serving it.
+
+| ✓   | Owner | Task                                                                                                             | Blocked by / reason |
+| --- | ----- | ---------------------------------------------------------------------------------------------------------------- | ------------------- |
+| ✅  | 🤖    | Pin the optional dependency to `mcp>=2.0,<3` and migrate `FastMCP` to the official `MCPServer` API               | —                   |
+| ✅  | 🤖    | Register MCP Apps with the stable Extensions API and emit only the standardized nested `ui.resourceUri` metadata | —                   |
+| ✅  | 🤖    | Keep modern HTTP stateless while preserving the legacy initialize/session path on the same endpoint              | —                   |
+| ✅  | 🤖    | Exercise modern + legacy interoperability over both stdio and the real Streamable HTTP entry point               | —                   |
+| ✅  | 🤖    | Document the legacy text/structured fallback when a host cannot negotiate the modern Apps extension              | —                   |
+
+**Acceptance:** MCP 2026-07-28 and MCP 2025-11-25 clients both list tools over
+the production entry points; modern discovery advertises
+`io.modelcontextprotocol/ui`; focused protocol tests pass.

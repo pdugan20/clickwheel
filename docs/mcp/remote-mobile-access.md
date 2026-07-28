@@ -75,13 +75,18 @@ HTTP.)
 
 ### 1. Streamable HTTP entry point (DONE — keeps stdio)
 
-`mcp` here is the official `modelcontextprotocol/python-sdk` FastMCP
-(`mcp.server.fastmcp.FastMCP`) — **not** the third-party gofastmcp/Prefect
-"FastMCP 2.x". The instance lives in `clickwheel/mcp/_runtime.py`; tools
-register on import. The installed SDK (1.27.x) already ships
-`mcp.run(transport="streamable-http")` plus `host`/`port`/`streamable_http_path`
-settings; the `[mcp]` extra pin was bumped to `mcp>=1.9` (the floor for that
-API).
+`mcp` is the official `modelcontextprotocol/python-sdk`. Clickwheel uses its
+MCP 2 `MCPServer` API (`mcp.server.MCPServer`), pinned to `mcp>=2.0,<3`; the
+instance lives in `clickwheel/mcp/_runtime.py`, and tools register on import.
+Transport configuration is passed directly to `mcp.run(...)`, as required by
+the 2.x API.
+
+The endpoint supports both protocol eras on the same URL:
+
+- MCP 2026-07-28 clients use `server/discover`. Streamable HTTP requests are
+  stateless, so they need no initialize request, session ID, or sticky routing.
+- Older clients fall back to the legacy initialize/session flow. The legacy
+  HTTP leg remains sessionful for compatibility.
 
 `clickwheel/mcp/server.py:main()` now switches transport (stdio stays the
 default — local Claude Code/Desktop are unchanged):
@@ -93,10 +98,17 @@ default — local Claude Code/Desktop are unchanged):
   loopback only — the Cloudflare Tunnel is the sole ingress; the server never
   listens on a public interface (a non-loopback bind logs a warning).
 
-Transport selection is unit-tested (`tests/test_mcp_transport.py`) and the live
-HTTP endpoint was smoke-tested end-to-end (initialize + `tools/list` returns all
-37 tools + a real `library_stats` call) — the in-repo verification ceiling
-(below) is met.
+Transport selection is unit-tested (`tests/test_mcp_transport.py`) and the real
+HTTP entry point is smoke-tested end to end in both modes: modern
+`server/discover` negotiates MCP 2026-07-28, and legacy initialization
+negotiates MCP 2025-11-25. Both paths list the clickwheel tools. Stdio is tested
+the same way.
+
+MCP Apps is registered through the stable `io.modelcontextprotocol/ui`
+extension API and modern discovery advertises its MIME types. Legacy clients
+still receive the core text and structured tool results, but the legacy
+initialize schema cannot advertise the modern extension; those hosts may use
+text-only fallback until they support discovery.
 
 The existing rules held while doing this:
 
@@ -153,10 +165,10 @@ The server and `cloudflared` must survive logout/reboot:
   `launchd` LaunchAgent plist.
 - Run `clickwheel-mcp serve --http` as a `launchd` LaunchAgent (`KeepAlive`,
   `RunAtLoad`). Log to a file under `~/.clickwheel/` or `~/.local/log/`.
-- Single process means no horizontal scaling, so the known MCP "sticky session"
-  problem (clients use `fetch()` and don't forward `Set-Cookie`, breaking
-  session affinity across instances) does **not** apply here — stateful bits
-  like `notifications/progress` during sync work against the one instance.
+- Modern MCP 2026-07-28 HTTP requests are stateless and need no affinity.
+  Legacy clients retain their session against this single process, so they also
+  avoid cross-instance affinity problems. Request-scoped
+  `notifications/progress` continues to work in both modes.
 - Mac-awake requirement: consider `caffeinate` or a Power Settings tweak so the
   machine doesn't sleep the tunnel. Document this for the owner.
 
@@ -175,7 +187,7 @@ The server and `cloudflared` must survive logout/reboot:
 
 ## Effort
 
-- HTTP transport switch + localhost bind: **done.**
+- MCP 2 migration + dual-era HTTP/stdio compatibility: **done in-repo.**
 - Cloudflare Tunnel + Access for SaaS OIDC: ~0.5–1 day (mostly Cloudflare
   dashboard + DNS).
 - launchd plumbing: ~0.5 day.
@@ -199,20 +211,21 @@ The server and `cloudflared` must survive logout/reboot:
 
 - `clickwheel.fm` registered (done), pointed at Cloudflare DNS.
 - A Cloudflare account with Zero Trust (Access) enabled.
-- ~~SDK version bump for streamable-http support~~ — done (`mcp>=1.9`).
+- ~~SDK migration~~ — done (`mcp>=2.0,<3`, MCPServer API).
 - ~~No code blockers~~ — transport shipped; remaining work is all
   Cloudflare/launchd on the owner's machine.
 
 ## Verification (owner-owned — cannot be fully done in-repo)
 
 The in-repo ceiling is met: transport resolution is unit-tested and the local
-streamable-http endpoint passes initialize + `tools/list` + a read-only
-`library_stats`. The rest needs the owner, on the phone, against the live
-tunnel:
+Streamable HTTP endpoint passes both modern stateless discovery and legacy
+session initialization, followed by `tools/list`. The rest needs the owner, on
+the phone, against the live tunnel after publishing and restarting the service:
 
-1. ✅ **(done, in-repo)** `clickwheel-mcp serve --http --port <p>` then an MCP
-   client against `http://127.0.0.1:<p>/mcp` — tools list + `library_stats`
-   succeed. (`npx @modelcontextprotocol/inspector` works too.)
+1. ✅ **(done, in-repo)** `clickwheel-mcp serve --http --port <p>` then clients
+   against `http://127.0.0.1:<p>/mcp` — MCP 2026-07-28 discovery and MCP
+   2025-11-25 legacy initialization both list tools. (`npx
+@modelcontextprotocol/inspector` works too.)
 2. Bring up the tunnel; confirm `https://clickwheel.fm` reaches the server and
    Access challenges as expected.
 3. **On a desktop browser:** add `clickwheel.fm` as a custom connector on

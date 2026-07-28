@@ -60,7 +60,7 @@ The server includes a built-in `build_playlist` prompt that walks the model thro
 
 ## Tool reference
 
-37 tools + 1 prompt, grouped by domain.
+39 tools + 1 prompt, grouped by domain.
 
 ### Library (read)
 
@@ -149,6 +149,12 @@ Note that the `sync_*` and `add_*` tools are additive — tracks already on the 
 
 Clickwheel ships an MCP Apps extension that lets compatible hosts (Claude Desktop, Claude.ai, VS Code Copilot, Goose) render an interactive iframe inline beneath certain tool results.
 
+On MCP 2026-07-28, the server advertises
+`io.modelcontextprotocol/ui` through modern `server/discover`. Legacy clients
+can still connect through the initialize/session flow and receive the same text
+and structured results, but may fall back to text-only rendering because the
+legacy capability schema cannot advertise the modern Apps extension.
+
 | Bundle           | Triggered by                                            | What it shows                                                                                              |
 | ---------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | iPod capacity    | `get_ipod_contents`                                     | Used/free bar segmented by top artists, inline pill legend (top 4 + "Other"); click a pill for a follow-up |
@@ -179,5 +185,9 @@ checklist are in the project brief
 [`remote-mobile-access.md`](remote-mobile-access.md). Note: custom connectors
 are added on claude.ai (web) or Claude Desktop, then become usable in the
 mobile app — you can't add one from the phone.
+
+The same stdio and Streamable HTTP entry points support both MCP 2026-07-28
+clients (stateless modern discovery) and older initialize/session clients. The
+server uses the official Python SDK 2.x `MCPServer` API.
 
 For high-level architecture, see [`docs/architecture.md`](../architecture.md).

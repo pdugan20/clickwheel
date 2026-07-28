@@ -132,7 +132,7 @@ def test_remove_tracks_happy_path(tmp_path, monkeypatch):
     ]
     result = asyncio.run(remove_tracks_from_ipod(paths=paths, ctx=ctx))
 
-    sc = result.structuredContent or {}
+    sc = result.structured_content or {}
     assert sc["removed"] == 2
     assert sc["not_matched"] == 0
     assert sc["bytes_freed"] == 9_500_000
@@ -169,7 +169,7 @@ def test_remove_tracks_reports_unmatched(tmp_path, monkeypatch):
     ]
     result = asyncio.run(remove_tracks_from_ipod(paths=paths, ctx=ctx))
 
-    sc = result.structuredContent or {}
+    sc = result.structured_content or {}
     assert sc["removed"] == 1
     # Two unmatched: one path not in library, one in library but not on iPod.
     assert sc["not_matched"] == 2
@@ -210,7 +210,7 @@ def test_remove_artist_from_ipod(tmp_path, monkeypatch):
     ctx = _FakeContext()
     result = asyncio.run(remove_artist_from_ipod(artist="Weezer", ctx=ctx))
 
-    sc = result.structuredContent or {}
+    sc = result.structured_content or {}
     assert sc["artist"] == "Weezer"
     assert sc["removed"] == 2
     assert sc["bytes_freed"] == 9_000_000
@@ -227,7 +227,7 @@ def test_remove_artist_no_matches(tmp_path, monkeypatch):
     ctx = _FakeContext()
     result = asyncio.run(remove_artist_from_ipod(artist="Nobody", ctx=ctx))
 
-    sc = result.structuredContent or {}
+    sc = result.structured_content or {}
     assert sc["removed"] == 0
     assert ctx.calls == []
 
@@ -249,7 +249,7 @@ def test_remove_ipod_playlist(tmp_path, monkeypatch):
     )
 
     result = remove_ipod_playlist(name="test-mix")
-    sc = result.structuredContent or {}
+    sc = result.structured_content or {}
     assert sc["removed_playlist"] is True
     assert sc["library_updated"] is True
     assert captured["remove_playlist_names"] == {"test-mix"}

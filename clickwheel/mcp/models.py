@@ -1,6 +1,6 @@
 """Pydantic models for MCP tool structured output.
 
-Each MCP tool annotates its return type with a model from here so FastMCP
+Each MCP tool annotates its return type with a model from here so MCPServer
 emits an `outputSchema`. The models mirror exactly what `render()` places
 in `structuredContent` (sourced from `actions.py` return shapes) — the MCP
 spec requires structured results to conform to the advertised schema.

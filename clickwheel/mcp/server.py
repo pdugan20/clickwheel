@@ -1,6 +1,6 @@
-"""FastMCP server entry point.
+"""MCP server entry point.
 
-The FastMCP instance, session helper, and shared utilities live in
+The MCPServer instance, session helper, and shared utilities live in
 `clickwheel.mcp._runtime`. Tool definitions are split by domain under
 `clickwheel.mcp.tools`. Importing the tools subpackage triggers
 `@mcp.tool()` registration for every tool.
@@ -208,14 +208,11 @@ def main() -> None:
                     "sit behind a tunnel and listen on localhost only.",
                     cfg.host,
                 )
-            mcp.settings.host = cfg.host
-            mcp.settings.port = cfg.port
-            mcp.settings.streamable_http_path = cfg.path
             # DNS-rebinding protection stays on; the allowlist is what lets the
             # tunnel's public Host header through (otherwise HTTP 421).
             from mcp.server.transport_security import TransportSecuritySettings
 
-            mcp.settings.transport_security = TransportSecuritySettings(
+            transport_security = TransportSecuritySettings(
                 enable_dns_rebinding_protection=True,
                 allowed_hosts=cfg.allowed_hosts,
                 allowed_origins=cfg.allowed_origins,
@@ -228,7 +225,13 @@ def main() -> None:
                 cfg.path,
                 ", ".join(cfg.allowed_hosts),
             )
-            mcp.run(transport="streamable-http")
+            mcp.run(
+                transport="streamable-http",
+                host=cfg.host,
+                port=cfg.port,
+                streamable_http_path=cfg.path,
+                transport_security=transport_security,
+            )
         else:
             logger.info("Starting clickwheel MCP server (stdio)")
             mcp.run(transport="stdio")

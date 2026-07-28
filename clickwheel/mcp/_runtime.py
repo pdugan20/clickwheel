@@ -1,6 +1,6 @@
 """Shared runtime for the MCP server.
 
-Holds the FastMCP instance, the per-tool session context manager, tool
+Holds the MCPServer instance, the per-tool session context manager, tool
 annotation presets, and small formatting utilities. Tool modules under
 `clickwheel.mcp.tools` import from here and never from `server.py`, which
 keeps the `server.py → tools/` import direction one-way.
@@ -12,7 +12,7 @@ import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
 from mcp.types import (
     CallToolResult,
     ContentBlock,
@@ -235,58 +235,57 @@ SERVER_ICON = Icon(
         "MyA3Ny4wNzA2QzY1LjkzMDMgNzMuNTUwNyA2My4wNjQ1IDcwLjY4NDYgNTkuNTQ1"
         "IDcwLjY4NDZaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K"
     ),
-    mimeType="image/svg+xml",
+    mime_type="image/svg+xml",
     sizes=["any"],
 )
 
-mcp = FastMCP(name="clickwheel", instructions=INSTRUCTIONS, icons=[SERVER_ICON])
+from clickwheel.mcp.ui import MCPAppsExtension  # noqa: E402
 
-
-# Advertise the MCP Apps extension in the initialize handshake so hosts
-# render `_meta.ui.resourceUri` iframes alongside tool results. Without
-# this, Claude Desktop sees the meta but skips iframe rendering.
-from clickwheel.mcp.ui import enable_mcp_apps  # noqa: E402
-
-enable_mcp_apps(mcp)
+mcp = MCPServer(
+    name="clickwheel",
+    instructions=INSTRUCTIONS,
+    icons=[SERVER_ICON],
+    extensions=[MCPAppsExtension()],
+)
 
 
 # Tool annotation presets. Per the MCP spec these are hints clients use
 # for auto-approval and UI labeling — they're not enforced server-side.
 READ_ONLY = ToolAnnotations(
-    readOnlyHint=True,
-    destructiveHint=False,
-    idempotentHint=True,
-    openWorldHint=False,
+    read_only_hint=True,
+    destructive_hint=False,
+    idempotent_hint=True,
+    open_world_hint=False,
 )
 
 MUTATION = ToolAnnotations(
-    readOnlyHint=False,
-    destructiveHint=False,
-    idempotentHint=True,
-    openWorldHint=False,
+    read_only_hint=False,
+    destructive_hint=False,
+    idempotent_hint=True,
+    open_world_hint=False,
 )
 
 # Re-running create errors on conflict, so it's NOT idempotent.
 MUTATION_NON_IDEMPOTENT = ToolAnnotations(
-    readOnlyHint=False,
-    destructiveHint=False,
-    idempotentHint=False,
-    openWorldHint=False,
+    read_only_hint=False,
+    destructive_hint=False,
+    idempotent_hint=False,
+    open_world_hint=False,
 )
 
 # Reaches out to Last.fm.
 MUTATION_OPEN_WORLD = ToolAnnotations(
-    readOnlyHint=False,
-    destructiveHint=False,
-    idempotentHint=False,
-    openWorldHint=True,
+    read_only_hint=False,
+    destructive_hint=False,
+    idempotent_hint=False,
+    open_world_hint=True,
 )
 
 DESTRUCTIVE = ToolAnnotations(
-    readOnlyHint=False,
-    destructiveHint=True,
-    idempotentHint=True,
-    openWorldHint=False,
+    read_only_hint=False,
+    destructive_hint=True,
+    idempotent_hint=True,
+    open_world_hint=False,
 )
 
 
@@ -366,7 +365,7 @@ def render(text: str, data: object | None = None) -> CallToolResult:
         content = [TextContent(type="text", text=text)]
     else:
         # MCP requires structuredContent to be an object. Wrap lists/scalars
-        # under "result", matching FastMCP's own auto-wrap convention.
+        # under "result", matching MCPServer's own auto-wrap convention.
         sc = data if isinstance(data, dict) else {"result": data}
         json_block = json.dumps(sc, default=str, separators=(",", ":"))
         content = [
@@ -375,5 +374,5 @@ def render(text: str, data: object | None = None) -> CallToolResult:
         ]
     return CallToolResult(
         content=content,
-        structuredContent=sc,
+        structured_content=sc,
     )
