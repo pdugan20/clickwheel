@@ -1,5 +1,5 @@
 """Tool modules. Importing this package registers every tool on the
-FastMCP instance held in `clickwheel.mcp._runtime`. UI bundles are
+MCPServer instance held in `clickwheel.mcp._runtime`. UI bundles are
 registered here too so the resource list is fully populated before the
 stdio transport starts.
 """

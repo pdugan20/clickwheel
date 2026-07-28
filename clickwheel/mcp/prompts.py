@@ -1,5 +1,5 @@
 """Server-defined prompts. Importing this module registers them on the
-FastMCP instance held in `clickwheel.mcp._runtime`.
+MCPServer instance held in `clickwheel.mcp._runtime`.
 
 Prompts are user-invokable via the client (typically a slash command).
 They seed the conversation with anti-hallucination rules and explicit

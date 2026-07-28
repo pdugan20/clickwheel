@@ -1,7 +1,7 @@
 """Register MCP Apps UI resources.
 
 Imported for side effects from `clickwheel.mcp.tools.__init__` so the
-resources are bound to the FastMCP instance at import time, before
+resources are bound to the MCPServer instance at import time, before
 `mcp.run()` starts the stdio transport.
 """
 

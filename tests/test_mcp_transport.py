@@ -3,7 +3,7 @@
 `clickwheel-mcp` stays stdio by default; `serve --http` (or the
 CLICKWHEEL_MCP_TRANSPORT env var) opts into the Streamable HTTP transport
 used for remote access behind a tunnel. Skipped if the mcp SDK isn't
-installed (importing server.py pulls in FastMCP)."""
+installed (importing server.py pulls in MCPServer)."""
 
 from __future__ import annotations
 

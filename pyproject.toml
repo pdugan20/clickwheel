@@ -47,9 +47,9 @@ artwork = [
     "numpy>=1.24",
 ]
 mcp = [
-    # >=1.9 for the Streamable HTTP transport used by `clickwheel-mcp serve
-    # --http` (mcp.run(transport="streamable-http") + host/port/path settings).
-    "mcp>=1.9",
+    # MCP 2.x speaks the stateless 2026-07-28 protocol while retaining the
+    # legacy initialize/session path for older clients on the same endpoint.
+    "mcp>=2.0,<3",
 ]
 plex = [
     "plexapi>=4.18",
@@ -106,7 +106,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# Typer (CLI) and pydantic/FastMCP (MCP tools) idiomatically use function calls
+# Typer (CLI) and pydantic/MCPServer (MCP tools) idiomatically use function calls
 # as parameter defaults — typer.Option(...), Field(...) inside Annotated[...].
 # B008 (function-call-in-default-argument) flags those, but they're correct.
 "clickwheel/cli.py" = ["B008"]
@@ -130,5 +130,5 @@ exclude = ['clickwheel/ipod/', 'clickwheel/mcp/_ui_bundles\.py']
 # `ignore_errors` exemptions. New code is expected to keep it that way — fix the
 # types rather than adding an override here. (The MCP tools use
 # `Annotated[CallToolResult, <Model>]` return types so the static type matches
-# `render()`'s actual return while FastMCP still derives each tool's output
+# `render()`'s actual return while MCPServer still derives each tool's output
 # schema from the model in the annotation metadata.)

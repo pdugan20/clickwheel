@@ -39,7 +39,7 @@ class _FakeContext:
         total: float | None = None,
         message: str | None = None,
     ) -> None:
-        # Match FastMCP's signature exactly so any future drift is caught.
+        # Match MCPServer's signature exactly so any future drift is caught.
         self.calls.append((progress, total, message))
 
 
@@ -125,7 +125,7 @@ def test_sync_reports_per_track_progress(tmp_path, monkeypatch):
     ], f"unexpected progress calls: {ctx.calls!r}"
 
     # Sanity-check the tool result still surfaces the structured payload.
-    sc = result.structuredContent or {}
+    sc = result.structured_content or {}
     assert sc.get("synced") is True
     assert sc.get("added") == 3
     assert sc.get("library_updated") is True
@@ -158,7 +158,7 @@ def test_sync_noop_when_diff_empty_skips_progress(tmp_path, monkeypatch):
 
     # No per-track progress because no tracks were copied.
     assert ctx.calls == []
-    sc = result.structuredContent or {}
+    sc = result.structured_content or {}
     assert sc.get("synced") is True
     assert sc.get("added") == 0
     assert sc.get("library_updated") is True

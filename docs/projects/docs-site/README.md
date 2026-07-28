@@ -79,13 +79,13 @@ clickwheel repo
 │   ├── concepts/*.mdx             # EXPLANATION (architecture, single-tenant design)
 │   ├── reference/
 │   │   ├── cli.mdx                # GENERATED from the Typer app
-│   │   ├── mcp-tools.mdx          # GENERATED from the FastMCP instance
+│   │   ├── mcp-tools.mdx          # GENERATED from the MCPServer instance
 │   │   └── configuration.mdx      # config.yaml / env vars
 │   ├── logo/ + favicon.svg + styles.css
 │   └── changelog.mdx
 └── scripts/
     ├── gen-cli-reference.py       # Typer app  -> reference/cli.mdx
-    └── gen-mcp-reference.py       # FastMCP     -> reference/mcp-tools.mdx
+    └── gen-mcp-reference.py       # MCPServer   -> reference/mcp-tools.mdx
 ```
 
 ## Anti-staleness strategy (the point of "industry-grade")
@@ -94,7 +94,7 @@ Mirrors rewind's snapshot/drift pattern and clickwheel's existing
 "Web Bundle Freshness" CI convention:
 
 1. **Generated reference** — `cli.mdx` and `mcp-tools.mdx` are emitted by
-   generators from the actual Typer commands + FastMCP tool definitions. They are
+   generators from the actual Typer commands + MCPServer tool definitions. They are
    committed, and a **"Docs Reference Freshness" CI job** regenerates them and
    fails if the committed copies differ. → reference can't drift from code.
 2. **Link checking in CI** — broken links / nav references block merge.

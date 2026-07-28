@@ -1,6 +1,6 @@
 """Tests for the read-only MCP server tools.
 
-We call tool functions directly — FastMCP's @mcp.tool() decorator registers
+We call tool functions directly — MCPServer's @mcp.tool() decorator registers
 the function but returns it unchanged, so it remains callable. The full
 stdio protocol is exercised separately in test_mcp_smoke.py.
 
@@ -35,7 +35,7 @@ def _call(fn, **kwargs):
         result = asyncio.run(fn(**kwargs))
     else:
         result = fn(**kwargs)
-    sc = result.structuredContent or {}
+    sc = result.structured_content or {}
     if list(sc.keys()) == ["result"]:
         return sc["result"]
     return sc
@@ -305,7 +305,7 @@ def test_list_ipod_tracks_no_ipod(tmp_path, monkeypatch):
 
 
 def test_tools_registered_with_fastmcp():
-    """All read + mutation tools should be registered with the FastMCP instance."""
+    """All read + mutation tools should register with the MCPServer instance."""
     from clickwheel.mcp.server import mcp
 
     expected = {
@@ -373,7 +373,7 @@ def test_destructive_tools_have_destructive_annotation():
     by_name = {t.name: t for t in mcp._tool_manager.list_tools()}
     for name in ("delete_playlist", "sync_playlist_to_ipod"):
         ann = by_name[name].annotations
-        assert ann is not None and ann.destructiveHint is True, name
+        assert ann is not None and ann.destructive_hint is True, name
 
 
 def test_read_tools_have_read_only_annotation():
@@ -396,7 +396,7 @@ def test_read_tools_have_read_only_annotation():
         "get_pending_scrobbles",
     ):
         ann = by_name[name].annotations
-        assert ann is not None and ann.readOnlyHint is True, name
+        assert ann is not None and ann.read_only_hint is True, name
 
 
 def test_eject_ipod_no_ipod(tmp_path, monkeypatch):
@@ -413,7 +413,7 @@ def test_eject_ipod_no_ipod(tmp_path, monkeypatch):
 
 
 def test_build_playlist_prompt_registered():
-    """The build_playlist prompt should register on the FastMCP instance."""
+    """The build_playlist prompt should register on the MCPServer instance."""
     from clickwheel.mcp.server import mcp
 
     names = {p.name for p in mcp._prompt_manager.list_prompts()}
@@ -928,7 +928,7 @@ def test_pull_playlist_from_plex_smart_error(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 # Output-schema conformance
 #
-# Every tool annotates a Pydantic return model, so FastMCP emits an
+# Every tool annotates a Pydantic return model, so MCPServer emits an
 # outputSchema. The MCP spec requires structuredContent to conform to that
 # schema, so each test below validates a real tool result against the model
 # the tool declares as its return type.
@@ -957,11 +957,11 @@ def _conform(fn, **kwargs):
     # Tools annotate `-> Annotated[CallToolResult, <Model>]` so the static
     # return type matches render()'s CallToolResult while the output model
     # lives in the Annotated metadata. Pull the model out exactly the way
-    # FastMCP's func_metadata does (metadata[0]) to validate against it.
+    # MCPServer's func_metadata does (metadata[0]) to validate against it.
     ann = typing.get_type_hints(fn, include_extras=True)["return"]
     if hasattr(ann, "__metadata__"):
         ann = ann.__metadata__[0]
-    sc = result.structuredContent
+    sc = result.structured_content
     assert sc is not None, f"{fn.__name__}: no structuredContent"
     payload = sc["result"] if typing.get_origin(ann) is list else sc
     TypeAdapter(ann).validate_python(payload)
@@ -974,8 +974,8 @@ def test_all_tools_emit_output_schema():
     tools = asyncio.run(mcp.list_tools())
     assert len(tools) == 39
     for t in tools:
-        assert t.outputSchema, f"{t.name}: no outputSchema"
-        assert t.outputSchema.get("properties"), f"{t.name}: schema has no properties"
+        assert t.output_schema, f"{t.name}: no outputSchema"
+        assert t.output_schema.get("properties"), f"{t.name}: schema has no properties"
 
 
 def test_conformance_library_tools(tmp_path, monkeypatch):
