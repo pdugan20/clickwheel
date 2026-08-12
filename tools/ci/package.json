@@ -4,7 +4,7 @@
   "description": "Integrity-locked command-line tools used by CI and pre-commit.",
   "devDependencies": {
     "claude-code-lint": "0.7.0",
-    "mint": "4.2.734",
+    "mint": "4.2.799",
     "prettier": "3.9.6"
   },
   "overrides": {
