@@ -15,9 +15,9 @@ music_dir: /Users/you/Music
 
 ## Settings
 
-Environment variables override the config file. Each is the setting name in
-`UPPER_CASE` (e.g. `MUSIC_DIR`), except the `library_*` settings, which add a
-`CLICKWHEEL_` prefix.
+Environment variables override the config file. Most use the setting name in
+`UPPER_CASE` (for example, `MUSIC_DIR`). The `library_*` and `transcode_*`
+settings add a `CLICKWHEEL_` prefix.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
@@ -28,6 +28,8 @@ Environment variables override the config file. Each is the setting name in
 | `auto_scan_staleness_minutes` | `1440` | Fallback re-scan timer; 1440 = 24h. |
 | `library_auto_remount` | `true` | Force-remount a stale SMB/NAS share before touching files. |
 | `library_mount_url` | _(unset)_ | Explicit `smb://` fallback for when the share is fully unmounted. |
+| `transcode_dir` | `~/.clickwheel/transcoded` | Output folder for MP3 copies created by [`convert`](/guides/convert-flac). |
+| `transcode_bitrate` | `320` | MP3 CBR bitrate in kbps for conversion. |
 
 ## Integration settings
 

@@ -1,0 +1,74 @@
+---
+title: Convert FLAC for iPod
+icon: "compact-disc"
+description: Create iPod-playable MP3 copies of selected FLAC albums.
+---
+
+Stock iPod firmware can't play FLAC. `clickwheel convert` creates separate MP3
+copies, adds them to the library index, and leaves your source files unchanged.
+The MP3s then flow through the normal selection and sync workflow.
+
+Conversion is always explicit. A normal iPod sync skips FLAC rather than
+transcoding it automatically.
+
+<Steps>
+  <Step title="Install ffmpeg" titleSize="h3">
+    Conversion requires `ffmpeg` on your `PATH`:
+
+    ```bash
+    brew install ffmpeg
+    ```
+
+  </Step>
+
+  <Step title="Choose albums" titleSize="h3">
+    Open the interactive album picker:
+
+    ```bash
+    clickwheel convert
+    ```
+
+    Use the space bar to select albums, then press Enter to start. You can also
+    target an artist or convert every FLAC album:
+
+    ```bash
+    clickwheel convert --artist "Nirvana"
+    clickwheel convert --artist "Nirvana" --album "Nevermind"
+    clickwheel convert --all-flac
+    ```
+
+    See the [Library command reference](/reference/cli/library) for every
+    option.
+
+  </Step>
+
+  <Step title="Load the MP3 copies" titleSize="h3">
+    Converted tracks are indexed automatically. Select them and continue with
+    the usual preview and sync:
+
+    ```bash
+    clickwheel select
+    clickwheel diff
+    clickwheel sync
+    ```
+
+  </Step>
+</Steps>
+
+## Output and reruns
+
+By default, clickwheel writes MP3s to `~/.clickwheel/transcoded` at 320 kbps.
+The output mirrors your library's folder structure but stays outside
+`music_dir`, so the scanner and Plex don't mistake the copies for source music.
+
+Change the destination or bitrate in your config:
+
+```yaml title="~/.clickwheel/config.yaml"
+transcode_dir: '/Volumes/iPod Music/Transcoded'
+transcode_bitrate: 256
+```
+
+Reruns skip tracks whose source and converted copy haven't changed. Pass
+`--force` when you intentionally want to rebuild an existing MP3. See
+[Configuration](/reference/configuration) for the corresponding environment
+variables.

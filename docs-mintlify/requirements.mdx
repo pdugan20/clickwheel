@@ -46,7 +46,12 @@ clickwheel expects the iPod at `/Volumes/IPOD` and assumes 64 GB. Override with
 | Format | On the iPod? | Notes |
 | --- | --- | --- |
 | MP3, AAC/M4A, ALAC | Yes | Played natively by stock firmware. |
-| FLAC | Skipped | Stock firmware can't play it, so it's excluded from sync. Your FLACs stay in your library. |
+| FLAC | Convert first | Stock firmware can't play it. [`clickwheel convert`](/guides/convert-flac) creates a separate MP3 copy; sync never transcodes automatically. |
+
+<Note>
+  `ffmpeg` is required only for FLAC conversion. Install it with
+  `brew install ffmpeg` before running `clickwheel convert`.
+</Note>
 
 ## Optional integrations
 
