@@ -1,10 +1,9 @@
 # clickwheel
 
-[![PyPI](https://img.shields.io/pypi/v/clickwheel?logo=pypi&logoColor=white)](https://pypi.org/project/clickwheel/)
-[![CI](https://github.com/pdugan20/clickwheel/actions/workflows/ci.yml/badge.svg)](https://github.com/pdugan20/clickwheel/actions/workflows/ci.yml)
-[![docs](https://img.shields.io/badge/docs-docs.clickwheel.fm-blue)](https://docs.clickwheel.fm)
-[![Python](https://img.shields.io/badge/Python-%3E%3D3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow?logo=opensourceinitiative&logoColor=white)](https://opensource.org/licenses/MIT)
+[![CI](https://github.com/pdugan20/clickwheel/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/pdugan20/clickwheel/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/clickwheel)](https://pypi.org/project/clickwheel/)
+[![Python versions](https://img.shields.io/pypi/pyversions/clickwheel)](https://pypi.org/project/clickwheel/)
+[![License](https://img.shields.io/github/license/pdugan20/clickwheel)](LICENSE)
 
 Sync a music library to a classic iPod from a modern Mac, no iTunes required.
 Scan your library, choose what goes on the iPod, and keep it up to date from the
