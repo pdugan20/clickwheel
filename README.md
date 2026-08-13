@@ -3,6 +3,7 @@
 [![CI](https://github.com/pdugan20/clickwheel/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/pdugan20/clickwheel/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/clickwheel)](https://pypi.org/project/clickwheel/)
 [![Python versions](https://img.shields.io/pypi/pyversions/clickwheel)](https://pypi.org/project/clickwheel/)
+[![Docs](https://img.shields.io/badge/docs-docs.clickwheel.fm-blue)](https://docs.clickwheel.fm)
 [![License](https://img.shields.io/github/license/pdugan20/clickwheel)](LICENSE)
 
 Sync a music library to a classic iPod from a modern Mac, no iTunes required.
