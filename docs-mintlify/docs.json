@@ -56,6 +56,7 @@
             "group": "Everyday use",
             "pages": [
               "guides/sync-to-ipod",
+              "guides/convert-flac",
               "guides/playlists",
               "guides/fix-metadata"
             ]

@@ -18,18 +18,20 @@ provide: each person's library and iPod are physically bound to their own Mac.
 Even the [remote/mobile MCP access](/guides/remote-mcp) keeps the Mac as the
 source of truth and simply exposes the existing local server through a tunnel.
 
-## Read-only library
+## Source files stay put
 
-Indexing (`scan`) only reads tags and writes to SQLite. The one command that
-touches your files is [`fix`](/guides/fix-metadata), and it edits tags, art, and
-genres **in place**, never moving or renaming them (other tools like Plex read
-the same library and rely on stable paths).
+Indexing (`scan`) only reads tags and writes to SQLite. [`fix`](/guides/fix-metadata)
+edits tags, art, and genres **in place**. [`convert`](/guides/convert-flac)
+leaves each FLAC source unchanged and writes a separate MP3 copy outside the
+music library. Neither command moves or renames source files, so other tools
+like Plex can continue to rely on stable paths.
 
-## FLAC is skipped
+## FLAC conversion is explicit
 
-Stock classic-iPod firmware doesn't play FLAC, so clickwheel skips FLAC when
-loading the device rather than silently transcoding. Your library keeps its
-FLACs; they just don't go on the iPod.
+Stock classic-iPod firmware doesn't play FLAC, so the sync path skips it rather
+than silently transcoding. Run [`clickwheel convert`](/guides/convert-flac) when
+you want an iPod-playable MP3 copy. The copy is indexed and joins the normal
+selection and sync workflow while your FLAC stays untouched.
 
 ## No auto-scan over MCP
 

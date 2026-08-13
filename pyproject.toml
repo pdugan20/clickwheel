@@ -32,6 +32,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/pdugan20/clickwheel"
+Documentation = "https://docs.clickwheel.fm"
 Repository = "https://github.com/pdugan20/clickwheel"
 Issues = "https://github.com/pdugan20/clickwheel/issues"
 Changelog = "https://github.com/pdugan20/clickwheel/blob/main/CHANGELOG.md"
