@@ -474,9 +474,7 @@ def test_ci_npm_tools_and_security_overrides_are_integrity_locked() -> None:
     # legacy edge on its declared major while patching every v4 consumer.
     front_matter = lock["packages"]["node_modules/front-matter"]
     assert front_matter["dependencies"]["js-yaml"] == "^3.13.1"
-    legacy_js_yaml = lock["packages"][
-        "node_modules/front-matter/node_modules/js-yaml"
-    ]
+    legacy_js_yaml = lock["packages"]["node_modules/front-matter/node_modules/js-yaml"]
     assert legacy_js_yaml["version"] == "3.15.1"
     assert "integrity" in legacy_js_yaml
 
@@ -504,7 +502,9 @@ def test_web_security_overrides_are_integrity_locked() -> None:
     for location, metadata in lock["packages"].items():
         if not location or metadata.get("link"):
             continue
-        assert "integrity" in metadata, f"web/{location} lacks registry integrity metadata"
+        assert "integrity" in metadata, (
+            f"web/{location} lacks registry integrity metadata"
+        )
 
     for package_name, expected_version in EXPECTED_WEB_OVERRIDE_TARGETS.items():
         matches = [
@@ -620,13 +620,65 @@ def test_hosted_shell_checks_cover_the_installer() -> None:
     assert "shfmt -d scripts/*.sh .github/scripts/install-shfmt.sh" in source
 
 
-def test_dependabot_ecosystems_have_non_overlapping_schedules() -> None:
+def test_dependency_updater_ownership_is_explicit_and_fail_closed() -> None:
+    renovate = json.loads((ROOT / "renovate.json").read_text())
+    assert renovate["enabled"] is True
+    assert set(renovate["enabledManagers"]) == {"npm", "pep621", "github-actions"}
+    assert renovate["semanticCommits"] == "enabled"
+    assert renovate["semanticCommitType"] == "chore"
+    assert renovate["semanticCommitScope"] == "deps"
+    assert renovate["constraints"] == {"uv": "0.11.17"}
+    assert renovate["platformAutomerge"] is True
+    assert renovate["automergeType"] == "pr"
+    assert renovate["automergeStrategy"] == "squash"
+    assert renovate["rebaseWhen"] == "behind-base-branch"
+    assert renovate["internalChecksFilter"] == "strict"
+    assert renovate["vulnerabilityAlerts"]["enabled"] is False
+    assert renovate["lockFileMaintenance"]["enabled"] is False
+    assert renovate["branchConcurrentLimit"] == 2
+    assert renovate["prConcurrentLimit"] == 2
+    assert renovate["prHourlyLimit"] == 1
+
+    rules = renovate["packageRules"]
+    automerge_rules = [rule for rule in rules if rule.get("automerge") is True]
+    assert len(automerge_rules) == 1
+    runtime_rule = automerge_rules[0]
+    assert runtime_rule["matchManagers"] == ["pep621"]
+    assert runtime_rule["matchFileNames"] == ["pyproject.toml"]
+    assert runtime_rule["matchDepTypes"] == ["project.dependencies"]
+    assert runtime_rule["matchCurrentVersion"] == "!/^0\\./"
+    assert "major" not in runtime_rule["matchUpdateTypes"]
+    assert runtime_rule["minimumReleaseAge"] == "7 days"
+    assert runtime_rule["dependencyDashboardApproval"] is False
+
+    manual_rules = [rule for rule in rules if rule.get("automerge") is False]
+    assert any(
+        "project.optional-dependencies" in rule.get("matchDepTypes", [])
+        and rule["dependencyDashboardApproval"] is True
+        for rule in manual_rules
+    )
+    assert any(
+        rule.get("matchManagers") == ["npm"]
+        and rule["dependencyDashboardApproval"] is True
+        for rule in manual_rules
+    )
+    assert any(
+        rule.get("matchManagers") == ["github-actions"]
+        and rule["dependencyDashboardApproval"] is True
+        for rule in manual_rules
+    )
+    assert all(
+        rule["dependencyDashboardApproval"] is True and rule["automerge"] is False
+        for rule in rules
+        if "major" in rule.get("matchUpdateTypes", [])
+    )
+
     config = load_yaml(ROOT / ".github" / "dependabot.yml")
     observed = {
-        (entry["package-ecosystem"], entry["directory"]): entry["schedule"]
+        (entry["package-ecosystem"], entry["directory"]): entry
         for entry in config["updates"]
     }
-    assert observed == {
+    expected_schedules = {
         ("github-actions", "/"): {
             "interval": "weekly",
             "day": "monday",
@@ -635,23 +687,33 @@ def test_dependabot_ecosystems_have_non_overlapping_schedules() -> None:
         },
         ("npm", "/web"): {
             "interval": "weekly",
-            "day": "tuesday",
-            "time": "06:00",
+            "day": "monday",
+            "time": "06:10",
             "timezone": "America/Los_Angeles",
         },
         ("uv", "/"): {
             "interval": "weekly",
-            "day": "wednesday",
-            "time": "06:00",
+            "day": "monday",
+            "time": "06:20",
             "timezone": "America/Los_Angeles",
         },
         ("npm", "/tools/ci"): {
             "interval": "weekly",
-            "day": "thursday",
-            "time": "06:00",
+            "day": "monday",
+            "time": "06:30",
+            "timezone": "America/Los_Angeles",
+        },
+        ("npm", "/apex-worker"): {
+            "interval": "weekly",
+            "day": "monday",
+            "time": "06:40",
             "timezone": "America/Los_Angeles",
         },
     }
+    assert set(observed) == set(expected_schedules)
+    for key, schedule in expected_schedules.items():
+        assert observed[key]["schedule"] == schedule
+        assert observed[key]["open-pull-requests-limit"] == 0
 
 
 def test_setup_uv_and_node_select_exact_tool_versions() -> None:
@@ -713,7 +775,12 @@ def copy_policy_fixture(tmp_path: Path) -> Path:
             fixture / directory,
             ignore=shutil.ignore_patterns("node_modules", "__pycache__"),
         )
-    for filename in (".nvmrc", ".pre-commit-config.yaml", "Makefile"):
+    for filename in (
+        ".nvmrc",
+        ".pre-commit-config.yaml",
+        "Makefile",
+        "renovate.json",
+    ):
         shutil.copy2(ROOT / filename, fixture / filename)
     return fixture
 
@@ -738,7 +805,7 @@ def assert_current_policy_accepts(root: Path) -> None:
         test_publish_workflows_guard_exact_same_repo_sources_before_oidc()
         test_test_publish_oidc_job_only_downloads_and_publishes_artifact()
         test_hosted_shell_checks_cover_the_installer()
-        test_dependabot_ecosystems_have_non_overlapping_schedules()
+        test_dependency_updater_ownership_is_explicit_and_fail_closed()
         test_setup_uv_and_node_select_exact_tool_versions()
         test_markdownlint_excludes_generated_and_internal_documents_consistently()
 
