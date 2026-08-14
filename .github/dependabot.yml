@@ -7,24 +7,40 @@ updates:
       day: 'monday'
       time: '06:00'
       timezone: 'America/Los_Angeles'
+    open-pull-requests-limit: 0
+
   - package-ecosystem: 'npm'
     directory: '/web'
     schedule:
       interval: 'weekly'
-      day: 'tuesday'
-      time: '06:00'
+      day: 'monday'
+      time: '06:10'
       timezone: 'America/Los_Angeles'
+    open-pull-requests-limit: 0
+
   - package-ecosystem: 'uv'
     directory: '/'
     schedule:
       interval: 'weekly'
-      day: 'wednesday'
-      time: '06:00'
+      day: 'monday'
+      time: '06:20'
       timezone: 'America/Los_Angeles'
+    open-pull-requests-limit: 0
+
   - package-ecosystem: 'npm'
     directory: '/tools/ci'
     schedule:
       interval: 'weekly'
-      day: 'thursday'
-      time: '06:00'
+      day: 'monday'
+      time: '06:30'
       timezone: 'America/Los_Angeles'
+    open-pull-requests-limit: 0
+
+  - package-ecosystem: 'npm'
+    directory: '/apex-worker'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '06:40'
+      timezone: 'America/Los_Angeles'
+    open-pull-requests-limit: 0
