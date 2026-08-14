@@ -3,7 +3,7 @@
   "private": true,
   "description": "Integrity-locked command-line tools used by CI and pre-commit.",
   "devDependencies": {
-    "claude-code-lint": "0.7.0",
+    "claude-code-lint": "0.8.0",
     "mint": "4.2.799",
     "prettier": "3.9.6"
   },
