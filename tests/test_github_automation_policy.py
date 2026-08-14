@@ -116,16 +116,52 @@ AUTHORIZED_EXECUTABLE_SHA256 = {
 
 EXPECTED_NPM_TOOLS = {
     "claude-code-lint": "0.7.0",
-    "mint": "4.2.734",
+    "mint": "4.2.799",
     "prettier": "3.9.6",
 }
 EXPECTED_NPM_OVERRIDES = {
+    "@mintlify/scraping": {"puppeteer": "25.6.0"},
     "adm-zip": "0.6.0",
     "axios": "1.18.1",
-    "js-yaml": "4.3.0",
+    "brace-expansion@<2": "1.1.18",
+    "brace-expansion@>=5": "5.0.9",
+    "fast-uri": "3.1.5",
+    "js-yaml@>=4": "4.3.1",
+    "nanoid": "3.3.18",
+    "postcss": "8.5.26",
     "qs": "6.15.3",
     "sharp": "0.35.3",
     "tar": "7.5.21",
+}
+EXPECTED_NPM_OVERRIDE_TARGETS = {
+    "adm-zip": "0.6.0",
+    "axios": "1.18.1",
+    "brace-expansion": {"1.1.18", "5.0.9"},
+    "fast-uri": "3.1.5",
+    "js-yaml": {"3.15.1", "4.3.1"},
+    "nanoid": "3.3.18",
+    "postcss": "8.5.26",
+    "puppeteer": "25.6.0",
+    "qs": "6.15.3",
+    "sharp": "0.35.3",
+    "tar": "7.5.21",
+}
+EXPECTED_WEB_OVERRIDES = {
+    "brace-expansion@<2": "1.1.18",
+    "brace-expansion@>=5": "5.0.9",
+    "fast-uri": "3.1.5",
+    "ip-address": "10.4.0",
+    "js-yaml@>=4": "4.3.1",
+    "nanoid": "3.3.18",
+    "postcss": "8.5.26",
+}
+EXPECTED_WEB_OVERRIDE_TARGETS = {
+    "brace-expansion": {"1.1.18", "5.0.9"},
+    "fast-uri": "3.1.5",
+    "ip-address": "10.4.0",
+    "js-yaml": "4.3.1",
+    "nanoid": "3.3.18",
+    "postcss": "8.5.26",
 }
 
 USES_LINE = re.compile(
@@ -420,14 +456,29 @@ def test_ci_npm_tools_and_security_overrides_are_integrity_locked() -> None:
             continue
         assert "integrity" in metadata, f"{location} lacks registry integrity metadata"
 
-    for package_name, expected_version in EXPECTED_NPM_OVERRIDES.items():
+    for package_name, expected_version in EXPECTED_NPM_OVERRIDE_TARGETS.items():
         matches = [
             metadata["version"]
             for location, metadata in lock["packages"].items()
             if location.endswith(f"node_modules/{package_name}")
         ]
         assert matches, f"override target is no longer installed: {package_name}"
-        assert set(matches) == {expected_version}
+        expected_versions = (
+            expected_version
+            if isinstance(expected_version, set)
+            else {expected_version}
+        )
+        assert set(matches) == expected_versions
+
+    # front-matter 4 still calls js-yaml's v3-only safeLoad API. Keep that
+    # legacy edge on its declared major while patching every v4 consumer.
+    front_matter = lock["packages"]["node_modules/front-matter"]
+    assert front_matter["dependencies"]["js-yaml"] == "^3.13.1"
+    legacy_js_yaml = lock["packages"][
+        "node_modules/front-matter/node_modules/js-yaml"
+    ]
+    assert legacy_js_yaml["version"] == "3.15.1"
+    assert "integrity" in legacy_js_yaml
 
 
 def test_ci_npm_lifecycle_scripts_are_disabled_and_asserted() -> None:
@@ -439,6 +490,35 @@ def test_ci_npm_lifecycle_scripts_are_disabled_and_asserted() -> None:
 
     makefile = (ROOT / "Makefile").read_text()
     assert "npm ci --ignore-scripts --prefix tools/ci" in makefile
+
+
+def test_web_security_overrides_are_integrity_locked() -> None:
+    package = json.loads((ROOT / "web" / "package.json").read_text())
+    lock = json.loads((ROOT / "web" / "package-lock.json").read_text())
+
+    assert package["overrides"] == EXPECTED_WEB_OVERRIDES
+    assert lock["lockfileVersion"] == 3
+    assert lock["packages"][""]["dependencies"] == package["dependencies"]
+    assert lock["packages"][""]["devDependencies"] == package["devDependencies"]
+
+    for location, metadata in lock["packages"].items():
+        if not location or metadata.get("link"):
+            continue
+        assert "integrity" in metadata, f"web/{location} lacks registry integrity metadata"
+
+    for package_name, expected_version in EXPECTED_WEB_OVERRIDE_TARGETS.items():
+        matches = [
+            metadata["version"]
+            for location, metadata in lock["packages"].items()
+            if location.endswith(f"node_modules/{package_name}")
+        ]
+        assert matches, f"web override target is no longer installed: {package_name}"
+        expected_versions = (
+            expected_version
+            if isinstance(expected_version, set)
+            else {expected_version}
+        )
+        assert set(matches) == expected_versions
 
 
 def test_release_pr_provenance_and_pat_lifetime_are_fail_closed() -> None:
@@ -627,7 +707,7 @@ def policy_root(root: Path) -> Iterator[None]:
 def copy_policy_fixture(tmp_path: Path) -> Path:
     fixture = tmp_path / "repository"
     fixture.mkdir()
-    for directory in (".github", "scripts", "tools"):
+    for directory in (".github", "scripts", "tools", "web"):
         shutil.copytree(
             ROOT / directory,
             fixture / directory,
@@ -653,6 +733,7 @@ def assert_current_policy_accepts(root: Path) -> None:
         test_ci_tools_are_locked_and_downloads_are_checksum_verified()
         test_ci_npm_tools_and_security_overrides_are_integrity_locked()
         test_ci_npm_lifecycle_scripts_are_disabled_and_asserted()
+        test_web_security_overrides_are_integrity_locked()
         test_release_pr_provenance_and_pat_lifetime_are_fail_closed()
         test_publish_workflows_guard_exact_same_repo_sources_before_oidc()
         test_test_publish_oidc_job_only_downloads_and_publishes_artifact()
