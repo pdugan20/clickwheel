@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 This project uses [Semantic Versioning](https://semver.org/) and
 [Conventional Commits](https://www.conventionalcommits.org/).
 
+## [0.19.2](https://github.com/pdugan20/clickwheel/compare/v0.19.1...v0.19.2) (2026-08-15)
+
+
+### Bug Fixes
+
+* **deps:** narrow Renovate automerge policy ([#168](https://github.com/pdugan20/clickwheel/issues/168)) ([a28bb99](https://github.com/pdugan20/clickwheel/commit/a28bb996e83942209e27f3893a78b2e5c3c0b52f))
+* remediate dependency vulnerabilities ([#159](https://github.com/pdugan20/clickwheel/issues/159)) ([f7cfe5a](https://github.com/pdugan20/clickwheel/commit/f7cfe5a9a82e52f9656512589ca755bec5f5fef2))
+
+
+### Documentation
+
+* restore documentation badge ([#163](https://github.com/pdugan20/clickwheel/issues/163)) ([6cb5f8f](https://github.com/pdugan20/clickwheel/commit/6cb5f8fa11c5ed8dd85ef98b0f8ef471ac29c19f))
+* standardize readme badges ([#162](https://github.com/pdugan20/clickwheel/issues/162)) ([da58e6c](https://github.com/pdugan20/clickwheel/commit/da58e6cbd20f1fcf748bfb609d5959301022c145))
+* streamline README and document FLAC conversion ([#157](https://github.com/pdugan20/clickwheel/issues/157)) ([98b1221](https://github.com/pdugan20/clickwheel/commit/98b12213668b18f971492e16c0fb8bb1110d8db8))
+
 ## [0.19.1](https://github.com/pdugan20/clickwheel/compare/v0.19.0...v0.19.1) (2026-07-28)
 
 
