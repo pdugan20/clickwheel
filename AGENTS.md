@@ -87,6 +87,16 @@ make format     # auto-format code
 
 13. **MCP server logs to stderr only** — stdout is the wire protocol. Use `logger` from `clickwheel.mcp.server`, controlled by `CLICKWHEEL_MCP_LOG_LEVEL`.
 
+## Code Review Rules
+
+- Flag any normal library or iPod operation that moves or renames source files, copies
+  FLAC directly to a stock-firmware iPod, or performs implicit transcoding outside the
+  explicit `clickwheel convert` destination.
+- Flag CLI or MCP behavior that bypasses the shared pure action layer: CLI output must use
+  `output.py`, and MCP tools must wrap `actions.py` rather than `cli.py`.
+- Flag sync or metadata operations that can partially mutate an iPod/library without a
+  clear preview, bounded failure behavior, and tests using fixtures rather than real media.
+
 ## Code Style
 
 - **Naming**: snake_case for functions/variables, UPPER_CASE for constants
