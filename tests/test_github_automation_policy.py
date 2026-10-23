@@ -120,7 +120,8 @@ EXPECTED_NPM_TOOLS = {
     "prettier": "3.9.6",
 }
 EXPECTED_NPM_OVERRIDES = {
-    "@mintlify/scraping": {"puppeteer": "25.6.0"},
+    "zod@>=4 <5": "4.6.7",
+    "@mintlify/scraping": {"puppeteer": "25.16.0"},
     "adm-zip": "0.6.1",
     "axios": "1.20.0",
     "brace-expansion@<2": "1.1.21",
@@ -142,10 +143,11 @@ EXPECTED_NPM_OVERRIDE_TARGETS = {
     "js-yaml": {"3.15.2", "4.3.2"},
     "nanoid": "3.3.18",
     "postcss": "8.5.26",
-    "puppeteer": "25.6.0",
+    "puppeteer": "25.16.0",
     "qs": "6.15.3",
     "sharp": "0.35.5",
     "tar": "7.5.21",
+    "zod": {"3.24.0", "4.6.7"},
 }
 EXPECTED_WEB_OVERRIDES = {
     "brace-expansion@<2": "1.1.21",
@@ -1037,6 +1039,12 @@ def test_policy_rejects_constrained_unsafe_renovate_gate(tmp_path: Path) -> None
             "tools/ci/package.json",
             "axios",
             "1.18.1",
+            test_ci_npm_tools_and_security_overrides_are_integrity_locked,
+        ),
+        (
+            "tools/ci/package.json",
+            "zod@>=4 <5",
+            "4.3.6",
             test_ci_npm_tools_and_security_overrides_are_integrity_locked,
         ),
         (
