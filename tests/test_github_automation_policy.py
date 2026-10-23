@@ -121,45 +121,46 @@ EXPECTED_NPM_TOOLS = {
 }
 EXPECTED_NPM_OVERRIDES = {
     "@mintlify/scraping": {"puppeteer": "25.6.0"},
-    "adm-zip": "0.6.0",
-    "axios": "1.18.1",
-    "brace-expansion@<2": "1.1.18",
-    "brace-expansion@>=5": "5.0.9",
-    "fast-uri": "3.1.5",
-    "js-yaml@>=4": "4.3.1",
+    "adm-zip": "0.6.1",
+    "axios": "1.20.0",
+    "brace-expansion@<2": "1.1.21",
+    "brace-expansion@>=5": "5.0.12",
+    "fast-uri": "3.1.9",
+    "js-yaml@<4": "3.15.2",
+    "js-yaml@>=4": "4.3.2",
     "nanoid": "3.3.18",
     "postcss": "8.5.26",
     "qs": "6.15.3",
-    "sharp": "0.35.3",
+    "sharp": "0.35.5",
     "tar": "7.5.21",
 }
 EXPECTED_NPM_OVERRIDE_TARGETS = {
-    "adm-zip": "0.6.0",
-    "axios": "1.18.1",
-    "brace-expansion": {"1.1.18", "5.0.9"},
-    "fast-uri": "3.1.5",
-    "js-yaml": {"3.15.1", "4.3.1"},
+    "adm-zip": "0.6.1",
+    "axios": "1.20.0",
+    "brace-expansion": {"1.1.21", "5.0.12"},
+    "fast-uri": "3.1.9",
+    "js-yaml": {"3.15.2", "4.3.2"},
     "nanoid": "3.3.18",
     "postcss": "8.5.26",
     "puppeteer": "25.6.0",
     "qs": "6.15.3",
-    "sharp": "0.35.3",
+    "sharp": "0.35.5",
     "tar": "7.5.21",
 }
 EXPECTED_WEB_OVERRIDES = {
-    "brace-expansion@<2": "1.1.18",
-    "brace-expansion@>=5": "5.0.9",
-    "fast-uri": "3.1.5",
+    "brace-expansion@<2": "1.1.21",
+    "brace-expansion@>=5": "5.0.12",
+    "fast-uri": "3.1.9",
     "ip-address": "10.4.0",
-    "js-yaml@>=4": "4.3.1",
+    "js-yaml@>=4": "4.3.2",
     "nanoid": "3.3.18",
     "postcss": "8.5.26",
 }
 EXPECTED_WEB_OVERRIDE_TARGETS = {
-    "brace-expansion": {"1.1.18", "5.0.9"},
-    "fast-uri": "3.1.5",
+    "brace-expansion": {"1.1.21", "5.0.12"},
+    "fast-uri": "3.1.9",
     "ip-address": "10.4.0",
-    "js-yaml": "4.3.1",
+    "js-yaml": "4.3.2",
     "nanoid": "3.3.18",
     "postcss": "8.5.26",
 }
@@ -481,7 +482,7 @@ def test_ci_npm_tools_and_security_overrides_are_integrity_locked() -> None:
     front_matter = lock["packages"]["node_modules/front-matter"]
     assert front_matter["dependencies"]["js-yaml"] == "^3.13.1"
     legacy_js_yaml = lock["packages"]["node_modules/front-matter/node_modules/js-yaml"]
-    assert legacy_js_yaml["version"] == "3.15.1"
+    assert legacy_js_yaml["version"] == "3.15.2"
     assert "integrity" in legacy_js_yaml
 
 
@@ -1027,3 +1028,32 @@ def test_policy_rejects_constrained_unsafe_renovate_gate(tmp_path: Path) -> None
     config_path.write_text(json.dumps(config, indent=2) + "\n")
 
     assert_current_policy_rejects(fixture)
+
+
+@pytest.mark.parametrize(
+    ("manifest", "dependency", "version", "validator"),
+    [
+        (
+            "tools/ci/package.json",
+            "axios",
+            "1.18.1",
+            test_ci_npm_tools_and_security_overrides_are_integrity_locked,
+        ),
+        (
+            "web/package.json",
+            "fast-uri",
+            "3.1.5",
+            test_web_security_overrides_are_integrity_locked,
+        ),
+    ],
+)
+def test_policy_rejects_vulnerable_dependency_override_downgrades(
+    tmp_path: Path, manifest: str, dependency: str, version: str, validator: Any
+) -> None:
+    fixture = copy_policy_fixture(tmp_path)
+    package_path = fixture / manifest
+    package = json.loads(package_path.read_text())
+    package["overrides"][dependency] = version
+    package_path.write_text(json.dumps(package))
+    with policy_root(fixture), pytest.raises(AssertionError):
+        validator()
