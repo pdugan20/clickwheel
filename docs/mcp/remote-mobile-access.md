@@ -112,7 +112,7 @@ text-only fallback until they support discovery.
 
 The existing rules held while doing this:
 
-- **Logging stays stderr-only** (CLAUDE.md rule #13). stdout is the wire
+- **Logging stays stderr-only** (AGENTS.md rule #13). stdout is the wire
   protocol for the stdio path; `_setup_logging()` is unchanged.
 - **Tools still wrap `actions.py`** (rule #11) — this was a transport addition
   only; no tool code changed.
