@@ -5,7 +5,7 @@
   in the user's Apple Music account). Confirms via the native Allow /
   Deny prompt that destructive-flagged tools get.
 
-Logic lives in `actions.py` per CLAUDE.md rule 11.
+Logic lives in `actions.py` per AGENTS.md rule 11.
 """
 
 from __future__ import annotations

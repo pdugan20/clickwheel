@@ -18,7 +18,7 @@ Four tools:
 
 The same library powers `clickwheel sync-plex`, `clickwheel plex pull`,
 `clickwheel plex list`, and `clickwheel plex doctor` on the CLI. Logic
-lives in `actions.py` per CLAUDE.md rule 11.
+lives in `actions.py` per AGENTS.md rule 11.
 """
 
 from __future__ import annotations
