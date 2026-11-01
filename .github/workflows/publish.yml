@@ -9,13 +9,15 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   publish:
     name: Build and Publish to PyPI
     runs-on: ubuntu-latest
     environment: pypi
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -55,7 +57,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
-          enable-cache: true
+          enable-cache: false
           version: '0.11.17'
       - name: Build package
         run: uv run --locked --extra dev python -m build --no-isolation
