@@ -1,6 +1,7 @@
 version: 2
 updates:
   - package-ecosystem: 'github-actions'
+    cooldown: { default-days: 14 }
     directory: '/'
     schedule:
       interval: 'weekly'
@@ -10,6 +11,7 @@ updates:
     open-pull-requests-limit: 0
 
   - package-ecosystem: 'npm'
+    cooldown: { default-days: 7 }
     directory: '/web'
     schedule:
       interval: 'weekly'
@@ -19,6 +21,7 @@ updates:
     open-pull-requests-limit: 0
 
   - package-ecosystem: 'uv'
+    cooldown: { default-days: 7 }
     directory: '/'
     schedule:
       interval: 'weekly'
@@ -28,6 +31,7 @@ updates:
     open-pull-requests-limit: 0
 
   - package-ecosystem: 'npm'
+    cooldown: { default-days: 7 }
     directory: '/tools/ci'
     schedule:
       interval: 'weekly'
@@ -37,6 +41,7 @@ updates:
     open-pull-requests-limit: 0
 
   - package-ecosystem: 'npm'
+    cooldown: { default-days: 7 }
     directory: '/apex-worker'
     schedule:
       interval: 'weekly'

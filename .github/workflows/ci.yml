@@ -150,17 +150,6 @@ jobs:
       - name: Check for broken links
         run: cd docs-mintlify && ../tools/ci/node_modules/.bin/mint broken-links
 
-  claude-lint:
-    name: Claude Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-ci-tools
-      - name: Run claude-code-lint
-        run: tools/ci/node_modules/.bin/claudelint
-
   web-lint:
     name: Web Lint
     runs-on: ubuntu-latest
@@ -224,3 +213,31 @@ jobs:
             echo "Run 'make build-web' locally and commit the regenerated bundle."
             exit 1
           fi
+
+  ci-gate:
+    name: CI Gate
+    if: always()
+    needs:
+      - shellcheck
+      - shfmt
+      - markdownlint
+      - prettier
+      - ruff
+      - mypy
+      - test
+      - docs-reference
+      - docs-links
+      - web-lint
+      - web-bundle
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check job results
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for result in $RESULTS; do
+            if [ "$result" != success ] && [ "$result" != skipped ]; then
+              echo "A required job finished with: $result"
+              exit 1
+            fi
+          done

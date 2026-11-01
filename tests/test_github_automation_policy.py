@@ -39,23 +39,24 @@ WorkflowLoader.add_implicit_resolver(
 
 EXPECTED_WORKFLOW_PERMISSIONS = {
     "ci.yml": {"contents": "read"},
+    "hygiene.yml": {"contents": "read"},
     "pr-lint.yml": {"pull-requests": "read"},
-    "publish.yml": {"contents": "read", "id-token": "write"},
+    "publish.yml": {"contents": "read"},
     "release-please.yml": {"contents": "read", "pull-requests": "read"},
     "test-publish.yml": {"contents": "read"},
     "version-guard.yml": {"contents": "read"},
 }
 
 EXPECTED_JOB_PERMISSIONS = {
+    ("publish.yml", "publish"): {"contents": "read", "id-token": "write"},
     ("test-publish.yml", "publish"): {"actions": "read", "id-token": "write"},
 }
 
 EXPECTED_WORKFLOW_TRIGGERS = {
     "ci.yml": {"push": {"branches": ["main"]}, "pull_request": {"branches": ["main"]}},
+    "hygiene.yml": {"pull_request": None, "push": {"branches": ["main"]}},
     "pr-lint.yml": {
-        "pull_request_target": {
-            "types": ["opened", "reopened", "edited", "synchronize"]
-        }
+        "pull_request": {"types": ["opened", "reopened", "edited", "synchronize"]}
     },
     "publish.yml": {"push": {"tags": ["v*"]}},
     "release-please.yml": {"push": {"branches": ["main"]}},
@@ -115,7 +116,6 @@ AUTHORIZED_EXECUTABLE_SHA256 = {
 }
 
 EXPECTED_NPM_TOOLS = {
-    "claude-code-lint": "0.7.0",
     "mint": "4.2.799",
     "prettier": "3.9.6",
 }
@@ -138,7 +138,7 @@ EXPECTED_NPM_OVERRIDES = {
 EXPECTED_NPM_OVERRIDE_TARGETS = {
     "adm-zip": "0.6.1",
     "axios": "1.20.0",
-    "brace-expansion": {"1.1.21", "5.0.12"},
+    "brace-expansion": "1.1.21",
     "fast-uri": "3.1.9",
     "js-yaml": {"3.15.2", "4.3.2"},
     "nanoid": "3.3.18",
