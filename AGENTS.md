@@ -104,3 +104,20 @@ Runtime config is in `~/.clickwheel/config.yaml`. Environment variables override
 - pytest with coverage threshold (60% minimum, excluding vendored ipod/)
 - Coverage runs in CI and uploads to Codecov
 - Test matrix: Python 3.11-3.14 on Ubuntu and macOS
+
+## Code Review Rules
+
+- Flag any normal library or iPod operation that moves or renames source files, copies
+  FLAC directly to a stock-firmware iPod, or performs implicit transcoding outside the
+  explicit `clickwheel convert` destination.
+- Flag CLI or MCP behavior that bypasses the shared pure action layer: CLI output must use
+  `output.py`, and MCP tools must wrap `actions.py` rather than `cli.py`.
+- Flag sync or metadata operations that can partially mutate an iPod/library without a
+  clear preview, bounded failure behavior, and tests using fixtures rather than real media.
+
+- For documentation changes, flag edits made only in the generated `clickwheel-fm/docs`
+  mirror, or sync changes that break its exact one-way copy of `docs-mintlify/`.
+- Flag documented commands, options, defaults, or safety behavior that disagree with
+  `clickwheel/` and the root guidance. Public docs must not expose credentials or private
+  data, present unreleased behavior as available, or omit warnings and safe verification
+  for destructive commands. Preserve the nested publication-approval rule.
