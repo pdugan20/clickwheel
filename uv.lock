@@ -1204,14 +1204,14 @@ crypto = [
 
 [[package]]
 name = "pylast"
-version = "7.2.0"
+version = "7.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx2" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a6/43/eea015416b641eaba05f5c8a11cecc4a13741ed33915079b24b124630a9a/pylast-7.2.0.tar.gz", hash = "sha256:6b99cdbb556a5bdd2f5711bb42551ef14be2e685f1c24d015f4592b485705ba9", size = 438013, upload-time = "2026-09-29T16:12:33.869Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/2d/66/18ff0216571154dd171af7418cd6a8a5a9085bea7ef707c5aff234010078/pylast-7.3.0.tar.gz", hash = "sha256:06d8c124838e75bc8800d6df276add9c13b889a167678fc055957fcd2b35f444", size = 462044, upload-time = "2026-11-19T22:44:46.094Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2d/0d/e2ce2cb0922251f417c6d80ad69979c3bbf0ae1f9b7af05aaa4f95275022/pylast-7.2.0-py3-none-any.whl", hash = "sha256:40a716d100e61f727205a880968ba22fde48943f5dc82bd534eeab085906b2ec", size = 26873, upload-time = "2026-09-29T16:12:32.109Z" },
+    { url = "https://files.pythonhosted.org/packages/c5/83/69f771592ff90d71a42849cfcb17c0e85e3ac5f6cc9e6ae09b85dc479c72/pylast-7.3.0-py3-none-any.whl", hash = "sha256:8172b5bbfc4fdc55312c2b4037e1021829050edf31ced403371352f3a04499d7", size = 36858, upload-time = "2026-11-19T22:44:45.061Z" },
 ]
 
 [[package]]
