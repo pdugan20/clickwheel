@@ -3,7 +3,7 @@
   "private": true,
   "description": "Integrity-locked command-line tools used by CI and pre-commit.",
   "devDependencies": {
-    "mint": "4.2.799",
+    "mint": "4.3.18",
     "prettier": "3.9.6"
   },
   "overrides": {
