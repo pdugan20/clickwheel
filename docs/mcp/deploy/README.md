@@ -122,12 +122,158 @@ cp docs/mcp/deploy/fm.clickwheel.mcp-http.plist ~/Library/LaunchAgents/
 mkdir -p ~/.local/log
 launchctl load -w ~/Library/LaunchAgents/fm.clickwheel.mcp-http.plist
 
-# cloudflared as a managed service (simplest):
+# For a NEW deployment without an existing cloudflared service:
 sudo cloudflared service install
 ```
 
+The existing deployment uses the user LaunchAgent
+`~/Library/LaunchAgents/fm.clickwheel.cloudflared.plist`, with `RunAtLoad` and
+`KeepAlive`, running `/opt/homebrew/bin/cloudflared`. It is not managed by
+`brew services`. Keep using that LaunchAgent; do not install a second service.
+
 Decide on keep-awake: `caffeinate -s` under launchd, a Power Settings tweak, or
 accept "only reachable when the Mac is awake."
+
+### Pause remote access and keep local Clickwheel
+
+The tunnel was intentionally paused on October 26, 2026. Local Clickwheel and
+the Codex connection remain available. Keep the LaunchAgent and tunnel
+configuration so remote access can be restored later.
+
+To pause this deployment as the LaunchAgent's owning user:
+
+```bash
+launchctl disable "gui/$(id -u)/fm.clickwheel.cloudflared"
+launchctl bootout "gui/$(id -u)/fm.clickwheel.cloudflared"
+```
+
+`disable` prevents automatic startup on later logins; `bootout` stops and
+unloads the current service, including its `KeepAlive` behavior. Leave
+`fm.clickwheel.mcp-http` running. Do not delete the tunnel, change DNS or Access
+policies, or remove credentials to pause remote access.
+
+Verify that the service is unloaded, its former PID has exited, and
+`cloudflared tunnel info clickwheel` reports no active connectors. Then run
+the local MCP initialization check below and `library_stats` through Codex.
+An unauthenticated public `401` may still come from Cloudflare Access while
+the tunnel is stopped; it does not mean the origin is reachable.
+
+Only when remote access is wanted and restoration is authorized, enable and
+load the preserved service again:
+
+```bash
+launchctl enable "gui/$(id -u)/fm.clickwheel.cloudflared"
+launchctl bootstrap "gui/$(id -u)" \
+  "$HOME/Library/LaunchAgents/fm.clickwheel.cloudflared.plist"
+```
+
+Check the installed version before restoring service, then perform the tunnel
+and remote-connector verification below. `kickstart` alone does not restore
+a service that has been unloaded and disabled.
+
+### Update and restart cloudflared
+
+For the operator maintaining the existing Apple Silicon Mac deployment: run
+these steps on that Mac as the user who owns the LaunchAgent. Confirm the
+upgrade and brief remote-access interruption are authorized before starting.
+This procedure updates cloudflared and restarts only its LaunchAgent.
+
+1. Record the installed version and the executable currently running:
+
+   ```bash
+   /opt/homebrew/bin/cloudflared --version
+   cloudflared_pid=$(launchctl list | awk '$3 == "fm.clickwheel.cloudflared" {print $1}')
+   test -n "$cloudflared_pid" && test "$cloudflared_pid" != "-"
+   lsof -a -p "$cloudflared_pid" -d txt -Fn |
+     sed -n '\|^n/opt/homebrew/Cellar/cloudflared/|s/^n//p'
+   ```
+
+   Expect a numeric PID and a path containing the running version. Stop if the
+   LaunchAgent is absent or the executable belongs to a different installation.
+   Updating the Homebrew symlink alone does not replace a running process.
+
+2. Upgrade only cloudflared to the latest stable Homebrew release:
+
+   ```bash
+   HOMEBREW_NO_INSTALL_CLEANUP=1 HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1 \
+     /opt/homebrew/bin/brew upgrade cloudflared
+   /opt/homebrew/bin/cloudflared --version
+   ```
+
+   These options retain the previous keg and skip dependent-package upgrades.
+   Check the current [Homebrew formula](https://formulae.brew.sh/formula/cloudflared)
+   and [Cloudflare releases](https://github.com/cloudflare/cloudflared/releases).
+   For the October 2026 [eMudhra advisory](https://blog.cloudflare.com/emudhra-certificate-compromise/),
+   Cloudflare specifies at least 2026.10.2. Homebrew stable was 2026.10.3 when
+   this procedure was verified on October 26, 2026; use newer stable fixes when
+   available. Stop if the upgrade fails or the installed version remains below
+   the required fixed release.
+
+3. Restart the existing LaunchAgent:
+
+   ```bash
+   launchctl kickstart -k "gui/$(id -u)/fm.clickwheel.cloudflared"
+   ```
+
+   Remote requests may briefly disconnect. Leave `fm.clickwheel.mcp-http`
+   running. Repeat step 1: the PID must change, and the executable path must
+   contain the upgraded version. Run that exact executable with `--version`
+   to confirm it. Do not substitute `brew services restart cloudflared`.
+
+4. Verify tunnel readiness and active connections:
+
+   ```bash
+   curl --fail --silent --show-error --max-time 10 \
+     http://127.0.0.1:20241/ready -o /dev/null -w 'readiness HTTP %{http_code}\n'
+   curl --fail --silent --show-error --max-time 10 \
+     http://127.0.0.1:20241/metrics |
+     awk '/^cloudflared_tunnel_ha_connections / || /^cloudflared_tunnel_request_errors /'
+   /opt/homebrew/bin/cloudflared tunnel info clickwheel
+   ```
+
+   Expect readiness `200`, active connections (normally four), and the new
+   version in the authenticated tunnel-info result. The current deployment
+   uses metrics port `20241`; if unavailable, inspect the process's listening
+   ports with `lsof -a -p "$cloudflared_pid" -iTCP -sTCP:LISTEN -Pn` before
+   retrying. A running PID alone is not a health check.
+
+5. Verify the local MCP protocol and the public authentication gate:
+
+   ```bash
+   curl --fail --silent --show-error --max-time 10 \
+     -H 'Content-Type: application/json' \
+     -H 'Accept: application/json, text/event-stream' \
+     --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"clickwheel-read-only-health","version":"1.0"}}}' \
+     http://127.0.0.1:8000/mcp -o /dev/null -w 'local MCP HTTP %{http_code}\n'
+   curl --silent --show-error --max-time 15 \
+     https://mcp.clickwheel.fm/mcp -o /dev/null -w 'public MCP HTTP %{http_code}\n'
+   ```
+
+   Expect local initialization `200`. An unauthenticated public request should
+   receive `401` or an Access login redirect (`302`); that verifies the gate,
+   not an authenticated request to the origin. Complete the remote check by
+   calling `library_stats` through the existing authenticated remote connector
+   at `https://mcp.clickwheel.fm/mcp`. A local/stdio tool call does not prove
+   remote access. If the connector requires reconnection, report remote
+   verification as incomplete and use its normal OAuth sign-in flow; do not
+   extract tokens or weaken Access to make the check pass.
+
+6. Check for additional tunnels and connectors through the signed-in Cloudflare
+   dashboard where account access permits. The read-only CLI fallback is:
+
+   ```bash
+   /opt/homebrew/bin/cloudflared tunnel list
+   ```
+
+   Use `tunnel info` for each in-scope tunnel to inspect connector versions.
+   Record the account coverage and any dashboard sign-in gap. This does not
+   establish coverage of other accounts or authorize restarting other connectors.
+
+Keep credentials, authentication files, environment values, raw process
+arguments, and unfiltered service/log dumps out of verification reports. If
+the updated tunnel cannot connect, check readiness and targeted error messages;
+do not disable TLS verification or Access, or silently roll back below a
+security fix.
 
 ## 6. Add the connector + verify
 
